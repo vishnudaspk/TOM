@@ -1,0 +1,9 @@
+require_confirmation_for_ask: true
+confirmation_timeout_seconds: 30.0
+blocked_commands:
+  - "rmdir /s"
+  - "format"
+  - "diskpart"
+  - "reg delete"
+  - "shutdown"
+  - "drop database"

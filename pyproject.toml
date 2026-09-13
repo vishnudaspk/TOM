@@ -1,0 +1,67 @@
+[build-system]
+requires = ["setuptools>=68.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tom-ai"
+version = "0.1.0"
+description = "TOM — Personal AI Assistant (Operating Layer)"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+    { name = "TOM Contributors" }
+]
+dependencies = [
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    "pyyaml>=6.0.1",
+    "psutil>=5.9.0",
+    "httpx>=0.25.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pytest-asyncio>=0.23.0",
+    "ruff>=0.1.0",
+    "mypy>=1.7.0",
+]
+models = [
+    "torch>=2.1.0",
+    "llama-cpp-python>=0.2.20",
+    "faster-whisper>=1.0.0",
+    "kokoro-onnx>=0.3.0",
+    "sounddevice>=0.4.6",
+    "numpy>=1.24.0",
+]
+vision = [
+    "opencv-python>=4.8.0",
+    "pillow>=10.0.0",
+    "screeninfo>=0.8.0",
+]
+memory = [
+    "qdrant-client>=1.7.0",
+]
+
+[project.scripts]
+tom = "tom.main:main"
+
+[tool.setuptools.packages.find]
+where = ["python"]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q --strict-markers"
+testpaths = ["tests"]
+pythonpath = ["python"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+exclude = ["skills"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "C4", "UP"]
+ignore = ["E501"]

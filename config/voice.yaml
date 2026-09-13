@@ -1,0 +1,8 @@
+enabled: true
+wakeword_phrase: "hey tom"
+wakeword_sensitivity: 0.6
+vad_threshold: 0.5
+silence_duration_ms: 600
+sample_rate: 16000
+playback_device: null
+capture_device: null

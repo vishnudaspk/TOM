@@ -1,0 +1,8 @@
+version: "0.1.0"
+environment: "development"
+
+ipc:
+  pipe_name: "\\\\.\\pipe\\tom-engine"
+  connection_timeout_ms: 3000
+  request_timeout_ms: 5000
+  max_reconnect_attempts: 5

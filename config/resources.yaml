@@ -1,0 +1,4 @@
+max_vram_mb: 7200
+max_ram_mb: 12000
+gpu_device_id: 0
+whisper_on_gpu: false

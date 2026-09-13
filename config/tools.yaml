@@ -1,0 +1,7 @@
+default_timeout_seconds: 15.0
+max_search_results: 10
+max_file_read_bytes: 5000000
+allowed_directories:
+  - "."
+  - "data"
+  - "docs"

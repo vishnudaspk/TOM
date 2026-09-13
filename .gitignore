@@ -1,0 +1,129 @@
+# ==============================================================================
+# TOM — Master .gitignore
+# Operating System: Windows (MSVC) | Python 3.11+ | Rust 2021
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Python Bytecode, Packaging & Caches
+# ------------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+.eggs/
+eggs/
+dist/
+build/
+*.whl
+
+# Testing, Coverage & Linters
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# ------------------------------------------------------------------------------
+# 2. Virtual Environments
+# ------------------------------------------------------------------------------
+.venv/
+venv/
+env/
+ENV/
+*.venv/
+
+# ------------------------------------------------------------------------------
+# 3. Rust / Cargo Build Artifacts
+# ------------------------------------------------------------------------------
+target/
+**/target/
+Cargo.lock.bak
+**/*.rs.bk
+
+# ------------------------------------------------------------------------------
+# 4. Secrets, Credentials & Local Environment
+# ------------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+*.pfx
+*.p12
+secrets.yaml
+secrets.json
+
+# ------------------------------------------------------------------------------
+# 5. AI / ML Model Weights & Checkpoints (Large Files — Never Commit)
+# ------------------------------------------------------------------------------
+models/*
+!models/.gitkeep
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.gguf
+*.onnx
+*.tflite
+*.ckpt
+
+# ------------------------------------------------------------------------------
+# 6. Runtime Data, Databases & Logs
+# ------------------------------------------------------------------------------
+data/memory/*.db
+data/memory/*.db-journal
+data/memory/*.db-wal
+data/memory/*.sqlite
+data/memory/*.sqlite3
+data/logs/
+data/cache/
+data/runtime/
+data/benchmarks/*.json
+!data/**/.gitkeep
+
+# ------------------------------------------------------------------------------
+# 7. IDE & Editor Artifacts
+# ------------------------------------------------------------------------------
+.vscode/
+!.vscode/settings.json.example
+!.vscode/launch.json.example
+*.code-workspace
+.idea/
+*.swp
+*.swo
+*~
+*.bak
+*.tmp
+*.crswap
+
+# ------------------------------------------------------------------------------
+# 8. Operating System Files
+# ------------------------------------------------------------------------------
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# ------------------------------------------------------------------------------
+# 9. Scratch & Temporary Directories
+# ------------------------------------------------------------------------------
+scratch/
+tmp/
+temp/
+*.log

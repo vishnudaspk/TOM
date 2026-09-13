@@ -1,0 +1,6 @@
+sqlite_db_path: "data/memory/tom.db"
+qdrant_host: "localhost"
+qdrant_port: 6333
+embedding_model: "BAAI/bge-small-en-v1.5"
+enable_semantic_search: true
+memory_retention_days: 90
