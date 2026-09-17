@@ -150,6 +150,7 @@ These skills apply throughout TOM's entire development lifecycle:
 - `coding/validation` — every data boundary
 - `git/workflow` — every commit
 - `documentation/project-state` — every completed task
+- `documentation/phase-closeout` — every completed phase exit gate & archival
 
 ---
 

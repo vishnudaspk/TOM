@@ -120,9 +120,9 @@ C:\Users\vishnuu\Projects\TOM\.venv
 
 ```python
 class PermissionLevel(StrEnum):
-    SAFE = "SAFE"          # Read-only, informational, non-destructive -> Auto-executed
+    SAFE = "SAFE"  # Read-only, informational, non-destructive -> Auto-executed
     ASK_USER = "ASK_USER"  # State-modifying, file modification, process kill -> Requires explicit confirmation
-    BLOCK = "BLOCK"        # Arbitrary shell, disk formatting, credential extraction -> Always prohibited
+    BLOCK = "BLOCK"  # Arbitrary shell, disk formatting, credential extraction -> Always prohibited
 ```
 
 | Permission Level | Description | Examples |

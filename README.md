@@ -128,8 +128,7 @@ TOM/
 │   └── integration/            # Live end-to-end integration tests (Windows pipe)
 ├── pyproject.toml              # Python project metadata & tool configs
 ├── IMPLEMENTATIONPLAN.md       # Master 15-phase implementation roadmap
-├── PHASE2_IMPLEMENTATIONPLAN.md# Phase 2 specification (Complete)
-├── PHASE3_IMPLEMENTATIONPLAN.md# Phase 3 detailed specification (Approved)
+├── PHASE3_IMPLEMENTATIONPLAN.md# Phase 3 detailed specification (Complete)
 ├── STATE.md                    # Current state snapshot & architectural decisions
 ├── PROGRESS.md                 # Chronological development ledger
 └── HANDOFF.md                  # Next-session developer handoff

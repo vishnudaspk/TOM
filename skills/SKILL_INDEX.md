@@ -45,6 +45,7 @@ Do NOT load all skills — load only what is relevant to the current task.
 | **Model: LM Studio** | `lm-studio/` | Benchmarking candidate models, measuring TTFT, throughput, VRAM, and experimenting with local runtimes | Phase 2+ | system-design/resource-management |
 | **Git: Workflow** | `git/workflow/` | Commits, PRs, .gitignore, pre-commit checks | All phases | — |
 | **Documentation: Project State** | `documentation/project-state/` | Updating STATE.md, HANDOFF.md after work | All phases | — |
+| **Documentation: Phase Closeout** | `documentation/phase-closeout/` | Formally closing/archiving a completed phase, updating STATE/PROGRESS/HANDOFF, deleting completed PHASE[N]_IMPLEMENTATIONPLAN.md, verifying deletion, purging stale references | All phases | documentation/project-state |
 
 ---
 
@@ -81,6 +82,9 @@ Do NOT load all skills — load only what is relevant to the current task.
 
 ### "I just finished a task"
 → `documentation/project-state`
+
+### "I just finished a phase / I'm closing out a phase"
+→ `documentation/phase-closeout` + `documentation/project-state`
 
 ---
 

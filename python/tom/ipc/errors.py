@@ -1,6 +1,6 @@
 """IPC error hierarchy and exception taxonomy for TOM.
 
-Adheres to plan.md and PHASE2_IMPLEMENTATIONPLAN.md:
+Adheres to plan.md and Phase 2 protocol specification:
 - Base exception TomError
 - IpcError and category-specific subclasses
 - Transport, connection, protocol, timeout, and remote error variants
