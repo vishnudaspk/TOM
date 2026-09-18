@@ -6,78 +6,173 @@
 
 ## Current Status
 
-| Milestone | Subsystem / Focus | Status | Tests |
-|---|---|---|---|
-| **Phase 0** | Project Bootstrap, Configuration & Structured Logging | **COMPLETE** | 9 passed |
-| **Phase 1** | Rust Engine (`tom-engine`) — Lifecycle, Telemetry & IPC Server | **COMPLETE** | 79 passed |
-| **Phase 2** | Python Core & IPC Client (`NamedPipeIpcClient`, `EngineClient`, `LifecycleManager`) | **COMPLETE** | 168 passed |
-| **Phase 3** | Deterministic Tools & Permission Engine (`registry`, `permissions`, `executor`) | **PLANNED / READY** | Next |
+| Milestone   | Subsystem / Focus                                                                   | Status                                         |          Tests |
+| ----------- | ----------------------------------------------------------------------------------- | ---------------------------------------------- | -------------: |
+| **Phase 0** | Project Bootstrap, Configuration & Structured Logging                               | **COMPLETE**                                   |              9 |
+| **Phase 1** | Rust Engine (`tom-engine`) — Lifecycle, Telemetry & IPC Server                      | **COMPLETE**                                   |             79 |
+| **Phase 2** | Python Core & IPC Client — `NamedPipeIpcClient`, `EngineClient`, `LifecycleManager` | **COMPLETE**                                   |            168 |
+| **Phase 3** | Deterministic Tools & Permission Engine                                             | **COMPLETE**                                   |            406 |
+| **Phase 4** | Agent Framework & Local Model Routing                                               | **IMPLEMENTATION COMPLETE — CLOSEOUT PENDING** | 621 baseline\* |
 
-* **Current Next Task**: Phase 3, Iteration 1 — Tool Definition, Base Models & Tool Registry (`python/tom/tools/registry.py`).
-* **Verified Test Baseline**: **247 Total Tests Passing** (168 Python, 79 Rust).
-* **IPC Roundtrip Latency**: P50 = 0.144 ms, P95 = 0.359 ms (Target: < 10.0 ms).
-* **Quality Gates**: Ruff clean (0 violations, 0 diffs), Cargo clippy clean (0 warnings), Cargo fmt clean (0 diffs).
+- Current verified repository baseline before final Phase 4 closeout documentation changes: **492 Python unit + 50 Python integration + 79 Rust = 621 tests passing**.
+
+### Current Development State
+
+**Phase 4 — Agent Framework & Local Model Routing**
+
+The Phase 4 implementation is complete through Iteration 6's integration and exit-gate verification. Final documentation cleanup and phase-plan deletion remain as the administrative closeout step.
+
+Phase 5 has **not** started.
+
+### Phase 4 Capabilities
+
+- **Agent State Machine** — Explicit deterministic lifecycle and validated state transitions.
+- **Agent Tool Integration** — Agents execute tools exclusively through the centralized `ToolExecutor`.
+- **Model Provider Boundary** — Provider-independent `LLMProvider` / `ModelProvider` abstraction.
+- **LM Studio Provider** — OpenAI-compatible local model integration, including streaming support.
+- **Two-Tier Intent Router** — Fast deterministic routing with model-backed fallback.
+- **Multi-Step Agent Loop** — Bounded reasoning/action loop with `max_steps` protection.
+- **Cooperative Cancellation** — Cancellation propagation through agent execution.
+- **Error Recovery** — Controlled model/tool failure handling without uncontrolled execution.
+- **End-to-End Pipeline** — User prompt → routing → tool/agent execution → response.
 
 ---
 
 ## Architecture
 
-TOM uses a dual-core design: **Python Brain** for high-level orchestration, tools, memory, and future agents, paired with **Rust Engine (`tom-engine`)** for deterministic, low-level OS operations, audio primitives, hardware telemetry, and Windows Named Pipe IPC.
+TOM uses a dual-core architecture:
+
+- **Python Brain** — high-level orchestration, agents, model routing, tools, memory, and future intelligence.
+- **Rust Engine (`tom-engine`)** — deterministic low-level OS operations, hardware/audio primitives, telemetry, global system integration, and IPC.
 
 ```text
-                        TOM Python Core
-                               │
-                        LifecycleManager
-                               │
+                         TOM Python Brain
+                                │
+                    ┌───────────┴───────────┐
+                    │                       │
+              IntentRouter             Agent Layer
+                    │                       │
+                    │                AgentOrchestrator
+                    │                       │
+                    └───────────┬───────────┘
+                                │
+                         ToolExecutor
+                                │
+                       PermissionEngine
+                                │
+                    ┌───────────┴───────────┐
+                    │                       │
+               System Tools            File Tools
+                    │                       │
+                    └───────────┬───────────┘
+                                │
                          EngineClient
-                               │
-                      NamedPipeIpcClient
-                               │
-                      NamedPipeTransport
-                               │
+                                │
+                       NamedPipeIpcClient
+                                │
+                       NamedPipeTransport
+                                │
               Windows Named Pipe \\.\pipe\tom-engine
-                               │
-                       Rust tom-engine
-                               │
-          ┌────────────────────┼────────────────────┐
-          │                    │                    │
-     CPU / RAM            GPU / Battery        Disk / Processes
-     telemetry              telemetry             telemetry
+                                │
+                         Rust tom-engine
+                                │
+              ┌─────────────────┼─────────────────┐
+              │                 │                 │
+          CPU / RAM         GPU / Battery    Disk / Processes
+           telemetry          telemetry         telemetry
 ```
 
 ---
 
-## Phase 3 Direction
+## Model & Agent Architecture
 
-Phase 3 establishes the deterministic tool execution and security foundation:
-* **Tool Registry**: Discovery, cataloging, `@tool` decorator, and automated Pydantic v2 schema generation.
-* **Permission Engine**: Centralized 3-tier pre-execution policy evaluation (`SAFE`, `ASK USER`, `BLOCK`).
-* **Tool Executor**: Pre-execution security gating, argument validation, timeout deadlines, and cooperative cancellation.
-* **Deterministic System Tools**: Hardware and OS inspection wrapping Phase 2's `EngineClient`.
-* **Sandboxed File Tools**: Whitelisted directory access with path-traversal (`../`) guards.
-* **End-to-End Tool Pipeline**: Sub-millisecond tool execution (< 1.0 ms dispatch overhead).
+Phase 4 establishes the model-independent agent boundary used by TOM.
+
+```text
+                         User Prompt
+                              │
+                              ▼
+                       ┌─────────────┐
+                       │ IntentRouter│
+                       └──────┬──────┘
+                              │
+                    ┌─────────┴─────────┐
+                    │                   │
+              Direct Tool          Agent Loop
+                    │                   │
+                    │             ModelProvider
+                    │                   │
+                    │             Tool Call Request
+                    │                   │
+                    └─────────┬─────────┘
+                              ▼
+                       ToolExecutor
+                              │
+                    PermissionEngine
+                              │
+                         Tool Result
+                              │
+                              ▼
+                        Final Response
+```
+
+### Two-Tier Intent Routing
+
+**Tier 1 — Deterministic**
+
+Fast heuristic classification for obvious intents such as system, file, and direct tool operations.
+
+**Tier 2 — Model-backed**
+
+Uses the configured `LLMProvider` when deterministic routing cannot confidently classify the request.
+
+Provider failures and malformed routing responses have deterministic fallback behavior rather than uncontrolled execution.
+
+---
+
+## Phase 3 — Deterministic Tool & Security Foundation
+
+Phase 3 established TOM's tool execution boundary:
+
+- **Tool Registry** — Typed tool discovery and registration.
+- **Pydantic v2 Schemas** — Structured tool arguments and validation.
+- **Permission Engine** — Centralized `SAFE`, `ASK_USER`, and `BLOCK` policy evaluation.
+- **Tool Executor** — Validation, permission gating, bounded execution, timeout handling, and cancellation.
+- **System Tools** — Deterministic OS/hardware operations through the Rust engine.
+- **File Tools** — Sandboxed filesystem access with path-traversal protection.
+- **No Arbitrary Shell Execution** — Tools operate through explicitly defined interfaces.
+
+All Phase 4 agents consume this existing tool boundary rather than bypassing it.
 
 ---
 
 ## Development Environment
 
-* **Operating System**: Windows 11 (MSVC toolchain)
-* **Python**: 3.11.9 (in dedicated virtual environment)
-* **Rust**: 1.80+ (Tokio 1.43, Serde, Tracing)
-* **Testing & Tooling**: pytest 9.1.1, Ruff 0.16.7, Cargo
+- **Operating System:** Windows 11
+- **Toolchain:** MSVC
+- **Python:** 3.11.9
+- **Pydantic:** v2
+- **Rust:** 1.80+
+- **Async Runtime:** Tokio 1.43
+- **Testing:** pytest 9.1.1
+- **Linting / Formatting:** Ruff 0.16.7
+- **IPC:** Windows Named Pipes
+- **Python Environment:** Dedicated repository `.venv`
 
 ### Python Environment Setup
 
-All TOM Python packages, tools, and tests **must** run within the repository's dedicated `.venv`. Never install packages globally or into unrelated environments.
+All TOM Python packages, tools, and tests **must** run inside the repository's dedicated `.venv`.
+
+Never install project dependencies globally or into an unrelated Python environment.
 
 ```powershell
-# Create virtual environment (if not present)
+# Create virtual environment if not present
 python -m venv .venv
 
-# Verify active interpreter resolves to .venv
+# Verify the interpreter
 .\.venv\Scripts\python.exe -c "import sys; print(sys.executable)"
 
-# Install dependencies into .venv
+# Install TOM
 .\.venv\Scripts\python.exe -m pip install -e .
 ```
 
@@ -85,25 +180,67 @@ python -m venv .venv
 
 ## Testing & Quality Gates
 
-Run tests and linters directly from PowerShell using `.venv`:
+Run Python tests and tooling through the dedicated `.venv`.
 
 ```powershell
-# Python Unit Tests (153 tests)
+# Python unit tests
 .\.venv\Scripts\pytest.exe tests/unit/ -v
 
-# Python Live Integration Tests against tom-engine (15 tests)
+# Python integration tests
 .\.venv\Scripts\pytest.exe tests/integration/ -v
 
-# Python Linting & Formatting
+# Ruff
 .\.venv\Scripts\ruff.exe check python/ tests/
+
+# Formatting check
 .\.venv\Scripts\ruff.exe format --check python/ tests/
 
-# IPC Roundtrip Latency Benchmark (100 requests)
-$env:PYTHONPATH="python"; .\.venv\Scripts\python.exe tests/integration/python_rust/bench_ipc.py
+# Rust tests
+cd rust\tom-engine
+cargo test
 
-# Rust Tests & Clippy (from rust/tom-engine)
-cd rust\tom-engine; cargo test; cargo clippy --all-targets --all-features -- -D warnings; cd ..\..
+# Rust formatting
+cargo fmt --check
+
+# Rust linting
+cargo clippy --all-targets --all-features -- -D warnings
+
+# Return to repository root
+cd ..\..
 ```
+
+### Verified Phase 4 Baseline
+
+The latest completed Phase 4 implementation/exit-gate run verified:
+
+```text
+Python unit tests:        492 passed
+Python integration tests:  50 passed
+Rust tests:                79 passed
+────────────────────────────────────
+Total:                    621 passed
+```
+
+Quality gates:
+
+```text
+Ruff check:        CLEAN
+Ruff format:       CLEAN
+Cargo fmt:         CLEAN
+Cargo clippy:      CLEAN
+```
+
+### IPC Performance Baseline
+
+Previously measured Rust/Python IPC roundtrip performance:
+
+```text
+P50:  0.144 ms
+P95:  0.359 ms
+Target: < 10 ms
+```
+
+Phase 4 routing/dispatch benchmark utilities also measure individual pipeline components. Performance results are treated as environment-dependent measurements rather than hard architectural guarantees.
 
 ---
 
@@ -111,48 +248,128 @@ cd rust\tom-engine; cargo test; cargo clippy --all-targets --all-features -- -D 
 
 ```text
 TOM/
-├── .venv/                      # Dedicated Python virtual environment
-├── config/                     # Default YAML configuration
-├── python/                     # Python Brain (orchestration, IPC, lifecycle)
+
+├── .venv/                         # Dedicated Python virtual environment
+│
+├── config/                        # YAML configuration
+│
+├── python/                        # Python Brain
 │   └── tom/
-│       ├── core/               # EngineClient, LifecycleManager, config loader
-│       ├── ipc/                # NamedPipeIpcClient, transport, protocol, errors
-│       ├── schemas/            # Pydantic v2 configuration models
-│       ├── security/           # PermissionEngine, ConfirmationHook (Phase 3)
-│       ├── telemetry/          # Structured JSON logging & secret redactor
-│       └── tools/              # ToolRegistry, ToolExecutor, system & file tools (Phase 3)
-├── rust/                       # Rust Engine (low-level OS layer)
-│   └── tom-engine/             # Tokio async runtime, Named Pipe server, hardware monitors
+│       ├── agents/                # Agent state machine & orchestration
+│       ├── core/                 # Core services, routing, context, lifecycle
+│       ├── ipc/                  # Named Pipe client, transport & protocol
+│       ├── models/               # Model provider abstractions/providers
+│       ├── schemas/              # Pydantic v2 schemas
+│       ├── security/             # Permission and confirmation systems
+│       ├── telemetry/            # Structured logging & redaction
+│       └── tools/                # Registry, executor, system & file tools
+│
+├── rust/                         # Rust Engine
+│   └── tom-engine/               # Tokio runtime, IPC & low-level services
+│
 ├── tests/
-│   ├── unit/                   # Isolated unit tests (Mock transport, no Rust needed)
-│   └── integration/            # Live end-to-end integration tests (Windows pipe)
-├── pyproject.toml              # Python project metadata & tool configs
-├── IMPLEMENTATIONPLAN.md       # Master 15-phase implementation roadmap
-├── PHASE3_IMPLEMENTATIONPLAN.md# Phase 3 detailed specification (Complete)
-├── STATE.md                    # Current state snapshot & architectural decisions
-├── PROGRESS.md                 # Chronological development ledger
-└── HANDOFF.md                  # Next-session developer handoff
+│   ├── unit/                     # Deterministic isolated unit tests
+│   └── integration/              # Cross-component integration tests
+│
+├── pyproject.toml                # Python project metadata & tooling
+├── IMPLEMENTATIONPLAN.md         # Master implementation roadmap
+├── STATE.md                      # Current state & architectural decisions
+├── PROGRESS.md                   # Chronological development ledger
+├── HANDOFF.md                    # Next-session developer handoff
+└── README.md                     # Project overview
 ```
+
+> Phase-specific implementation plans are temporary development artifacts and are removed during phase closeout once their historical information has been migrated into the project documentation.
 
 ---
 
 ## Development Principles
 
-1. **Python / Rust Dual-Core Architecture**: Python manages intelligence, orchestration, tools, and memory; Rust handles low-level OS operations, audio, sensors, and IPC.
-2. **Strict `.venv` Isolation**: All package installations and executions are restricted to `.venv`.
-3. **Deterministic Tools**: Tools are typed, bounded, and callable directly by Python code.
-4. **Centralized Pre-Execution Permissions**: Policy checks (`SAFE`, `ASK USER`, `BLOCK`) occur before execution; tools never evaluate their own safety.
-5. **LLM/Agent Independence**: Tools must never import or depend on LLM models, prompts, routers, or agent frameworks. Future models are consumers of tools.
-6. **Security-First Design**: Path-traversal protection, secret redaction in logs, bounded timeouts, and zero arbitrary shell execution.
-7. **Incremental Verification**: Strict iteration gates with 100% test pass baselines and clean quality checks before advancing.
+1. **Python / Rust Dual-Core Architecture**
+   Python manages intelligence, orchestration, agents, tools, and memory. Rust handles low-level OS operations, hardware/audio primitives, telemetry, and IPC.
+
+2. **Strict `.venv` Isolation**
+   All Python package installation and execution uses the repository's dedicated virtual environment.
+
+3. **Deterministic Tools**
+   Tools are typed, validated, bounded, and independently executable.
+
+4. **Centralized Pre-Execution Permissions**
+   Permission decisions occur before tool execution. Tools do not implement their own security policy.
+
+5. **LLM / Agent Independence**
+   Tools must never depend on specific LLMs, prompts, routers, or agent frameworks.
+
+6. **Non-Bypassable Tool Execution**
+   Agents and models must route tool execution through `ToolExecutor`.
+
+7. **Security-First Design**
+   Path traversal protection, secret redaction, bounded execution, explicit permissions, and safe failure are mandatory architectural properties.
+
+8. **Cooperative Cancellation**
+   Long-running operations must support bounded, explicit cancellation rather than uncontrolled background execution.
+
+9. **Bounded Agent Execution**
+   Agent loops use explicit step limits and deterministic termination conditions.
+
+10. **Incremental Verification**
+    Each implementation iteration must pass its relevant tests and quality gates before the project advances.
+
+11. **Minimalism / Avoid Over-Engineering**
+    New abstractions must solve a demonstrated requirement. Existing interfaces should be reused wherever practical.
+
+12. **Local-First Model Runtime**
+    TOM maintains a provider boundary so local model runtimes can be evaluated and replaced without coupling the agent framework to a particular inference engine.
 
 ---
 
-## Documentation Quick Links
+## Documentation
 
-* [Master Implementation Plan](file:///c:/Users/vishnuu/Projects/TOM/IMPLEMENTATIONPLAN.md) — 15-phase comprehensive roadmap
-* [Phase 3 Specification](file:///c:/Users/vishnuu/Projects/TOM/PHASE3_IMPLEMENTATIONPLAN.md) — Approved iteration breakdown for Tools & Permissions
-* [State Snapshot](file:///c:/Users/vishnuu/Projects/TOM/STATE.md) — Current state, active decisions, and baseline metrics
-* [Progress Ledger](file:///c:/Users/vishnuu/Projects/TOM/PROGRESS.md) — Complete history of all completed iterations
-* [Developer Handoff](file:///c:/Users/vishnuu/Projects/TOM/HANDOFF.md) — Unambiguous handoff for the next development session
-* [Testing Guide](file:///c:/Users/vishnuu/Projects/TOM/test.md) — Hands-on testing & verification walkthrough
+- [Master Implementation Plan](IMPLEMENTATIONPLAN.md) — Overall TOM roadmap
+- [State Snapshot](STATE.md) — Current implementation state and architectural decisions
+- [Progress Ledger](PROGRESS.md) — Chronological development history
+- [Developer Handoff](HANDOFF.md) — Next-session continuation point
+- [Testing Guide](test.md) — Testing and verification walkthrough
+- [Skills Index](skills/SKILL_INDEX.md) — Development skills and project-specific guidance
+
+---
+
+## Current Roadmap
+
+The project is being developed incrementally through defined implementation phases.
+
+```text
+Phase 0  ── Bootstrap & Configuration          COMPLETE
+   │
+Phase 1  ── Rust Engine & IPC                  COMPLETE
+   │
+Phase 2  ── Python Core & IPC Client           COMPLETE
+   │
+Phase 3  ── Tools & Security                   COMPLETE
+   │
+Phase 4  ── Agents & Local Model Routing      IMPLEMENTATION COMPLETE
+   │
+Phase 5  ── Next subsystem                     NEXT
+   │
+   ▼
+Future phases ── Memory, Voice, Vision,
+                 Web, Security hardening,
+                 Concurrency, Monitoring,
+                 Personality & deployment
+```
+
+Phase 5 should begin only after the Phase 4 documentation closeout has been completed and the repository state has been verified.
+
+---
+
+## Design Goal
+
+TOM is intended to evolve into a **local-first personal AI operating layer** where:
+
+- intelligence remains modular,
+- tools remain deterministic,
+- model providers remain replaceable,
+- sensitive operations remain permission-controlled,
+- low-level system operations remain isolated,
+- resource usage remains bounded,
+- and every major architectural step is verified before the next one begins.

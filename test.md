@@ -1,173 +1,378 @@
-# TOM Phase 1 & Phase 2 — Testing & Verification Guide
+# TOM — Testing & Verification Guide
 
-> **Operating System:** Windows 11  
-> **Terminal / Shell:** Windows PowerShell / PowerShell 7  
-> **Current Milestone:** Phase 1 (Rust Engine) & Phase 2 (Python Core & IPC Client) **COMPLETE**  
-> **Test Baseline:** 168 Python Tests (153 unit, 15 integration) | 79 Rust Tests | Latency P95: 0.36 ms  
+> **OS:** Windows 11 | **Shell:** PowerShell | **Python:** 3.11 | **Phases Complete:** 1, 2, 3, 4 (Iterations 1, 2 & 3)
 
-This step-by-step guide is designed for you to test and verify everything built across **Phase 1** and **Phase 2** directly from your PowerShell terminal.
+This guide walks you through verifying everything built so far — from the Rust engine all the way up to the AI Agent and Model Provider layers.
+You don't need to know Rust or be a Python expert. Just follow each step in order.
 
 ---
 
 ## 📋 Table of Contents
 
-1. [Quick Verification (Run Everything)](#1-quick-verification-run-everything)
-2. [Phase 2 — Python Core & IPC Client Testing](#2-phase-2--python-core--ipc-client-testing)
-   - [2.1 All Python Unit Tests (153 tests)](#21-all-python-unit-tests-153-tests)
-   - [2.2 Live End-to-End Integration Tests (15 tests)](#22-live-end-to-end-integration-tests-15-tests)
-   - [2.3 IPC Roundtrip Latency Benchmark (100 requests)](#23-ipc-roundtrip-latency-benchmark-100-requests)
-   - [2.4 Python Code Formatting & Linting](#24-python-code-formatting--linting)
-3. [Phase 2 — Interactive Live Python Sandbox](#3-phase-2--interactive-live-python-sandbox)
-   - [3.1 Querying Live Telemetry via `EngineClient`](#31-querying-live-telemetry-via-engineclient)
-   - [3.2 Full Startup & Shutdown via `LifecycleManager`](#32-full-startup--shutdown-via-lifecyclemanager)
-4. [Phase 1 — Rust Engine Verification (Compact)](#4-phase-1--rust-engine-verification-compact)
-   - [4.1 Compiling & Running Rust Tests (79 tests)](#41-compiling--running-rust-tests-79-tests)
-   - [4.2 Rust Formatting & Clippy Linter](#42-rust-formatting--clippy-linter)
-   - [4.3 Running the Engine Manually](#43-running-the-engine-manually)
-5. [Troubleshooting & Handy Tips](#5-troubleshooting--handy-tips)
-6. [Master Command Cheat Sheet](#6-master-command-cheat-sheet)
+1. [Before You Start — One-Time Setup](#1-before-you-start--one-time-setup)
+2. [Quick Check — Run Everything at Once](#2-quick-check--run-everything-at-once)
+3. [Phase 1 — Rust Engine Tests](#3-phase-1--rust-engine-tests)
+4. [Phase 2 — Python Core & IPC Tests](#4-phase-2--python-core--ipc-tests)
+5. [Phase 3 — Tools & Security Tests](#5-phase-3--tools--security-tests)
+6. [Phase 4 — Agent Framework & Model Provider Tests](#6-phase-4--agent-framework--model-provider-tests)
+7. [Live Interactive Demos](#7-live-interactive-demos)
+8. [Troubleshooting](#8-troubleshooting)
+9. [Command Cheat Sheet](#9-command-cheat-sheet)
 
 ---
 
-## 1. Quick Verification (Run Everything)
+## 1. Before You Start — One-Time Setup
 
-From the project root (`C:\Users\vishnuu\Projects\TOM`), you can verify the entire test suite in three commands:
+Every command in this guide must be run from the **project root folder**.
 
-```powershell
-# 1. Run all Python unit and integration tests (168 passed)
-pytest tests/unit/ -v; pytest tests/integration/ -v
+Open PowerShell and navigate there first:
 
-# 2. Run the IPC latency benchmark (< 10ms P95 target)
-$env:PYTHONPATH="python"; python tests/integration/python_rust/bench_ipc.py
-
-# 3. Check Python formatting and linting (0 errors)
-ruff check python/ tests/; ruff format --check python/ tests/
-```
-
-To also verify the Rust engine in one command:
-```powershell
-cd rust\tom-engine; cargo test; cargo fmt --check; cargo clippy --all-targets --all-features -- -D warnings; cd ..\..
-```
-
----
-
-## 2. Phase 2 — Python Core & IPC Client Testing
-
-All commands in this section should be executed from the **repository root**:
 ```powershell
 cd C:\Users\vishnuu\Projects\TOM
 ```
 
-### 2.1 All Python Unit Tests (153 tests)
-
-Runs all unit tests across protocol schemas, exception taxonomy, named pipe transport, IPC client, request correlation, reconnection state machine, `EngineClient`, and `LifecycleManager`:
-
-```powershell
-pytest tests/unit/ -v
-```
-
-**Expected Result:**
-```text
-============================= 153 passed in ~1.0s =============================
-```
-
-#### Breakdown of Unit Test Coverage:
-* `tests/unit/core/test_config.py` — Config schema validation & loading (5 tests)
-* `tests/unit/ipc/test_protocol.py` — Protocol v1 wire format, ID generation, ErrorCode enum (20 tests)
-* `tests/unit/ipc/test_errors.py` — Exception taxonomy and RemoteError predicates (20 tests)
-* `tests/unit/ipc/test_transport.py` — Named pipe framing, 1MB limit, timeout, mock transport (24 tests)
-* `tests/unit/ipc/test_client.py` — Correlation, receive loop, timeouts, cancellation, reconnection backoff (32 tests)
-* `tests/unit/ipc/test_engine_client.py` — Typed domain models, hardware fallback, method routing (36 tests)
-* `tests/unit/ipc/test_lifecycle.py` — Startup sequence, idempotent stop, signal handling (12 tests)
-* `tests/unit/telemetry/test_logging.py` — Secret redactor & structured JSON logging (4 tests)
+> 💡 **You only need to do this once per terminal session.** All subsequent commands assume you're in this folder.
 
 ---
 
-### 2.2 Live End-to-End Integration Tests (15 tests)
+## 2. Quick Check — Run Everything at Once
 
-Runs live end-to-end integration tests over the real Windows Named Pipe (`\\.\pipe\tom-engine`). The test suite **automatically starts and stops `tom-engine.exe`** if it is not already running:
+Want to verify the whole project in one go? Run these three commands:
 
 ```powershell
-pytest tests/integration/ -v
+# Step 1 — Run ALL Python tests (unit + integration) — expect 469 passed
+.\.venv\Scripts\pytest.exe tests/ -q --tb=short
+
+# Step 2 — Check Python code quality (expect "All checks passed!")
+.\.venv\Scripts\ruff.exe check python/ tests/
+.\.venv\Scripts\ruff.exe format --check python/ tests/
+
+# Step 3 — Run Rust engine tests (expect 79 passed)
+cd rust\tom-engine
+cargo test
+cd ..\..
 ```
 
-**Expected Result:**
-```text
-tests/integration/python_rust/test_lifecycle.py ..                       [ 13%]
-tests/integration/python_rust/test_live_ipc.py .............             [100%]
-============================= 15 passed in ~0.6s ==============================
-```
-
-#### What is Verified Live:
-1. `engine.ping` → Validates roundtrip pong and engine version
-2. `engine.status` → Confirms engine is "running"
-3. `system.cpu` → Live core count and CPU utilization percentage
-4. `system.memory` → Real RAM total/used/available bytes
-5. `system.gpu` → GPU telemetry or graceful fallback if absent
-6. `system.battery` → Battery charge state or desktop fallback
-7. `system.disk` → Mounted drive volumes and storage metrics
-8. `system.processes` → Top processes ranked by resource consumption
-9. `system.all` → Aggregated snapshot of all 6 telemetry domains
-10. **10 concurrent pings** → High-concurrency correlation without crosstalk
-11. **Remote errors** → `NOT_FOUND` on unknown methods and `VERSION_MISMATCH` on bad versions
-12. **Zero task leaks** → Active task audit across 100 sequential requests
-13. **Lifecycle 2-cycle test** → Full startup and shutdown executed twice without leaks
+**What to expect:**
+| Check | Expected Result |
+|:---|:---|
+| Python tests | `469 passed` (419 unit + 50 integration) |
+| Ruff lint | `All checks passed!` |
+| Ruff format | `69 files already formatted` |
+| Rust tests | `79 passed` |
+| **Total Verified** | **548 passed** |
 
 ---
 
-### 2.3 IPC Roundtrip Latency Benchmark (100 requests)
+## 3. Phase 1 — Rust Engine Tests
 
-Measures 100 sequential requests between Python and Rust across the Windows Named Pipe:
+The Rust engine (`tom-engine`) is the always-on background process that handles system telemetry, audio, and IPC.
+
+### 3.1 Run Rust Unit & Integration Tests
 
 ```powershell
-$env:PYTHONPATH="python"
+cd rust\tom-engine
+cargo test
+```
+
+**Expected output:**
+```
+test result: ok. 72 passed  ← unit tests
+test result: ok. 7 passed   ← integration tests
+```
+
+### 3.2 Check Rust Code Quality
+
+```powershell
+# Check formatting (no output = clean)
+cargo fmt --check
+
+# Strict linter (no warnings allowed)
+cargo clippy --all-targets --all-features -- -D warnings
+```
+
+### 3.3 Start the Engine Manually (optional)
+
+If you want to see the engine running live:
+
+```powershell
+cargo run
+```
+
+You'll see JSON log lines like:
+```json
+{"level":"INFO","message":"Starting TOM Engine","version":"0.1.0"}
+{"level":"INFO","message":"TOM Engine initialized. Awaiting signals or shutdown..."}
+```
+
+Press **Ctrl + C** to stop it cleanly.
+
+```powershell
+# Go back to project root when done
+cd ..\..
+```
+
+---
+
+## 4. Phase 2 — Python Core & IPC Tests
+
+Phase 2 is the Python side: it connects to the Rust engine over a Windows Named Pipe and provides a clean async API.
+
+### 4.1 Run Python Unit Tests
+
+```powershell
+.\.venv\Scripts\pytest.exe tests/unit/ -v
+```
+
+**Expected result:** `419 passed`
+
+The unit tests cover:
+- Config schema loading
+- IPC protocol wire format
+- Named pipe transport
+- Request/response correlation
+- Reconnection state machine
+- `EngineClient` typed API
+- `LifecycleManager` startup/shutdown
+- Tools, security, agent, and model provider layers
+
+### 4.2 Run Live Integration Tests
+
+These tests **automatically start and stop `tom-engine.exe`** — you don't need to do anything extra.
+
+```powershell
+.\.venv\Scripts\pytest.exe tests/integration/ -v
+```
+
+**Expected result:** `50 passed` (47 engine/tool integration + 3 live LM Studio smoke tests)
+
+These tests verify:
+- Live CPU, RAM, GPU, battery, disk, process telemetry over Named Pipe
+- 10 concurrent requests without errors
+- Latency well under 10ms
+- Lifecycle startup and shutdown
+- End-to-end tool execution and permission checks
+- Live LM Studio generation and streaming (if LM Studio is running)
+
+### 4.3 Run the IPC Latency Benchmark
+
+This measures how fast Python and Rust can talk to each other (target: under 10ms P95):
+
+```powershell
+$env:PYTHONPATH = "python"
 python tests/integration/python_rust/bench_ipc.py
 ```
 
-**Expected Output:**
-```text
-==================================================
-      TOM IPC Roundtrip Latency Benchmark      
-==================================================
-Iterations:     100
-Min:            0.109 ms
-Mean:           0.172 ms
-P50 (Median):   0.144 ms
-P95:            0.359 ms (Target: < 10.0 ms)
-P99:            0.448 ms
-Max:            0.448 ms
-==================================================
-RESULT: PASS (P95 0.359 ms < 10.0 ms target)
+**Expected output:**
+```
+P95:    0.359 ms  (Target: < 10.0 ms)
+RESULT: PASS
 ```
 
 ---
 
-### 2.4 Python Code Formatting & Linting
+## 5. Phase 3 — Tools & Security Tests
 
-Verify that all Python code complies with Ruff rules:
+Phase 3 built a deterministic tool execution engine with a 3-tier security model (SAFE / ASK_USER / BLOCK).
+
+### 5.1 Run Tool & Security Unit Tests
 
 ```powershell
-# Run the Ruff linter
-ruff check python/ tests/
-
-# Verify formatting without altering files
-ruff format --check python/ tests/
+.\.venv\Scripts\pytest.exe tests/unit/tools/ tests/unit/security/ -v
 ```
 
-**Expected Result:** `All checks passed!` with 0 violations and 0 diffs.
+**Expected result:** `127 passed`
+
+Covers:
+- `ToolRegistry` — tool registration and lookup
+- `ToolDefinition` — schema extraction and JSON export
+- `PermissionEngine` — SAFE/ASK_USER/BLOCK policy enforcement
+- `ConfirmationHook` — user confirmation flows
+- `ToolExecutor` — full pipeline: lookup → permission → confirm → validate → run → result
+- System tools (CPU, RAM, GPU, battery, disk, processes)
+- File tools (read, list, search, write, delete) with `PathGuard` sandbox
+
+### 5.2 Run Tool Integration Tests
+
+```powershell
+.\.venv\Scripts\pytest.exe tests/integration/tools/ -v
+```
+
+**Expected result:** `47 passed`
+
+These are end-to-end tests through the full tool pipeline including real file operations and live system queries.
+
+### 5.3 Try a Tool Manually
+
+Run a live CPU info query through the tool system:
+
+```powershell
+$env:PYTHONPATH = "python"
+python -c "
+import asyncio
+from tom.tools.bootstrap import setup_default_tools
+from tom.tools.registry import ToolRegistry
+from tom.tools.executor import ToolExecutor
+
+async def main():
+    reg = ToolRegistry()
+    setup_default_tools(registry=reg)
+    executor = ToolExecutor(registry=reg)
+    result = await executor.execute('system.cpu_info')
+    print('Success:', result.success)
+    print('CPU cores:', result.data.core_count)
+    print('CPU usage:', result.data.usage_percent, '%')
+
+asyncio.run(main())
+"
+```
 
 ---
 
-## 3. Phase 2 — Interactive Live Python Sandbox
+## 6. Phase 4 — Agent Framework & Model Provider Tests
 
-Try communicating with the Rust engine interactively using the high-level Python APIs.
+Phase 4 implements the AI Agent layer and the Model Provider boundary:
 
-### 3.1 Querying Live Telemetry via `EngineClient`
+1. **Stateful Agent** with a strict 6-state lifecycle (`IDLE`, `THINKING`, `ACTING`, `WAITING_CONFIRMATION`, `ERROR`, `TERMINATED`).
+2. **Centralized Tool Execution** through `ToolExecutor` with automatic confirmation handling.
+3. **Pluggable Model Provider** interface (`LLMProvider` / `ModelProvider`), supporting deterministic mock testing and local LM Studio / Bionic endpoints.
 
-Run this PowerShell command to connect to `tom-engine`, query live CPU, RAM, and Battery stats, and print them:
+### Agent States (the lifecycle)
+
+```
+IDLE → THINKING → ACTING → WAITING_CONFIRMATION → ACTING → THINKING
+                         ↘ ERROR / TERMINATED
+```
+
+### 6.1 Run All Agent Unit Tests
 
 ```powershell
-$env:PYTHONPATH="python"
+.\.venv\Scripts\pytest.exe tests/unit/agents/ -v
+```
+
+**Expected result:** `78 passed`
+
+Covers:
+- **State machine** — valid and invalid transitions, callbacks, `StateChangeEvent`
+- **Conversation history** — bounded context, system prompt anchoring, trimming
+- **Tool execution** — `execute_tool()` with SAFE, ASK_USER (approve & deny), BLOCK, errors, and cancellation
+
+### 6.2 Run Model Provider Unit Tests
+
+```powershell
+.\.venv\Scripts\pytest.exe tests/unit/models/ -v
+```
+
+**Expected result:** `61 passed`
+
+Covers:
+- `ModelRequest`, `ModelResponse`, `StreamChunk`, `TokenUsage` schema validation
+- `MockModelProvider` scripted responses, error injection, simulated streaming
+- `HttpModelProvider` and `LMStudioProvider` OpenAI-compatible request building and SSE streaming
+- `AgentDependencies` model provider injection (agent decoupled from concrete providers)
+- Clean error hierarchy (`ModelConnectionError`, `ModelAPIError`, `ModelTimeoutError`, `ModelResponseError`)
+
+### 6.3 Run Live LM Studio Smoke Test
+
+If you have LM Studio running locally on `http://localhost:1234/v1`:
+
+```powershell
+.\.venv\Scripts\pytest.exe tests/integration/models/ -v
+```
+
+**Expected result:** `3 passed` (auto-detects loaded model like `qwen3-8b`, tests health, generation, and streaming).
+*(Note: If LM Studio is not running, these tests skip automatically without failing).*
+
+### 6.4 Try the Agent Manually
+
+Create an agent, run a tool, and inspect the conversation history:
+
+```powershell
+$env:PYTHONPATH = "python"
+python -c "
+import asyncio
+from tom.agents.base import Agent
+from tom.agents.dependencies import AgentDependencies
+from tom.tools.bootstrap import setup_default_tools
+from tom.tools.registry import ToolRegistry
+
+async def main():
+    reg = ToolRegistry()
+    setup_default_tools(registry=reg)
+    deps = AgentDependencies(registry=reg)
+    agent = Agent(dependencies=deps)
+
+    print('Agent state:', agent.state.value)
+    result = await agent.execute_tool('system.cpu_info')
+    print('Tool succeeded:', result.success)
+    print('Agent state after:', agent.state.value)
+    print('Messages in history:', len(agent.history))
+
+asyncio.run(main())
+"
+```
+
+### 6.5 Try the Model Provider Manually
+
+#### Option A: Using Mock Provider (Zero Network, 100% Deterministic)
+
+```powershell
+$env:PYTHONPATH = "python"
+python -c "
+import asyncio
+from tom.models.providers.mock import MockModelProvider
+from tom.schemas.agent import Message, Role
+from tom.schemas.models import ModelRequest
+
+async def main():
+    provider = MockModelProvider(responses=['Hello from TOM mock brain!'])
+    req = ModelRequest(
+        model='test-model',
+        messages=[Message(role=Role.USER, content='Hi TOM!')]
+    )
+    resp = await provider.generate(req)
+    print('Response:', resp.content)
+
+asyncio.run(main())
+"
+```
+
+#### Option B: Using Live LM Studio (Requires LM Studio running at `http://localhost:1234/v1`)
+
+```powershell
+$env:PYTHONPATH = "python"
+python -c "
+import asyncio
+from tom.models.lmstudio import LMStudioProvider
+from tom.schemas.agent import Message, Role
+from tom.schemas.models import ModelRequest
+
+async def main():
+    provider = LMStudioProvider(base_url='http://localhost:1234/v1')
+    healthy = await provider.check_health()
+    print('LM Studio Healthy:', healthy)
+    if healthy:
+        req = ModelRequest(
+            model='qwen3-8b',
+            messages=[Message(role=Role.USER, content='Reply with one word: TOM')]
+        )
+        resp = await provider.generate(req)
+        print('Generated:', resp.content or resp.reasoning_content)
+
+asyncio.run(main())
+"
+```
+
+---
+
+## 7. Live Interactive Demos
+
+### Demo 1 — Query System Telemetry via EngineClient
+
+Connect to the Rust engine and fetch live system stats:
+
+```powershell
+$env:PYTHONPATH = "python"
 python -c "
 import asyncio
 from tom.ipc.client import NamedPipeIpcClient
@@ -179,11 +384,12 @@ async def main():
     await client.connect()
     try:
         ping = await engine.ping()
-        cpu = await engine.get_cpu()
-        mem = await engine.get_memory()
-        print(f'Engine Connected: {ping.version}')
-        print(f'CPU: {cpu.core_count} cores | Usage: {cpu.usage_percent:.1f}%')
-        print(f'RAM: {mem.used_bytes / (1024**3):.2f} GB used / {mem.total_bytes / (1024**3):.2f} GB total')
+        cpu  = await engine.get_cpu()
+        mem  = await engine.get_memory()
+        print(f'Engine version : {ping.version}')
+        print(f'CPU cores      : {cpu.core_count}')
+        print(f'CPU usage      : {cpu.usage_percent:.1f}%')
+        print(f'RAM used       : {mem.used_bytes / 1024**3:.2f} GB / {mem.total_bytes / 1024**3:.2f} GB')
     finally:
         await client.close()
 
@@ -191,33 +397,26 @@ asyncio.run(main())
 "
 ```
 
-> **Note:** If `tom-engine` is not already running in the background, run `cargo run` in another terminal or run the `LifecycleManager` snippet below!
+> **Note:** `tom-engine` must be running for this demo (`cargo run` in `rust\tom-engine`).
 
----
-
-### 3.2 Full Startup & Shutdown via `LifecycleManager`
-
-Test the complete lifecycle startup and shutdown coordinator:
+### Demo 2 — Full Lifecycle Startup & Shutdown
 
 ```powershell
-$env:PYTHONPATH="python"
+$env:PYTHONPATH = "python"
 python -c "
 import asyncio
 from tom.core.lifecycle import LifecycleManager
 
 async def demo():
     manager = LifecycleManager()
-    print('Starting TOM Lifecycle...')
+    print('Starting TOM...')
     await manager.start()
-    print(f'TOM is running: {manager.is_running}')
-    
-    # Query via manager.engine
+    print('Running:', manager.is_running)
     status = await manager.engine.status()
-    print(f'Engine health: {status.status}')
-    
-    print('Shutting down TOM cleanly...')
+    print('Engine status:', status.status)
+    print('Shutting down...')
     await manager.stop()
-    print(f'TOM is stopped: {manager.is_stopped}')
+    print('Stopped:', manager.is_stopped)
 
 asyncio.run(demo())
 "
@@ -225,93 +424,74 @@ asyncio.run(demo())
 
 ---
 
-## 4. Phase 1 — Rust Engine Verification (Compact)
+## 8. Troubleshooting
 
-All commands in this section should be executed from `rust/tom-engine`:
+### ❌ `No module named 'tom'`
+
+The Python path isn't set. Fix:
 ```powershell
-cd C:\Users\vishnuu\Projects\TOM\rust\tom-engine
+$env:PYTHONPATH = "python"
 ```
 
-### 4.1 Compiling & Running Rust Tests (79 tests)
+### ❌ Named pipe not found / connection timeout
 
-```powershell
-# Run all unit tests (72 tests) + integration hardening tests (7 tests)
-cargo test
-```
-**Expected Result:** `test result: ok. 72 passed` and `test result: ok. 7 passed` (total 79 passed).
-
-To see live latency measurements and timing logs during the integration hardening test:
-```powershell
-cargo test --test integration_hardening -- --nocapture
-```
-
-### 4.2 Rust Formatting & Clippy Linter
-
-```powershell
-# Check formatting
-cargo fmt --check
-
-# Strict Clippy lint check (zero warnings)
-cargo clippy --all-targets --all-features -- -D warnings
-```
-
-### 4.3 Running the Engine Manually
-
-To run the engine manually in a dedicated terminal:
-```powershell
-cargo run
-```
-You will see:
-```text
-{"timestamp":"...","level":"INFO","fields":{"message":"Starting TOM Engine","engine":"tom-engine","version":"0.1.0"}}
-{"timestamp":"...","level":"INFO","fields":{"message":"TOM Engine initialized. Awaiting signals or shutdown..."}}
-```
-Press **`Ctrl + C`** to gracefully shut down the engine.
-
----
-
-## 5. Troubleshooting & Handy Tips
-
-### Issue: Named pipe not found or connection timeout
-* **Cause:** `tom-engine` is not running.
-* **Solution:** 
-  * If running integration tests (`pytest tests/integration/ -v`) or the benchmark (`bench_ipc.py`), make sure you ran `cargo build` in `rust/tom-engine` so the binary `target/debug/tom-engine.exe` exists. The integration test suite will automatically launch it!
-  * Or manually start the engine in another terminal: `cd rust\tom-engine; cargo run`.
-
-### Issue: "Access denied" or "pipe busy"
-* **Cause:** A stale background `tom-engine` instance is holding the pipe.
-* **Solution:** Kill any running instances in PowerShell:
+The `tom-engine` binary isn't running.
+- The **integration tests** launch it automatically — no action needed.
+- For **manual demos**, start it yourself in a separate terminal:
   ```powershell
-  Stop-Process -Name "tom-engine" -Force -ErrorAction SilentlyContinue
+  cd C:\Users\vishnuu\Projects\TOM\rust\tom-engine
+  cargo run
   ```
 
-### Issue: Python `ModuleNotFoundError: No module named 'tom'`
-* **Cause:** `PYTHONPATH` does not include `python`.
-* **Solution:** Set the environment variable in PowerShell:
-  ```powershell
-  $env:PYTHONPATH="python"
-  ```
+### ❌ "Access denied" or "pipe busy"
+
+A stale engine process is blocking the pipe:
+```powershell
+Stop-Process -Name "tom-engine" -Force -ErrorAction SilentlyContinue
+```
+
+### ❌ LM Studio connection refused
+
+LM Studio server is not started on port 1234.
+- Open LM Studio -> Developer / Local Server tab -> click **Start Server**.
+- Ensure endpoint is `http://localhost:1234/v1`.
 
 ---
 
-## 6. Master Command Cheat Sheet
+## 9. Command Cheat Sheet
 
-| Category | Goal | PowerShell Command |
-| :--- | :--- | :--- |
-| **Python** | Run all unit tests | `pytest tests/unit/ -v` |
-| **Python** | Run live integration tests | `pytest tests/integration/ -v` |
-| **Python** | Run all tests (unit + integration) | `pytest tests/ -v` |
-| **Python** | Run IPC latency benchmark | `$env:PYTHONPATH="python"; python tests/integration/python_rust/bench_ipc.py` |
-| **Python** | Check linting | `ruff check python/ tests/` |
-| **Python** | Check formatting | `ruff format --check python/ tests/` |
-| **Python** | Auto-fix formatting | `ruff format python/ tests/` |
-| **Rust** | Run all tests (unit + integration) | `cd rust\tom-engine; cargo test; cd ..\..` |
-| **Rust** | Run integration benchmarks | `cd rust\tom-engine; cargo test --test integration_hardening -- --nocapture; cd ..\..` |
-| **Rust** | Strict Clippy linter | `cd rust\tom-engine; cargo clippy --all-targets --all-features -- -D warnings; cd ..\..` |
-| **Rust** | Check formatting | `cd rust\tom-engine; cargo fmt --check; cd ..\..` |
-| **Rust** | Launch engine manually | `cd rust\tom-engine; cargo run` |
-| **Cleanup** | Kill running `tom-engine` processes | `Stop-Process -Name "tom-engine" -Force -ErrorAction SilentlyContinue` |
+Run all commands from `C:\Users\vishnuu\Projects\TOM`.
+
+| What | Command |
+|:---|:---|
+| **Run ALL Python tests** | `.\.venv\Scripts\pytest.exe tests/ -q` |
+| **Run unit tests only** | `.\.venv\Scripts\pytest.exe tests/unit/ -v` |
+| **Run integration tests only** | `.\.venv\Scripts\pytest.exe tests/integration/ -v` |
+| **Run agent tests only** | `.\.venv\Scripts\pytest.exe tests/unit/agents/ -v` |
+| **Run model tests only** | `.\.venv\Scripts\pytest.exe tests/unit/models/ -v` |
+| **Run live LM Studio smoke test** | `.\.venv\Scripts\pytest.exe tests/integration/models/ -v` |
+| **Run tool tests only** | `.\.venv\Scripts\pytest.exe tests/unit/tools/ -v` |
+| **Run security tests only** | `.\.venv\Scripts\pytest.exe tests/unit/security/ -v` |
+| **IPC latency benchmark** | `$env:PYTHONPATH="python"; python tests/integration/python_rust/bench_ipc.py` |
+| **Lint check** | `.\.venv\Scripts\ruff.exe check python/ tests/` |
+| **Format check** | `.\.venv\Scripts\ruff.exe format --check python/ tests/` |
+| **Auto-fix formatting** | `.\.venv\Scripts\ruff.exe format python/ tests/` |
+| **Run Rust tests** | `cd rust\tom-engine; cargo test; cd ..\..` |
+| **Rust clippy** | `cd rust\tom-engine; cargo clippy --all-targets --all-features -- -D warnings; cd ..\..` |
+| **Rust format check** | `cd rust\tom-engine; cargo fmt --check; cd ..\..` |
+| **Start engine manually** | `cd rust\tom-engine; cargo run` |
+| **Kill engine process** | `Stop-Process -Name "tom-engine" -Force -ErrorAction SilentlyContinue` |
 
 ---
 
-🎉 **Phase 1 and Phase 2 are 100% complete and verified.** The repository is fully prepared for **Phase 3 — Deterministic Tools & Permission Engine**.
+## Current Test Baseline
+
+| Layer | Tests | Status |
+|:---|:---:|:---:|
+| Rust Engine (`cargo test`) | **79** | ✅ |
+| Python Unit (`tests/unit/`) | **419** | ✅ |
+| Python Integration (`tests/integration/`) | **50** | ✅ |
+| **Total** | **548** | ✅ |
+
+**Phases complete: 0 → 1 → 2 → 3 → 4 (Iterations 1, 2 & 3)**
+**Next up: Phase 4, Iteration 4 — Two-Tier Intent & Model Router**
