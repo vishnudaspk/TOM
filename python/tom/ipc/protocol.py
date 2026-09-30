@@ -277,3 +277,91 @@ class SystemSnapshot(BaseModel):
     battery: BatteryInfo
     disk: DiskInfo
     processes: list[ProcessItem]
+
+
+# ----------------------------------------------------------------------
+# Audio Subsystem Wire Schemas (Iteration 0)
+# ----------------------------------------------------------------------
+
+
+class AudioDeviceInfo(BaseModel):
+    """Structured audio endpoint device descriptor.
+
+    Mirrors Rust AudioDeviceInfo:
+    {"name": str, "is_default": bool, "is_input": bool,
+     "min_channels": u16, "max_channels": u16,
+     "min_sample_rate": u32, "max_sample_rate": u32}
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    name: str
+    is_default: bool
+    is_input: bool
+    min_channels: int
+    max_channels: int
+    min_sample_rate: int
+    max_sample_rate: int
+
+
+class AudioHostInfo(BaseModel):
+    """System-wide audio host and available device inventory.
+
+    Mirrors Rust AudioHostInfo:
+    {"host_id": str, "input_devices": [...], "output_devices": [...],
+     "default_input_device": str | None, "default_output_device": str | None}
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    host_id: str
+    input_devices: list[AudioDeviceInfo] = Field(default_factory=list)
+    output_devices: list[AudioDeviceInfo] = Field(default_factory=list)
+    default_input_device: str | None = None
+    default_output_device: str | None = None
+
+
+class AudioStatusResponse(BaseModel):
+    """Current operating status of the engine's audio subsystem.
+
+    Mirrors Rust AudioStatus:
+    {"capture_active": bool, "playback_active": bool,
+     "capture_sample_rate": u32, "capture_channels": u16,
+     "captured_samples": usize}
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    capture_active: bool
+    playback_active: bool
+    capture_sample_rate: int
+    capture_channels: int
+    captured_samples: int
+
+
+class AudioSpeechResponse(BaseModel):
+    """PCM audio speech payload retrieved from the engine's speech buffer.
+
+    Wire: {"samples": [float, ...], "sample_rate": int, "channels": int, "sample_count": int}
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    samples: list[float]
+    sample_rate: int
+    channels: int
+    sample_count: int
+
+
+class AudioOperationResponse(BaseModel):
+    """Generic status response for audio control actions.
+
+    Wire: {"success": bool, "message": str | None, "captured_samples": int | None, "samples_played": int | None}
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    success: bool = True
+    message: str | None = None
+    captured_samples: int | None = None
+    samples_played: int | None = None

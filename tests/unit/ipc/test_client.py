@@ -397,7 +397,8 @@ class TestEdgeCasesAndFailureModes:
     def test_connection_lost_fails_all_pending_requests(self) -> None:
         async def _test() -> None:
             transport = QueueMockTransport()
-            client = NamedPipeIpcClient(transport=transport)
+            config = IpcConfig(max_reconnect_attempts=0)
+            client = NamedPipeIpcClient(config=config, transport=transport)
             await client.connect()
 
             task1 = asyncio.create_task(client.request("slow.method1"))

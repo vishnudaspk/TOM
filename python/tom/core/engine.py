@@ -26,6 +26,10 @@ Architecture:
 
 from tom.ipc.client import NamedPipeIpcClient
 from tom.ipc.protocol import (
+    AudioHostInfo,
+    AudioOperationResponse,
+    AudioSpeechResponse,
+    AudioStatusResponse,
     BatteryInfo,
     CpuInfo,
     DiskInfo,
@@ -157,3 +161,93 @@ class EngineClient:
         """
         data = await self._ipc.request("system.all")
         return SystemSnapshot.model_validate(data)
+
+    # ------------------------------------------------------------------
+    # Audio subsystem endpoints (Phase 6 Iteration 0)
+    # ------------------------------------------------------------------
+
+    async def get_audio_devices(self) -> AudioHostInfo:
+        """Retrieve system-wide audio input and output device inventory.
+
+        IPC method: audio.devices
+        Returns: AudioHostInfo(host_id, input_devices, output_devices, ...)
+        """
+        data = await self._ipc.request("audio.devices")
+        return AudioHostInfo.model_validate(data)
+
+    async def get_audio_status(self) -> AudioStatusResponse:
+        """Retrieve current audio capture/playback status and buffer metrics.
+
+        IPC method: audio.status
+        Returns: AudioStatusResponse(capture_active, playback_active, ...)
+        """
+        data = await self._ipc.request("audio.status")
+        return AudioStatusResponse.model_validate(data)
+
+    async def start_audio_capture(
+        self,
+        device_name: str | None = None,
+        sample_rate: int = 16000,
+        channels: int = 1,
+        chunk_size: int = 1600,
+    ) -> AudioOperationResponse:
+        """Begin audio capture session into the engine's speech buffer.
+
+        IPC method: audio.capture_start
+        """
+        params: dict[str, object] = {
+            "sample_rate": sample_rate,
+            "channels": channels,
+            "chunk_size": chunk_size,
+        }
+        if device_name is not None:
+            params["device_name"] = device_name
+        data = await self._ipc.request("audio.capture_start", params)
+        return AudioOperationResponse.model_validate(data)
+
+    async def stop_audio_capture(self) -> AudioOperationResponse:
+        """Stop active audio capture and retrieve sample count.
+
+        IPC method: audio.capture_stop
+        """
+        data = await self._ipc.request("audio.capture_stop")
+        return AudioOperationResponse.model_validate(data)
+
+    async def get_captured_speech(self, clear: bool = True) -> AudioSpeechResponse:
+        """Retrieve captured PCM speech samples from the engine's buffer.
+
+        IPC method: audio.get_speech
+        Args:
+            clear: Whether to clear the buffer after reading (default True).
+        """
+        data = await self._ipc.request("audio.get_speech", {"clear": clear})
+        return AudioSpeechResponse.model_validate(data)
+
+    async def play_audio_buffer(
+        self,
+        samples: list[float],
+        device_name: str | None = None,
+        sample_rate: int = 24000,
+        channels: int = 1,
+    ) -> AudioOperationResponse:
+        """Enqueue PCM audio samples for asynchronous playback.
+
+        IPC method: audio.play_buffer
+        """
+        params: dict[str, object] = {
+            "samples": samples,
+            "sample_rate": sample_rate,
+            "channels": channels,
+        }
+        if device_name is not None:
+            params["device_name"] = device_name
+        data = await self._ipc.request("audio.play_buffer", params)
+        return AudioOperationResponse.model_validate(data)
+
+    async def stop_audio_playback(self) -> AudioOperationResponse:
+        """Immediately stop audio playback and clear buffers (barge-in).
+
+        IPC method: audio.playback_stop
+        """
+        data = await self._ipc.request("audio.playback_stop")
+        return AudioOperationResponse.model_validate(data)

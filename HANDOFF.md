@@ -1,60 +1,95 @@
-# TOM Agent Handoff
+# TOM Developer Handoff — Ready for Phase 7
 
-## Current Position
-- **Current Phase**: Phase 4 — Agent Framework & Local Model Routing (**IN PROGRESS — Iteration 5/6 Complete**)
-- **Next Target**: **Phase 4, Iteration 6 — Phase 4 Exit Gate & Closeout**
-- **Completed Milestones**:
-  - **Phase 0**: Project foundation, schemas, YAML config loader, structured logging.
-  - **Phase 1**: Rust engine (`tom-engine`), named pipe IPC server, system telemetry, audio/hotkey foundations (79 tests).
-  - **Phase 2**: Python core, named pipe IPC client, typed `EngineClient`, `LifecycleManager` (168 tests, P95 0.359 ms).
-  - **Phase 3 (Tools & Security — 6/6 Iterations Complete)**: Complete deterministic tool pipeline, `PermissionEngine`, sandboxed file tools (`PathGuard`), system tools, bootstrap seam (`setup_default_tools`) (406 tests).
-  - **Phase 4 (Agent Framework & Local Model Routing — Iterations 1, 2, 3, 4, & 5 Complete)**:
-    - Iteration 1: `python/tom/schemas/agent.py` (`AgentState`, `AgentConfig`, `AgentIdentity`, `Role`, `Message`, `ConversationHistory`, `ToolCallMetadata`, `StateChangeEvent`, `InvalidStateTransitionError`), `python/tom/agents/base.py` (`Agent`, `VALID_TRANSITIONS` matrix, strict transition validation, observer callbacks). Decision 031.
-    - Iteration 2: `python/tom/agents/dependencies.py` (`AgentDependencies`), `python/tom/agents/base.py` updated (`AgentAwareConfirmationHook`, `Agent.execute_tool()`). 10 new unit tests in `tests/unit/agents/test_agent_tools.py`. Decision 032.
-    - Iteration 3: Pluggable model provider boundary: `ModelProvider` / `LLMProvider` protocol in `python/tom/models/base.py` and `provider.py`, typed schemas in `schemas/models.py` and `models/schemas.py`, deterministic test double `MockModelProvider` in `models/providers/mock.py`, OpenAI-compatible HTTP adapter `HttpModelProvider` and `LMStudioProvider` in `models/providers/http.py` and `models/lmstudio.py`, full SSE streaming parser with reasoning token support (`reasoning_content`), structured error hierarchy, `model_provider` injected into `AgentDependencies`. 61 unit tests (`tests/unit/models/test_providers.py`) and 3 live LM Studio integration smoke tests (`tests/integration/models/test_lmstudio_smoke.py`). Decision 033.
-    - Iteration 4: Two-Tier Intent & Model Router: `python/tom/schemas/router.py` (`IntentDomain` enum, `RoutingDecision` schema), `python/tom/core/router.py` (`IntentRouter` with Tier 1 heuristic < 1ms and Tier 2 model-backed classification via `LLMProvider`), `tests/unit/core/test_router.py` (49 tests covering Tier 1, Tier 2 mock, ambiguous input, provider failure, malformed output). Decision 034.
-    - Iteration 5: Agent Orchestrator: `python/tom/agents/orchestrator.py` (`AgentOrchestrator` with multi-step reasoning loop, bounded execution, cooperative cancellation, and error recovery), `python/tom/core/context.py` (`CancellationToken`), `tests/unit/agents/test_agent_loop.py` (24 tests covering initialization, Tier 1 direct tool routing, Tier 2 multi-step model loop, tool call execution, model error recovery, cooperative cancellation, state transitions, and step bounds). Decision 035.
-- **Environment**: Dedicated `.venv` at `C:\Users\vishnuu\Projects\TOM\.venv` (Python 3.11.9, pytest 9.1.1, ruff 0.16.7).
-- **Current Verified Test Baseline**:
-  - Python Unit: **492 passed** (`pytest tests/unit/ -v`)
-  - Python Integration: **50 passed** (`pytest tests/integration/ -v`)
-  - Total Python: **542 passed**
-  - Rust: **79 passed** (`cargo test` in `rust/tom-engine`)
-  - Total Verified Tests: **621 passed** (0 failures, 0 regressions)
-  - Quality Gates: Ruff clean (0 violations, 0 diffs), Cargo clippy/fmt clean
+## Current Status
+
+- **Phases 0–6**: CLOSED & COMPLETE.
+- **Current Milestone**: Phase 7 — Vision & Multimodal Capabilities / Extended OS Automation.
+- **Active Implementation Plan**: [`docs/development/PHASE7_IMPLEMENTATIONPLAN.md`](file:///c:/Users/vishnuu/Projects/TOM/docs/development/PHASE7_IMPLEMENTATIONPLAN.md).
+- **Verified Test Baseline**: 848 Python tests (756 unit + 92 integration) + 83 Rust tests (76 unit + 7 integration) = **931 total verified tests**.
+- **Quality Gates**: Ruff check clean (0 violations), Ruff format clean (0 diffs), Cargo fmt clean, Cargo clippy clean (0 warnings).
+- **Baseline Date**: 2026-09-30.
 
 ---
 
-## Iteration 4 — Completed
+## Resume Point: Phase 7 — Iteration 0
 
-The Two-Tier Intent & Model Router is implemented and tested:
+The next coding session should begin immediately with **Phase 7 — Iteration 0: Rust Input IPC & OS Input Boundary**.
 
-- **`python/tom/schemas/router.py`**: `IntentDomain` enum (`SYSTEM`, `FILES`, `REASONING`, `MEMORY`, `VISION`, `CHAT`, `UNKNOWN`) and `RoutingDecision` schema (domain, confidence, target_tool, route_tier, latency_ms).
-- **`python/tom/core/router.py`**: `IntentRouter` class providing:
-  - **Tier 1** (fast heuristic < 1ms): keyword/pattern matching for obvious system/file requests and direct tool name patterns (`system.*`, `files.*`).
-  - **Tier 2** (model-backed via `LLMProvider`): classifies ambiguous prompts using a classification prompt; safe fallback to `REASONING` on provider failure, timeout, or malformed output.
-- **`tests/unit/core/test_router.py`**: 49 deterministic tests covering Tier 1 paths, Tier 2 with mock provider, ambiguous input, provider failure/timeout, and malformed model output.
+### Immediate Implementation Tasks (Iteration 0)
+
+1. **Rust Engine Input Manager (`rust/tom-engine/src/input/manager.rs`)**:
+   - Implement `InputManager` orchestrating canonical virtual-desktop coordinate clamping, parameter bounding, rate limiting, and emergency cancellation.
+   - Implement Win32 `SendInput` primitives for mouse moves, clicks (left, right, middle, double), and wheel scrolls.
+   - Implement Win32 `SendInput` primitives for keyboard key down/up and Unicode character sequence typing.
+   - Add safety guardrails:
+     - Parameter limits: Clamped typing length (max 500 chars/call) and bounded key sequences.
+     - Emergency hotkey: Global listener for `Ctrl+Alt+Shift+Escape` that immediately aborts active/queued inputs.
+     - Corner slam fail-safe: Detects physical mouse slam into `(0, 0)` during automation (without confusing valid requested coordinates).
+     - Dry-run / test mode: Flag to validate coordinate math and parameters without calling physical `SendInput` during automated tests.
+2. **Rust IPC Handlers (`rust/tom-engine/src/ipc/handlers.rs`)**:
+   - Register low-level IPC handlers under `input.*`:
+     - `input.mouse_click`
+     - `input.mouse_move`
+     - `input.mouse_position`
+     - `input.keyboard_press`
+     - `input.keyboard_type`
+     - `input.status`
+3. **Python IPC Layer**:
+   - Register `input.*` IPC method names in `python/tom/ipc/protocol.py`.
+   - Add typed wire models in `python/tom/schemas/ipc.py`.
+   - Extend `EngineClient` in `python/tom/core/engine.py` with typed methods (`mouse_click`, `mouse_move`, `get_mouse_position`, `keyboard_press`, `keyboard_type`).
+4. **Targeted Tests**:
+   - Rust unit tests in `src/input/manager.rs`.
+   - Rust integration tests in `tests/integration_input.rs` (using dry-run mode).
+   - Python unit tests in `tests/unit/ipc/test_engine_client.py`.
 
 ---
 
-## Iteration 5 — Completed
+## Critical Rules & Boundaries for Phase 7
 
-The Agent Orchestrator, Cancellation, and Error Recovery systems are implemented and tested:
-
-- **`python/tom/agents/orchestrator.py`**: `AgentOrchestrator` class providing:
-  - **Pipeline**: `User Prompt → IntentRouter → Direct Tool or Agent Loop → Response`
-  - **Tier 1 path**: Direct tool execution via `_execute_direct_tool` with result formatting (BaseModel → JSON, dict/list → JSON, fallback → string).
-  - **Tier 2 path**: Multi-step agent loop (`_run_agent_loop`) — model → tool → observation loop bounded by `max_steps`.
-  - **Cancellation**: Cooperative cancellation via `CancellationToken`; checks before each step, between tool calls, and at loop start; returns `"Task cancelled"` and transitions to `TERMINATED`.
-  - **Error recovery**: Model errors return `"Model error: ..."` with `ERROR` state; max steps exceeded sets `ERROR` state and returns `"Maximum steps exceeded"`.
-- **`python/tom/core/context.py`**: `CancellationToken` class wrapping `asyncio.Event` for cooperative cross-task cancellation signalling.
-- **`tests/unit/agents/test_agent_loop.py`**: 24 deterministic tests covering initialization, Tier 1 direct tool routing, Tier 2 multi-step model loop, tool call execution, model error recovery (provider error, timeout, generic exception), cooperative cancellation, direct tool error handling, state transitions, model request construction, step bounds, and empty prompt handling.
+1. **Local-Only Runtime**:
+   - Phase 7 runtime is strictly local. No cloud LLM/VLM execution, no cloud fallback, and no remote screenshot transmission.
+   - `CloudVLMProvider` is future-only and must not be implemented or activated in Phase 7.
+2. **Python vs. Rust Boundary**:
+   - Python owns screen capture, image preprocessing, OCR, OpenCV, optional YOLO/SAM, VLM orchestration, and tool validation.
+   - Rust owns mouse/keyboard primitives, canonical coordinate clamping, emergency hotkey, and Windows `SendInput`.
+   - Python must **never** directly inject OS input using `pyautogui`, `pywin32`, or `pynput`.
+   - High-level tool namespace is `os.input.*`; low-level Rust IPC namespace is `input.*`.
+3. **Data-Driven Tool Permissions**:
+   - Tool permissions must be explicit metadata in `ToolRegistry` and `PermissionEngine` (`vision.capture`, `vision.ocr`, `vision.find_element`, `vision.ask` $\rightarrow$ `SAFE`; `os.input.get_cursor_pos` $\rightarrow$ `SAFE`; `os.input.click`, `os.input.type_text`, `os.input.hotkey` $\rightarrow$ `ASK_USER`).
+   - Never use string-prefix matching (e.g. `if name.startswith("vision.")`) as a security mechanism.
+4. **Ephemeral Privacy Lifecycle**:
+   - Screen captures exist only in volatile RAM during request execution and are discarded immediately.
+   - Never persist screenshots to disk, temporary files, or databases by default.
+   - Never log raw image payloads, base64 strings, or unredacted OCR credentials.
+   - Never automatically persist vision results into SQLite or Qdrant memory.
+5. **Safe Automated Testing**:
+   - Automated unit/integration tests must use dry-run mode or mocks; they must **never** move the physical mouse cursor, click real UI, or type into active applications on the user's desktop.
+6. **Backward Compatibility**:
+   - When updating `AgentDependencies` in `python/tom/agents/dependencies.py`, `vision_manager: object | None = Field(default=None)` must be optional with default `None` to prevent breaking existing tests and call sites.
+7. **What NOT to Change**:
+   - Do not modify or redesign completed Phase 0–6 code (Rust `AudioManager`, `VoicePipelineManager`, `ToolExecutor`, `MemoryManager`, etc.).
+   - Do not bypass the `ToolExecutor` and `PermissionEngine` pipeline.
 
 ---
 
-## Mandatory Development Rules for Next Agent
+## Testing & Verification Commands
 
-1. **Virtual Environment**: Always use `C:\Users\vishnuu\Projects\TOM\.venv`. Never pollute external Python environments.
-2. **Phase Boundary Discipline**: Implement ONLY Iteration 6 (Phase 4 Exit Gate). Do not implement beyond Phase 4.
-3. **No Heavy AI Dependencies**: Do NOT install `torch`, `llama-cpp-python`, `transformers`, `vLLM`, `qdrant-client`, or `whisper`.
-4. **Phase 4 Plan Remains Active**: Do NOT delete `PHASE4_IMPLEMENTATIONPLAN.md` until Iteration 6 and Phase 4 exit gate are complete.
+```powershell
+# 1. Activate environment
+.\.venv\Scripts\Activate.ps1
+
+# 2. Run focused tests during Iteration 0 (do NOT run the full suite for baseline)
+pytest tests/unit/ipc/test_engine_client.py -v
+cd rust\tom-engine
+cargo test input
+cargo fmt --check
+cargo clippy --all-targets --all-features -- -D warnings
+cd ..\..
+
+# 3. Full test suite verification (ONLY required at the Phase 7 Exit Gate)
+pytest tests/unit/ tests/integration/ -q
+cd rust\tom-engine
+cargo test
+cd ..\..
+```

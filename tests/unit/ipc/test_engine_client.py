@@ -18,6 +18,11 @@ from tom.ipc.errors import (
     RemoteError,
 )
 from tom.ipc.protocol import (
+    AudioDeviceInfo,
+    AudioHostInfo,
+    AudioOperationResponse,
+    AudioSpeechResponse,
+    AudioStatusResponse,
     BatteryInfo,
     CpuInfo,
     DiskInfo,
@@ -594,5 +599,150 @@ class TestEngineClientErrorPropagation:
 
             with pytest.raises(ValidationError):
                 await engine.get_cpu()
+
+        run_async(_test())
+
+
+# ---------------------------------------------------------------------------
+# Audio Subsystem EngineClient Tests (Phase 6 Iteration 0)
+# ---------------------------------------------------------------------------
+
+
+class TestEngineClientAudio:
+    """Verify EngineClient audio methods against FakeIpcClient."""
+
+    def test_get_audio_devices(self) -> None:
+        async def _test() -> None:
+            engine, fake = make_engine()
+            fake.set_response(
+                "audio.devices",
+                {
+                    "host_id": "wasapi",
+                    "input_devices": [
+                        {
+                            "name": "Microphone (Realtek)",
+                            "is_default": True,
+                            "is_input": True,
+                            "min_channels": 1,
+                            "max_channels": 2,
+                            "min_sample_rate": 16000,
+                            "max_sample_rate": 48000,
+                        }
+                    ],
+                    "output_devices": [
+                        {
+                            "name": "Speakers (Realtek)",
+                            "is_default": True,
+                            "is_input": False,
+                            "min_channels": 2,
+                            "max_channels": 2,
+                            "min_sample_rate": 44100,
+                            "max_sample_rate": 48000,
+                        }
+                    ],
+                    "default_input_device": "Microphone (Realtek)",
+                    "default_output_device": "Speakers (Realtek)",
+                },
+            )
+
+            res = await engine.get_audio_devices()
+            assert isinstance(res, AudioHostInfo)
+            assert res.host_id == "wasapi"
+            assert len(res.input_devices) == 1
+            assert isinstance(res.input_devices[0], AudioDeviceInfo)
+            assert res.input_devices[0].name == "Microphone (Realtek)"
+            assert len(res.output_devices) == 1
+            assert res.default_input_device == "Microphone (Realtek)"
+
+        run_async(_test())
+
+    def test_get_audio_status(self) -> None:
+        async def _test() -> None:
+            engine, fake = make_engine()
+            fake.set_response(
+                "audio.status",
+                {
+                    "capture_active": False,
+                    "playback_active": True,
+                    "capture_sample_rate": 16000,
+                    "capture_channels": 1,
+                    "captured_samples": 3200,
+                },
+            )
+
+            res = await engine.get_audio_status()
+            assert isinstance(res, AudioStatusResponse)
+            assert res.capture_active is False
+            assert res.playback_active is True
+            assert res.capture_sample_rate == 16000
+            assert res.captured_samples == 3200
+
+        run_async(_test())
+
+    def test_start_and_stop_audio_capture(self) -> None:
+        async def _test() -> None:
+            engine, fake = make_engine()
+            fake.set_response(
+                "audio.capture_start", {"success": True, "message": "Capture started"}
+            )
+            fake.set_response("audio.capture_stop", {"success": True, "captured_samples": 4800})
+
+            start_res = await engine.start_audio_capture(
+                device_name="Mic1", sample_rate=16000, channels=1, chunk_size=1600
+            )
+            assert isinstance(start_res, AudioOperationResponse)
+            assert start_res.success is True
+
+            # Verify arguments passed to IPC
+            assert fake.calls[0][0] == "audio.capture_start"
+            assert fake.calls[0][1]["device_name"] == "Mic1"
+            assert fake.calls[0][1]["sample_rate"] == 16000
+
+            stop_res = await engine.stop_audio_capture()
+            assert isinstance(stop_res, AudioOperationResponse)
+            assert stop_res.captured_samples == 4800
+
+        run_async(_test())
+
+    def test_get_captured_speech(self) -> None:
+        async def _test() -> None:
+            engine, fake = make_engine()
+            fake.set_response(
+                "audio.get_speech",
+                {
+                    "samples": [0.0, 0.1, 0.2, 0.1],
+                    "sample_rate": 16000,
+                    "channels": 1,
+                    "sample_count": 4,
+                },
+            )
+
+            res = await engine.get_captured_speech(clear=True)
+            assert isinstance(res, AudioSpeechResponse)
+            assert res.sample_count == 4
+            assert res.sample_rate == 16000
+            assert res.samples == [0.0, 0.1, 0.2, 0.1]
+            assert fake.calls[0][1]["clear"] is True
+
+        run_async(_test())
+
+    def test_play_buffer_and_stop_playback(self) -> None:
+        async def _test() -> None:
+            engine, fake = make_engine()
+            fake.set_response("audio.play_buffer", {"success": True, "samples_played": 100})
+            fake.set_response("audio.playback_stop", {"success": True, "message": "Stopped"})
+
+            play_res = await engine.play_audio_buffer(
+                samples=[0.5, -0.5],
+                sample_rate=24000,
+                channels=1,
+            )
+            assert isinstance(play_res, AudioOperationResponse)
+            assert play_res.samples_played == 100
+            assert fake.calls[0][1]["samples"] == [0.5, -0.5]
+
+            stop_res = await engine.stop_audio_playback()
+            assert isinstance(stop_res, AudioOperationResponse)
+            assert stop_res.success is True
 
         run_async(_test())

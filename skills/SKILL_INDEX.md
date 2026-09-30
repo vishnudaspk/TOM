@@ -17,6 +17,61 @@ Do NOT load all skills — load only what is relevant to the current task.
 
 ---
 
+## Graphify Project Architecture Context
+
+**Every coding or planning agent MUST consult the Graphify output before making
+architectural changes or inspecting the codebase from scratch.**
+
+### Primary files (always current)
+
+| File | Purpose |
+|------|---------|
+| `graphify-out/graph.json` | Full relationship graph — use for `graphify query / path / explain` |
+| `graphify-out/GRAPH_TREE.html` | Interactive tree of all modules and files |
+| `graphify-out/GRAPH_REPORT.md` | Prose architecture summary (read for broad reviews) |
+
+Full paths:
+- `C:\Users\vishnuu\Projects\TOM\graphify-out\graph.json`
+- `C:\Users\vishnuu\Projects\TOM\graphify-out\GRAPH_TREE.html`
+- `C:\Users\vishnuu\Projects\TOM\graphify-out\GRAPH_REPORT.md`
+
+### Dated snapshot folders
+
+Graphify also produces dated snapshot folders under `graphify-out\`.  
+The **latest known** folder is `graphify-out\2026-09-22\` — it contains its own `GRAPH_REPORT.md`.
+
+If multiple dated folders exist, **always identify and use the newest one**.
+Do not assume any dated report is current — check folder names before reading.
+
+### Usage rules
+
+1. Use `graphify query "<question>"` (or equivalent graph tool) before grepping raw files.
+2. Use `graphify path "<A>" "<B>"` to understand module relationships.
+3. Use `graphify explain "<concept>"` for focused concept lookup.
+4. If `graphify-out/wiki/index.md` exists, navigate it instead of reading raw source.
+5. Read `GRAPH_REPORT.md` only for broad architecture reviews or when targeted queries surface insufficient context.
+6. Graphify is a **reference tool, not a replacement** for inspecting actual source files before editing them.
+7. After modifying source files, run `graphify update .` to keep the graph current.
+
+---
+
+## Development Workflow Rules
+
+All agents working in this repository MUST follow these rules:
+
+1. **Read `SKILL_INDEX.md` first.** Do this before any planning or coding.
+2. **Load only relevant skills.** Do not load the entire `/skills` directory.
+3. **Read the latest Graphify report/tree before architectural changes.** Identify the newest dated folder and read its `GRAPH_REPORT.md` if doing broad architecture work.
+4. **Inspect actual source files before modifying them.** Graphify gives the map; source files are the ground truth.
+5. **Do NOT start `pytest tests -q` as a background baseline check and then wait for it to finish.** This wastes tokens and provides no useful progress. Run the full test suite only when:
+   - Explicitly requested by the user, OR
+   - Required to verify the current implementation, OR
+   - The iteration exit gate explicitly requires it.
+6. **Never claim tests passed unless the test command actually completed successfully** and the output was observed.
+7. **At the end of each iteration**, update `STATE.md`, `PROGRESS.md`, and `HANDOFF.md` as required by the project workflow.
+
+---
+
 ## Skill Table
 
 | Skill | Location | Use When | Phase(s) | Depends On |

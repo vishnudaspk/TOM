@@ -13,8 +13,8 @@ use tracing::{debug, warn};
 
 use super::protocol::{error_code, IpcError, IpcRequest, IpcResponse};
 
-/// Default per-request execution timeout (500 milliseconds).
-pub const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_millis(500);
+/// Default per-request execution timeout (1500 milliseconds).
+pub const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_millis(1500);
 
 /// Pinned, boxed future returned by an asynchronous IPC handler.
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;

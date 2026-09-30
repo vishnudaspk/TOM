@@ -184,6 +184,11 @@ class Agent:
         """Return the model provider configured in dependencies, or None."""
         return self.dependencies.model_provider
 
+    @property
+    def memory_manager(self) -> Any:
+        """Return the memory manager configured in dependencies, or None."""
+        return self.dependencies.memory_manager
+
     def add_state_callback(self, callback: Callable[..., Any]) -> None:
         """Register a callback invoked whenever the agent transitions state.
 

@@ -19,6 +19,20 @@ from tom.tools.files import (
     create_file_tools,
     register_file_tools,
 )
+from tom.tools.memory import (
+    MemoryForgetInput,
+    MemoryForgetOutput,
+    MemoryPreferencesInput,
+    MemoryPreferencesOutput,
+    MemoryRecallInput,
+    MemoryRecallOutput,
+    MemoryRecentInput,
+    MemoryRecentOutput,
+    MemoryRememberInput,
+    MemoryRememberOutput,
+    create_memory_tools,
+    register_memory_tools,
+)
 from tom.tools.registry import (
     PermissionLevel,
     ToolAlreadyExistsError,
@@ -35,6 +49,14 @@ from tom.tools.system import (
     create_system_tools,
     register_system_tools,
 )
+from tom.tools.voice import (
+    VoiceAnnounceInput,
+    VoiceAnnounceOutput,
+    VoiceStatusInput,
+    VoiceStatusOutput,
+    create_voice_tools,
+    register_voice_tools,
+)
 
 __all__ = [
     "DeleteFileInput",
@@ -43,6 +65,16 @@ __all__ = [
     "GetFileInfoInput",
     "ListDirectoryInput",
     "ListDirectoryOutput",
+    "MemoryForgetInput",
+    "MemoryForgetOutput",
+    "MemoryPreferencesInput",
+    "MemoryPreferencesOutput",
+    "MemoryRecallInput",
+    "MemoryRecallOutput",
+    "MemoryRecentInput",
+    "MemoryRecentOutput",
+    "MemoryRememberInput",
+    "MemoryRememberOutput",
     "PathGuard",
     "PermissionLevel",
     "ReadFileInput",
@@ -60,10 +92,18 @@ __all__ = [
     "WriteFileInput",
     "WriteFileOutput",
     "create_file_tools",
+    "create_memory_tools",
     "create_system_tools",
     "default_registry",
     "register_file_tools",
+    "register_memory_tools",
     "register_system_tools",
+    "register_voice_tools",
     "setup_default_tools",
     "tool",
+    "VoiceAnnounceInput",
+    "VoiceAnnounceOutput",
+    "VoiceStatusInput",
+    "VoiceStatusOutput",
+    "create_voice_tools",
 ]

@@ -1,11 +1,13 @@
 pub mod buffer;
 pub mod capture;
 pub mod device;
+pub mod manager;
 pub mod playback;
 
 pub use buffer::AudioBuffer;
 pub use capture::{AudioCaptureConfig, AudioCaptureController};
 pub use device::{get_audio_devices, AudioDeviceInfo, AudioHostInfo};
+pub use manager::{AudioManager, AudioStatus};
 pub use playback::{AudioPlaybackConfig, AudioPlaybackController};
 
 /// Strongly typed errors for the audio foundation.

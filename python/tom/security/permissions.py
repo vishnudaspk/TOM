@@ -237,6 +237,30 @@ class PermissionEngine:
             effective_level = self._overrides[tool_name]
         else:
             effective_level = base_level
+            if tool_name == "memory.remember" and params:
+                content = (
+                    params.get("content")
+                    if isinstance(params, dict)
+                    else getattr(params, "content", None)
+                )
+                if content and isinstance(content, str):
+                    from tom.memory.policies import MemoryPolicy
+
+                    if MemoryPolicy.default_scan_for_secrets(content):
+                        return PermissionDecision.deny(
+                            reason="Memory content contains sensitive credentials or secrets",
+                            level=PermissionLevel.BLOCK,
+                        )
+
+                importance = (
+                    params.get("importance")
+                    if isinstance(params, dict)
+                    else getattr(params, "importance", None)
+                )
+                if isinstance(importance, str):
+                    importance = importance.upper()
+                if importance in ("IMPORTANT", "CRITICAL"):
+                    effective_level = PermissionLevel.ASK_USER
 
         # 4. Evaluate effective permission level
         if effective_level == PermissionLevel.BLOCK:

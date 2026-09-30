@@ -6,35 +6,33 @@
 
 ## Current Status
 
-| Milestone   | Subsystem / Focus                                                                   | Status                                         |          Tests |
-| ----------- | ----------------------------------------------------------------------------------- | ---------------------------------------------- | -------------: |
-| **Phase 0** | Project Bootstrap, Configuration & Structured Logging                               | **COMPLETE**                                   |              9 |
-| **Phase 1** | Rust Engine (`tom-engine`) — Lifecycle, Telemetry & IPC Server                      | **COMPLETE**                                   |             79 |
-| **Phase 2** | Python Core & IPC Client — `NamedPipeIpcClient`, `EngineClient`, `LifecycleManager` | **COMPLETE**                                   |            168 |
-| **Phase 3** | Deterministic Tools & Permission Engine                                             | **COMPLETE**                                   |            406 |
-| **Phase 4** | Agent Framework & Local Model Routing                                               | **IMPLEMENTATION COMPLETE — CLOSEOUT PENDING** | 621 baseline\* |
+| Milestone   | Subsystem / Focus                                                                   | Status       |   Tests |
+| ----------- | ----------------------------------------------------------------------------------- | ------------ | ------: |
+| **Phase 0** | Project Bootstrap, Configuration & Structured Logging                               | **COMPLETE** |       9 |
+| **Phase 1** | Rust Engine (`tom-engine`) — Lifecycle, Telemetry & IPC Server                      | **COMPLETE** |      79 |
+| **Phase 2** | Python Core & IPC Client — `NamedPipeIpcClient`, `EngineClient`, `LifecycleManager` | **COMPLETE** |     168 |
+| **Phase 3** | Deterministic Tools & Permission Engine                                             | **COMPLETE** |     406 |
+| **Phase 4** | Agent Framework & Local Model Routing                                               | **COMPLETE** |     621 |
+| **Phase 5** | Memory Architecture (SQLite Store, Qdrant Index, CPU Embeddings, Policies)         | **COMPLETE** |     621 |
+| **Phase 6** | Voice Pipeline (Audio IPC, STT, TTS, Barge-in, Interaction Layer, Voice Tools)      | **COMPLETE** | **931** |
 
-- Current verified repository baseline before final Phase 4 closeout documentation changes: **492 Python unit + 50 Python integration + 79 Rust = 621 tests passing**.
+- Verified repository test baseline: **848 Python tests (756 unit + 92 integration) + 83 Rust tests = 931 tests passing**.
+- All quality gates clean: Ruff checks (0 violations), Ruff format (0 diffs), Cargo fmt (0 diffs), Cargo clippy (0 warnings).
 
 ### Current Development State
 
-**Phase 4 — Agent Framework & Local Model Routing**
+**Phase 6 — Voice Pipeline: CLOSED & COMPLETE**
 
-The Phase 4 implementation is complete through Iteration 6's integration and exit-gate verification. Final documentation cleanup and phase-plan deletion remain as the administrative closeout step.
+All 5 iterations of Phase 6 are implemented, validated, and formally closed:
+- Audio control IPC over Windows Named Pipe (`\\.\pipe\tom-engine`) via Rust `AudioManager`.
+- `STTProvider` abstraction with lazy CPU/int8 `FasterWhisperSTTProvider` and deterministic mock.
+- `TTSProvider` abstraction with lazy CPU `KokoroTTSProvider` and deterministic mock.
+- Deterministic `SpeechFormatter` converting markdown and symbols into natural speakable text.
+- Formal `VoicePipelineManager` state machine (`IDLE`, `LISTENING`, `PROCESSING`, `SPEAKING`, `INTERRUPTED`, `ERROR`) with sub-millisecond barge-in interruption and epoch invalidation.
+- `VoiceInteractionManager` session coordination maintaining bounded ephemeral `ConversationHistory` in RAM.
+- Deterministic agent voice tools (`voice.announce`, `voice.status`) routed through `ToolExecutor` $\to$ `PermissionEngine`.
 
-Phase 5 has **not** started.
-
-### Phase 4 Capabilities
-
-- **Agent State Machine** — Explicit deterministic lifecycle and validated state transitions.
-- **Agent Tool Integration** — Agents execute tools exclusively through the centralized `ToolExecutor`.
-- **Model Provider Boundary** — Provider-independent `LLMProvider` / `ModelProvider` abstraction.
-- **LM Studio Provider** — OpenAI-compatible local model integration, including streaming support.
-- **Two-Tier Intent Router** — Fast deterministic routing with model-backed fallback.
-- **Multi-Step Agent Loop** — Bounded reasoning/action loop with `max_steps` protection.
-- **Cooperative Cancellation** — Cancellation propagation through agent execution.
-- **Error Recovery** — Controlled model/tool failure handling without uncontrolled execution.
-- **End-to-End Pipeline** — User prompt → routing → tool/agent execution → response.
+Phase 7 (Vision & Multimodal Capabilities / Extended OS Automation) is next in the master roadmap.
 
 ---
 
@@ -42,107 +40,64 @@ Phase 5 has **not** started.
 
 TOM uses a dual-core architecture:
 
-- **Python Brain** — high-level orchestration, agents, model routing, tools, memory, and future intelligence.
-- **Rust Engine (`tom-engine`)** — deterministic low-level OS operations, hardware/audio primitives, telemetry, global system integration, and IPC.
+- **Python Brain** — high-level orchestration, agents, model routing, tools, memory, voice interaction layer, and future intelligence.
+- **Rust Engine (`tom-engine`)** — deterministic low-level OS operations, audio capture/playback buffers, hardware telemetry, and Windows Named Pipe IPC.
 
 ```text
-                         TOM Python Brain
-                                │
-                    ┌───────────┴───────────┐
-                    │                       │
-              IntentRouter             Agent Layer
-                    │                       │
-                    │                AgentOrchestrator
-                    │                       │
-                    └───────────┬───────────┘
-                                │
-                         ToolExecutor
-                                │
-                       PermissionEngine
-                                │
-                    ┌───────────┴───────────┐
-                    │                       │
-               System Tools            File Tools
-                    │                       │
-                    └───────────┬───────────┘
-                                │
-                         EngineClient
-                                │
-                       NamedPipeIpcClient
-                                │
-                       NamedPipeTransport
-                                │
-              Windows Named Pipe \\.\pipe\tom-engine
-                                │
-                         Rust tom-engine
-                                │
-              ┌─────────────────┼─────────────────┐
-              │                 │                 │
-          CPU / RAM         GPU / Battery    Disk / Processes
-           telemetry          telemetry         telemetry
+User / Modality (Voice or Text)
+  │
+  ├─────────────────────────────────────────────────┐
+  │                                                 │
+  ▼                                                 ▼
+VoiceInteractionManager                       IntentRouter
+  │ (ephemeral RAM context)                         │ (two-tier heuristic + model fallback)
+  ▼                                                 ▼
+VoicePipelineManager                          Agent / Orchestrator
+  │ (STT -> Agent -> Formatter -> TTS)              │
+  ▼                                                 ▼
+EngineClient ───────────────────────────────► ToolExecutor
+  │ (audio IPC & telemetry)                         │
+  │                                           PermissionEngine + ConfirmationHook
+  │                                                 │
+  │                                     ┌───────────┴───────────┐
+  │                                     │                       │
+  │                                System Tools            File Tools
+  │                                Memory Tools            Voice Tools
+  │                                     │                       │
+  │                                     └───────────┬───────────┘
+  ▼                                                 ▼
+NamedPipeIpcClient ─────────────────────────────────┘
+  │
+Windows Named Pipe (\\.\pipe\tom-engine)
+  │
+Rust tom-engine
+  ├── IPC Server & Dispatcher
+  ├── AudioManager (audio.capture_start/stop, audio.get_speech, audio.play_buffer, audio.playback_stop)
+  └── Telemetry (CPU, memory, GPU, disk, battery, processes)
 ```
 
 ---
 
-## Model & Agent Architecture
+## Subsystem Highlights
 
-Phase 4 establishes the model-independent agent boundary used by TOM.
+### Phase 6 — Voice Pipeline
+- **Decoupled Audio Transport** — Utterance-buffered requests over Named Pipe IPC (`audio.*` endpoints).
+- **Abstracted Local Providers** — Provider ABCs with lazy loading; CPU-first defaults preserve GPU VRAM for the primary LLM.
+- **Deterministic Speech Formatting** — Sub-millisecond text normalization and markdown removal.
+- **Instant Barge-In** — Audio playback stops immediately, active tasks cancel, and turn epochs increment to prevent stale playback.
+- **RAM-Only Ephemeral Context** — Prevents conversational audio turns from polluting long-term vector memory.
 
-```text
-                         User Prompt
-                              │
-                              ▼
-                       ┌─────────────┐
-                       │ IntentRouter│
-                       └──────┬──────┘
-                              │
-                    ┌─────────┴─────────┐
-                    │                   │
-              Direct Tool          Agent Loop
-                    │                   │
-                    │             ModelProvider
-                    │                   │
-                    │             Tool Call Request
-                    │                   │
-                    └─────────┬─────────┘
-                              ▼
-                       ToolExecutor
-                              │
-                    PermissionEngine
-                              │
-                         Tool Result
-                              │
-                              ▼
-                        Final Response
-```
+### Phase 5 — Memory Subsystem
+- **Authoritative SQLite Store** — ACID persistence with CRUD, keyword search, and TTL expiration.
+- **Optional Qdrant Vector Index** — Semantic search with automatic fallback to SQLite when offline.
+- **CPU Embeddings** — 384-dimensional CPU embeddings preserve GPU VRAM for inference.
+- **MemoryPolicy Guardrails** — Secret filtering, credential detection, entropy checks, and confirmation requirements.
+- **Deterministic Memory Tools** — `memory.remember`, `memory.recall`, `memory.forget`, `memory.recent`, `memory.preferences`.
 
-### Two-Tier Intent Routing
-
-**Tier 1 — Deterministic**
-
-Fast heuristic classification for obvious intents such as system, file, and direct tool operations.
-
-**Tier 2 — Model-backed**
-
-Uses the configured `LLMProvider` when deterministic routing cannot confidently classify the request.
-
-Provider failures and malformed routing responses have deterministic fallback behavior rather than uncontrolled execution.
-
----
-
-## Phase 3 — Deterministic Tool & Security Foundation
-
-Phase 3 established TOM's tool execution boundary:
-
-- **Tool Registry** — Typed tool discovery and registration.
-- **Pydantic v2 Schemas** — Structured tool arguments and validation.
-- **Permission Engine** — Centralized `SAFE`, `ASK_USER`, and `BLOCK` policy evaluation.
-- **Tool Executor** — Validation, permission gating, bounded execution, timeout handling, and cancellation.
-- **System Tools** — Deterministic OS/hardware operations through the Rust engine.
-- **File Tools** — Sandboxed filesystem access with path-traversal protection.
-- **No Arbitrary Shell Execution** — Tools operate through explicitly defined interfaces.
-
-All Phase 4 agents consume this existing tool boundary rather than bypassing it.
+### Phase 3 & 4 — Tools & Agent Foundation
+- **Non-Bypassable ToolExecutor** — All tools execute through centralized permission gating (`SAFE`, `ASK_USER`, `BLOCK`).
+- **20 Default Built-In Tools** — 7 system tools, 6 file tools, 5 memory tools, 2 voice tools.
+- **Deterministic Agent Lifecycle** — 6-state machine with cancellation propagation and error recovery.
 
 ---
 
