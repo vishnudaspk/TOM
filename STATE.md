@@ -2,12 +2,12 @@
 
 ## Current Status
 
-- **Phase 0–6**: CLOSED & COMPLETE.
-- **Phase 7 (Vision & Multimodal / Extended OS Automation)**: PLANNING COMPLETE — implementation NOT started.
-- **Latest Verified Test Baseline**: 848 Python tests passed (756 unit + 92 integration) + 83 Rust tests passed (76 unit + 7 integration) = 931 total verified tests.
+- **Phases 0–7**: CLOSED & COMPLETE.
+- **Phase 7 (Vision & Multimodal / Extended OS Automation)**: CLOSED & COMPLETE — Iterations 0–5 complete and verified.
+- **Latest Verified Test Baseline**: 1004 Python tests passed + 8 skipped (870 unit + 134 integration) + 83 Rust tests passed = **1087 total passing** (8 skipped are optional-dep cv2/winocr tests).
 - **Quality Gates**: Ruff check clean (0 violations), Ruff format clean (0 diffs), Cargo fmt clean, Cargo clippy clean (0 warnings).
-- **Active Implementation Plan**: [`docs/development/PHASE7_IMPLEMENTATIONPLAN.md`](file:///c:/Users/vishnuu/Projects/TOM/docs/development/PHASE7_IMPLEMENTATIONPLAN.md).
-- **Current / Immediate Next Action**: Begin Phase 7 — Iteration 0 (Rust Input IPC & OS Input Boundary).
+- **Active Implementation Plan**: None (Phase 7 closed; awaiting Phase 8 planning).
+- **Current / Immediate Next Action**: Phase 8 (Autonomous Proactive Agent & Long-Horizon Task Execution).
 
 ---
 
@@ -22,15 +22,17 @@ TOM
 │   ├── Agents (Agent / AgentOrchestrator, 6-state lifecycle)
 │   │   └── AgentDependencies (executor, memory_manager, voice_manager, vision_manager [Phase 7])
 │   ├── Models (LLMProvider ABC: Mock, LMStudio / Bionic / local OpenAI-compatible)
-│   ├── Tools (20 built-ins through ToolExecutor + PermissionEngine)
+│   ├── Tools (28 built-ins through ToolExecutor + PermissionEngine; 8 new tools in Phase 7)
 │   │   ├── System Tools (7: system.ping, system.status, system.cpu, etc.)
 │   │   ├── File Tools (6: file.read, file.write, file.list, etc.)
 │   │   ├── Memory Tools (5: memory.remember, memory.recall, memory.forget, etc.)
-│   │   └── Voice Tools (2: voice.announce, voice.status)
-│   ├── Security (PermissionEngine: SAFE, ASK_USER, BLOCK; ConfirmationHook; Sandbox)
+│   │   ├── Voice Tools (2: voice.announce, voice.status)
+│   │   ├── Vision Tools (4: vision.capture, vision.ocr, vision.find_element, vision.ask [SAFE])
+│   │   └── OS Input Tools (4: os.input.click [ASK_USER], os.input.type_text [ASK_USER], os.input.hotkey [ASK_USER], os.input.get_cursor_pos [SAFE])
+│   ├── Security (PermissionEngine: SAFE, ASK_USER, BLOCK; ConfirmationHook; Sandbox; explicit DEFAULT_TOOL_PERMISSIONS)
 │   ├── Memory (Phase 5: MemoryManager, SQLite authoritative store, optional Qdrant, CPU embeddings)
 │   ├── Voice (Phase 6: STT FasterWhisper CPU, TTS Kokoro CPU, SpeechFormatter, VoicePipelineManager, VoiceInteractionManager)
-│   └── Vision (Phase 7 Planned: ScreenCaptureService, PrivacyShield, OCRProvider, CVElementDetector, VisionManager, LocalVLMProvider)
+│   └── Vision (Phase 7: ScreenCaptureService, PrivacyShield, OCRProvider, CVElementDetector, VisionManager, LocalVLMProvider, Vision Tools, OS Input Tools)
 └── Rust Engine (tom-engine)
     ├── IPC Server (Named Pipe \\.\pipe\tom-engine)
     ├── System Telemetry (CPU, memory, GPU, disk, battery, processes)
@@ -43,7 +45,7 @@ TOM
 
 ## Active Architectural Invariants
 
-1. **Phases 0–6 are CLOSED**: Core architecture, tools, agents, memory, and voice are complete, verified, and locked. Do not rewrite or redesign these subsystems.
+1. **Phases 0–7 are CLOSED**: Core architecture, tools, agents, memory, voice, vision, and OS input actuation are complete, verified, and locked. Do not rewrite or redesign these subsystems.
 2. **Deterministic Code Outside the LLM**: Tool routing, permission verification, security checks, coordinate clamping, and audio state machines execute in deterministic code, never inside LLM prompts.
 3. **Non-Bypassable Tool Execution**: All agent tool calls flow strictly through `ToolExecutor` and `PermissionEngine`.
 4. **Data-Driven Tool Permissions**: Tool security levels (`SAFE`, `ASK_USER`, `BLOCK`) are explicitly registered metadata in `ToolRegistry` and `PermissionEngine`, never inferred via string prefixes.
