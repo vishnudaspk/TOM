@@ -77,6 +77,8 @@ def load_config(config_dir: Path | None = None, force_reload: bool = False) -> T
         "permissions": "permissions.yaml",
         "memory": "memory.yaml",
         "resources": "resources.yaml",
+        "vision": "vision.yaml",
+        "task": "task.yaml",
     }
 
     for section_name, filename in component_files.items():

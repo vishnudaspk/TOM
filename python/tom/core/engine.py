@@ -24,6 +24,10 @@ Architecture:
     Windows Named Pipe \\\\.\\pipe\\tom-engine
 """
 
+from __future__ import annotations
+
+from typing import Any
+
 from tom.ipc.client import NamedPipeIpcClient
 from tom.ipc.protocol import (
     AudioHostInfo,
@@ -251,3 +255,50 @@ class EngineClient:
         """
         data = await self._ipc.request("audio.playback_stop")
         return AudioOperationResponse.model_validate(data)
+
+    # ------------------------------------------------------------------
+    # Input subsystem endpoints (Phase 7 Iteration 0 / Iteration 4)
+    # ------------------------------------------------------------------
+
+    async def mouse_click(
+        self,
+        x: int,
+        y: int,
+        button: str = "left",
+        click_type: str = "single",
+    ) -> dict[str, Any]:
+        """Dispatch mouse click event to tom-engine over IPC.
+
+        IPC method: input.mouse_click
+        """
+        params: dict[str, Any] = {
+            "x": x,
+            "y": y,
+            "button": button,
+            "click_type": click_type,
+        }
+        return await self._ipc.request("input.mouse_click", params)
+
+    async def type_text(self, text: str) -> dict[str, Any]:
+        """Dispatch keyboard typing event to tom-engine over IPC.
+
+        IPC method: input.keyboard_type
+        """
+        params: dict[str, Any] = {"text": text}
+        return await self._ipc.request("input.keyboard_type", params)
+
+    async def send_hotkey(self, keys: list[str]) -> dict[str, Any]:
+        """Dispatch key combination event to tom-engine over IPC.
+
+        IPC method: input.hotkey
+        """
+        params: dict[str, Any] = {"keys": keys}
+        return await self._ipc.request("input.hotkey", params)
+
+    async def get_cursor_pos(self) -> dict[str, int]:
+        """Retrieve current cursor position from tom-engine over IPC.
+
+        IPC method: input.get_cursor_pos
+        """
+        data = await self._ipc.request("input.get_cursor_pos")
+        return {"x": data.get("x", 0), "y": data.get("y", 0)}

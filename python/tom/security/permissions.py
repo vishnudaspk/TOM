@@ -37,6 +37,46 @@ class PermissionLevel(StrEnum):
         return cls(clean)
 
 
+# Authoritative, data-driven default tool permission mappings for all 28 built-in tools.
+# Never use name-prefix string matching as a security mechanism.
+DEFAULT_TOOL_PERMISSIONS: dict[str, PermissionLevel] = {
+    # System tools (SAFE)
+    "system.cpu_info": PermissionLevel.SAFE,
+    "system.memory_info": PermissionLevel.SAFE,
+    "system.gpu_info": PermissionLevel.SAFE,
+    "system.battery_info": PermissionLevel.SAFE,
+    "system.disk_info": PermissionLevel.SAFE,
+    "system.list_processes": PermissionLevel.SAFE,
+    "system.get_snapshot": PermissionLevel.SAFE,
+    # File tools (SAFE & ASK_USER)
+    "files.list_directory": PermissionLevel.SAFE,
+    "files.read_file": PermissionLevel.SAFE,
+    "files.get_metadata": PermissionLevel.SAFE,
+    "files.write_file": PermissionLevel.ASK_USER,
+    "files.copy_file": PermissionLevel.ASK_USER,
+    "files.delete_file": PermissionLevel.ASK_USER,
+    # Memory tools (SAFE & ASK_USER)
+    "memory.remember": PermissionLevel.SAFE,
+    "memory.recall": PermissionLevel.SAFE,
+    "memory.forget": PermissionLevel.ASK_USER,
+    "memory.search": PermissionLevel.SAFE,
+    "memory.status": PermissionLevel.SAFE,
+    # Voice tools (SAFE)
+    "voice.announce": PermissionLevel.SAFE,
+    "voice.status": PermissionLevel.SAFE,
+    # Vision tools (SAFE)
+    "vision.capture": PermissionLevel.SAFE,
+    "vision.ocr": PermissionLevel.SAFE,
+    "vision.find_element": PermissionLevel.SAFE,
+    "vision.ask": PermissionLevel.SAFE,
+    # OS Input tools (SAFE & ASK_USER)
+    "os.input.get_cursor_pos": PermissionLevel.SAFE,
+    "os.input.click": PermissionLevel.ASK_USER,
+    "os.input.type_text": PermissionLevel.ASK_USER,
+    "os.input.hotkey": PermissionLevel.ASK_USER,
+}
+
+
 if TYPE_CHECKING:
     from tom.tools.registry import ToolDefinition
 
@@ -212,11 +252,14 @@ class PermissionEngine:
                     reason="Tool name cannot be empty or whitespace",
                     level=PermissionLevel.BLOCK,
                 )
-            base_level = (
-                PermissionLevel.from_str(default_level)
-                if isinstance(default_level, str)
-                else default_level
-            )
+            if tool_name in DEFAULT_TOOL_PERMISSIONS and default_level == PermissionLevel.SAFE:
+                base_level = DEFAULT_TOOL_PERMISSIONS[tool_name]
+            else:
+                base_level = (
+                    PermissionLevel.from_str(default_level)
+                    if isinstance(default_level, str)
+                    else default_level
+                )
         else:
             return PermissionDecision.deny(
                 reason=f"Expected ToolDefinition or str, got {type(tool).__name__}",

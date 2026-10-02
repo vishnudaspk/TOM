@@ -1,0 +1,11 @@
+enabled: true
+backend: "auto"
+enable_privacy_shield: true
+sensitive_window_patterns:
+  - "*password*"
+  - "*bitwarden*"
+  - "*1password*"
+  - "*keepass*"
+  - "*bank*"
+  - "*private browsing*"
+  - "*incognito*"

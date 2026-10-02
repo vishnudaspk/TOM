@@ -2,7 +2,7 @@
 
 Exposes the decoupled language model provider abstraction (LLMProvider),
 OpenAI-compatible HTTP provider (HttpModelProvider / LMStudioProvider),
-deterministic test double (MockModelProvider), and all typed schemas.
+deterministic test double (MockModelProvider), benchmark suite, and typed schemas.
 
 Architecture (Decision 033):
     Agent
@@ -23,6 +23,12 @@ from tom.models.base import (
     ModelResponseError,
     ModelTimeoutError,
 )
+from tom.models.benchmark import (
+    BenchmarkMetric,
+    BenchmarkResult,
+    IterationResult,
+    ModelBenchmarkSuite,
+)
 from tom.models.providers.http import HttpModelProvider, LMStudioProvider
 from tom.models.providers.mock import MockModelProvider
 from tom.schemas.models import (
@@ -42,6 +48,11 @@ __all__ = [
     "HttpModelProvider",
     "LMStudioProvider",
     "MockModelProvider",
+    # Benchmark suite
+    "BenchmarkMetric",
+    "BenchmarkResult",
+    "IterationResult",
+    "ModelBenchmarkSuite",
     # Error hierarchy
     "ModelProviderError",
     "ModelConnectionError",

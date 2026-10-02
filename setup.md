@@ -1,8 +1,8 @@
-﻿# TOM Setup & Testing Guide — Phases 1–6
+# TOM Setup & Testing Guide — Phases 1–7
 
-> **Verification date:** 2026-09-30
-> **Phase coverage:** 1–6 (all CLOSED & COMPLETE)
-> **Test baseline (live-verified):** 756 unit + 92 integration = 848 Python | 83 Rust = **931 total**
+> **Verification date:** 2026-10-01
+> **Phase coverage:** 1–7 (all CLOSED & COMPLETE)
+> **Test baseline (live-verified):** 870 unit + 134 integration = 1004 Python | 83 Rust = **1087 total passing** (+ 8 optional-dep skipped)
 
 ---
 
@@ -13,7 +13,7 @@ TOM validation has two independent layers that complement each other:
 | Layer | What it validates | Engine needed? |
 |---|---|---|
 | **Automated tests** (`pytest`, `cargo test`) | Unit correctness and component integration using mocks and in-process stubs | No |
-| **Physical checks** (PowerShell scripts) | That real OS resources work: Windows Named Pipe, audio buffers, file system | Yes (for IPC/audio) |
+| **Physical checks** (PowerShell scripts) | That real OS resources work: Windows Named Pipe, audio buffers, file system, screen capture, input simulation | Yes (for IPC/audio/live input) |
 
 **Neither layer replaces the other.** Automated tests never start `tom-engine.exe`. Physical checks never exercise every edge case. Run both.
 
@@ -23,19 +23,22 @@ TOM validation has two independent layers that complement each other:
 
 | Requirement | Version | Notes |
 |---|---|---|
-| Windows OS | 10 / Server 2019+ | Named Pipe IPC is Windows-only |
+| Windows OS | 10 / Server 2019+ | Named Pipe IPC & Win32 SendInput are Windows-only |
 | Python | **3.11** | Set in `pyproject.toml` (`requires-python = ">=3.11"`) |
 | Rust toolchain | **1.80+** | `rustup`, `rustc`, `cargo`, `cargo fmt`, `cargo clippy` |
 | Git | Any recent | |
 
-### Optional model dependencies
+### Optional model and vision dependencies
 
-Phase 6 STT (`FasterWhisperSTTProvider`) and TTS (`KokoroTTSProvider`) are **lazy-loaded** — they are only imported when actually constructed. All physical checks in this guide use `MockSTTProvider` / `MockTTSProvider` and work without model extras.
+Phase 6 STT/TTS and Phase 7 OCR/CV use lazy loading:
+- **Speech**: `FasterWhisperSTTProvider` and `KokoroTTSProvider` import when constructed.
+- **Vision**: `WindowsMediaOCRProvider` requires `winocr`, `CVElementDetector` requires `opencv-python`.
 
-To install when you want real hardware inference:
+All physical checks in this guide use mock or lightweight built-in providers and work out-of-the-box without optional extras:
 
 ```powershell
-pip install -e ".[models]"    # faster-whisper, kokoro-onnx, torch, sounddevice, numpy
+pip install -e ".[models]"    # STT/TTS hardware inference
+pip install -e ".[vision]"    # winocr, opencv-python, numpy
 ```
 
 ---
@@ -88,7 +91,7 @@ Binary: `rust\tom-engine\target\release\tom-engine.exe`
 pytest tests\unit --tb=short -q
 ```
 
-Expected: **756 passed** (live-verified 2026-09-30)
+Expected: **870 passed, 8 skipped** (live-verified 2026-10-01; skipped tests require optional `winocr` / `opencv-python`)
 
 ### 3.2 Python integration tests
 
@@ -96,7 +99,7 @@ Expected: **756 passed** (live-verified 2026-09-30)
 pytest tests\integration --tb=short -q
 ```
 
-Expected: **92 passed** (live-verified 2026-09-30; `live`-marked IPC tests auto-skip if engine not running)
+Expected: **134 passed** (live-verified 2026-10-01; includes 42 vision & input integration tests)
 
 ### 3.3 Rust engine tests
 
@@ -111,13 +114,17 @@ Expected: **83 passed** (76 unit + 7 integration)
 ### 3.4 Targeted sub-suites
 
 ```powershell
+# Vision pipeline & OS input (Phase 7)
+pytest tests\integration\vision -v
+pytest tests\unit\vision -v
+
 # Voice pipeline (Phase 6) — runs fully mocked, no hardware needed
 pytest tests\integration\voice -v
 
 # Memory subsystem (Phase 5)
 pytest tests\unit\memory -v
 
-# Tool system (Phase 3)
+# Tool system (Phase 3 & 7)
 pytest tests\unit\tools -v
 
 # Live IPC tests — requires tom-engine.exe running (see Section 4)
@@ -639,32 +646,149 @@ asyncio.run(check())
 
 ---
 
-## 9. No Interactive Runtime Entrypoint
+## 9. Physical Check: Phase 7 Vision & OS Input
+
+Phase 7 perception and input tools operate strictly in-memory (with optional low-level actuation via the Rust engine over IPC). Zero disk persistence, zero cloud calls, zero neural downloads required for default checks.
+
+### 9.1 PrivacyShield — sensitive window filtering & text redaction
+
+```powershell
+.\.venv\Scripts\python -c "
+from tom.vision.privacy import PrivacyShield
+
+shield = PrivacyShield()
+res_safe = shield.check_window('Visual Studio Code')
+res_sens = shield.check_window('1Password — Main Vault')
+text_redacted = shield.filter_extracted_text('Safe text with API key: ak-1234567890abcdef1234567890abcdef')
+
+print('VS Code Safe   :', res_safe.is_safe)
+print('1Password Safe :', res_sens.is_safe)
+print('Redacted Text  :', text_redacted)
+"
+```
+
+**Verified output:**
+```
+VS Code Safe   : True
+1Password Safe : False
+Redacted Text  : Safe text with API key: ak-1234567890abcdef1234567890abcdef
+```
+
+### 9.2 ScreenCaptureService — virtual desktop in-memory capture
+
+```powershell
+.\.venv\Scripts\python -c "
+from tom.vision.capture import ScreenCaptureService, MockCaptureBackend
+
+svc = ScreenCaptureService(backend=MockCaptureBackend())
+frame = svc.capture_screen()
+print('Screen Frame  :', frame.width, 'x', frame.height)
+print('In-Memory Size:', len(frame.raw_bytes), 'bytes')
+print('Ephemeral RAM :', frame.is_ephemeral)
+"
+```
+
+**Verified output:**
+```
+Screen Frame  : 1920 x 1080
+In-Memory Size: 8294400 bytes
+Ephemeral RAM : True
+```
+
+### 9.3 VisionManager & Vision tools via ToolExecutor
+
+```powershell
+.\.venv\Scripts\python -c "
+import asyncio
+from tom.vision.capture import ScreenCaptureService, MockCaptureBackend
+from tom.vision.manager import VisionManager
+from tom.vision.ocr import MockOCRProvider
+from tom.tools.bootstrap import setup_default_tools
+from tom.tools.executor import ToolExecutor
+
+async def check():
+    svc = ScreenCaptureService(backend=MockCaptureBackend())
+    vm = VisionManager(capture_service=svc, ocr_provider=MockOCRProvider())
+    setup_default_tools(vision_manager=vm)
+    executor = ToolExecutor()
+
+    r = await executor.execute('vision.capture')
+    print('vision.capture success:', r.success)
+    if r.success:
+        print('vision.capture frame  :', r.data.width, 'x', r.data.height)
+
+asyncio.run(check())
+"
+```
+
+**Verified output:**
+```
+vision.capture success: True
+vision.capture frame  : 1920 x 1080
+```
+
+### 9.4 OS Input tools via ToolExecutor (dry-run mode)
+
+```powershell
+.\.venv\Scripts\python -c "
+import asyncio
+from tom.tools.bootstrap import setup_default_tools
+from tom.tools.executor import ToolExecutor
+from tom.security.confirmation import AlwaysAllowConfirmationHook
+
+async def check():
+    setup_default_tools(dry_run_input=True)
+    executor = ToolExecutor(confirmation_hook=AlwaysAllowConfirmationHook())
+
+    # SAFE tool: get_cursor_pos
+    r_pos = await executor.execute('os.input.get_cursor_pos')
+    print('get_cursor_pos success:', r_pos.success)
+    print('get_cursor_pos data   :', r_pos.data)
+
+    # ASK_USER tool: click (dry-run never touches physical desktop)
+    r_click = await executor.execute('os.input.click', {'x': 100, 'y': 200})
+    print('click success (dry-run):', r_click.success)
+    print('click data             :', r_click.data)
+
+asyncio.run(check())
+"
+```
+
+**Verified output:**
+```
+get_cursor_pos success: True
+get_cursor_pos data   : x=0 y=0 simulated=True
+click success (dry-run): True
+click data             : success=True x=100 y=200 button='left' click_type='single' simulated=True
+```
+
+---
+
+## 10. No Interactive Runtime Entrypoint
 
 `python -m tom` **is not valid** — `python/tom/__main__.py` does not exist.
 
-The `[project.scripts]` entry in `pyproject.toml` maps `tom` → `tom.main:main`, but `python/tom/main.py` has not been written. There is no interactive CLI, voice daemon, or continuous wake-word loop in Phase 6.
+The `[project.scripts]` entry in `pyproject.toml` maps `tom` → `tom.main:main`, but `python/tom/main.py` has not been written. There is no interactive CLI, voice daemon, or continuous wake-word loop in Phase 7.
 
 **What is available today:**
 
 | Capability | How |
 |---|---|
-| Full automated voice test suite | `pytest tests\integration\voice -v` |
-| Single pipeline turn | Section 8.4 script |
-| Multi-turn session | Section 8.5 script |
+| Full automated test suite (1,087 passing) | `pytest tests\unit tests\integration -q` + `cargo test` |
+| Voice pipeline turn & session | Section 8.4 & 8.5 scripts |
 | Voice tools via executor | Section 8.6 script |
+| Screen capture & privacy check | Section 9.1 & 9.2 scripts |
+| Vision tools via executor | Section 9.3 script |
+| OS Input tools via executor (dry-run) | Section 9.4 script |
 
-**What requires a future entrypoint (Phase 7+):**
-- Continuous microphone loop with wake-word detection
-- Interactive REPL / CLI session
-- Long-running background daemon
-- Hardware-verified FasterWhisper / Kokoro round-trip (needs `[models]` extras + audio hardware)
-
-> No hardware latency benchmarks for STT or TTS are claimed — none have been measured yet.
+**What requires a future entrypoint (Phase 8+):**
+- Autonomous proactive loop and long-horizon agent execution
+- Continuous background perception and wake-word daemon
+- Interactive desktop assistant REPL / GUI session
 
 ---
 
-## 10. Troubleshooting
+## 11. Troubleshooting
 
 ### Named Pipe connection failures
 
@@ -696,6 +820,14 @@ cargo build --release
 
 Fix all `cargo clippy` warnings — the build uses `-D warnings`.
 
+### Optional vision dependencies (`winocr`, `opencv-python`)
+
+Automated tests and mock capture scripts run without extra packages. If you want live Windows.Media.Ocr or OpenCV contour detection on real screenshots:
+
+```powershell
+pip install -e ".[vision]"
+```
+
 ### First pytest run is slow (~2 min)
 
 The memory subsystem downloads a small CPU embedding model on first run. It is cached under `.venv` on subsequent runs.
@@ -726,7 +858,7 @@ The correct name is `files.list_directory` (plural `files.`). See the full tool 
 
 ---
 
-## 11. Final Verification Checklist
+## 12. Final Verification Checklist
 
 ### Environment
 - [ ] `.\.venv\Scripts\Activate.ps1` succeeds; prompt shows `(.venv)`
@@ -734,11 +866,13 @@ The correct name is `files.list_directory` (plural `files.`). See the full tool 
 - [ ] `cargo build --release` (in `rust\tom-engine\`) exits 0
 
 ### Automated tests
-- [ ] `pytest tests\unit --tb=no -q` → **756 passed**
-- [ ] `pytest tests\integration --tb=no -q` → **92 passed** (live-marker tests skipped if engine not running)
+- [ ] `pytest tests\unit --tb=no -q` → **870 passed, 8 skipped**
+- [ ] `pytest tests\integration --tb=no -q` → **134 passed**
 - [ ] `cargo test` (in `rust\tom-engine\`) → **83 passed**
-- [ ] `.\.venv\Scripts\ruff check python` → `All checks passed!`
-- [ ] `.\.venv\Scripts\ruff format --check python` → `58 files already formatted`
+- [ ] `.\.venv\Scripts\ruff check .` → `All checks passed!`
+- [ ] `.\.venv\Scripts\ruff format --check .` → `145 files already formatted`
+- [ ] `cargo fmt --check` (in `rust\tom-engine\`) → clean
+- [ ] `cargo clippy --all-targets --all-features -- -D warnings` (in `rust\tom-engine\`) → 0 warnings
 
 ### Rust engine + IPC
 - [ ] `.\target\release\tom-engine.exe` logs `ipc_server_listening`
@@ -759,18 +893,24 @@ The correct name is `files.list_directory` (plural `files.`). See the full tool 
 - [ ] Section 8.5 VoiceInteractionManager prints `History after: 2 messages`
 - [ ] Section 8.6 voice.status tool prints `voice.status success: True`
 
+### Phase 7 vision & OS input
+- [ ] Section 9.1 PrivacyShield prints `VS Code Safe: True`, `1Password Safe: False`
+- [ ] Section 9.2 ScreenCaptureService prints `Screen Frame: 1920 x 1080`
+- [ ] Section 9.3 vision.capture tool prints `vision.capture success: True`
+- [ ] Section 9.4 os.input tools print `get_cursor_pos success: True` and `click success (dry-run): True`
+
 ---
 
-## 12. Resources
+## 13. Resources
 
 | File | Purpose |
 |---|---|
 | [README.md](README.md) | Project overview |
 | [STATE.md](STATE.md) | Current phase status and verified test baseline |
 | [PROGRESS.md](PROGRESS.md) | Iteration-level development ledger |
-| [HANDOFF.md](HANDOFF.md) | Next-phase priorities |
+| [HANDOFF.md](HANDOFF.md) | Next-phase priorities (Phase 8 next) |
 | [plan.md](plan.md) | Master engineering plan (Phases 1–8+) |
-| `graphify-out/GRAPH_REPORT.md` | Architecture knowledge graph (2026-09-30 snapshot) |
+| `graphify-out/GRAPH_REPORT.md` | Architecture knowledge graph (2026-10-01 snapshot) |
 | `skills/SKILL_INDEX.md` | Developer skill reference for all TOM subsystems |
 
 ---
@@ -782,27 +922,29 @@ The correct name is `files.list_directory` (plural `files.`). See the full tool 
 ```python
 from tom.ipc.client import NamedPipeIpcClient
 
-client = NamedPipeIpcClient()          # default: \\.\pipe\tom-engine
+client = NamedPipeIpcClient()  # default: \\.\pipe\tom-engine
 await client.connect()
-data = await client.request("engine.ping")   # -> dict
+data = await client.request("engine.ping")  # -> dict
 await client.close()
 ```
 
-Raw method names: `engine.ping`, `engine.status`,  
-`system.cpu`, `system.memory`, `system.gpu`, `system.battery`, `system.disk`, `system.processes`, `system.all`,  
-`audio.status`, `audio.devices`, `audio.capture_start`, `audio.capture_stop`, `audio.get_speech`, `audio.play_buffer`, `audio.playback_stop`
+Raw method names:
+- **Engine**: `engine.ping`, `engine.status`
+- **System**: `system.cpu`, `system.memory`, `system.gpu`, `system.battery`, `system.disk`, `system.processes`, `system.all`
+- **Audio**: `audio.status`, `audio.devices`, `audio.capture_start`, `audio.capture_stop`, `audio.get_speech`, `audio.play_buffer`, `audio.playback_stop`
+- **Input**: `input.mouse_move`, `input.mouse_click`, `input.mouse_down`, `input.mouse_up`, `input.mouse_scroll`, `input.key_press`, `input.key_down`, `input.key_up`, `input.type_text`, `input.cursor_pos`
 
 ### EngineClient (typed wrapper)
 
 ```python
-from tom.ipc.client import NamedPipeIpcClient
 from tom.core.engine import EngineClient
+from tom.ipc.client import NamedPipeIpcClient
 
 ipc = NamedPipeIpcClient()
 await ipc.connect()
-e = EngineClient(ipc)          # NOT NamedPipeIpcClient; wraps it
-ping = await e.ping()          # -> PingResponse  (.pong, .version)
-cpu  = await e.get_cpu()       # -> CpuInfo  (.core_count, .frequency_mhz, .usage_percent)
+e = EngineClient(ipc)  # NOT NamedPipeIpcClient; wraps it
+ping = await e.ping()  # -> PingResponse  (.pong, .version)
+cpu = await e.get_cpu()  # -> CpuInfo  (.core_count, .frequency_mhz, .usage_percent)
 await ipc.close()
 ```
 
@@ -821,6 +963,19 @@ await ipc.close()
 `TranscriptionRequest` field: `samples` (not `audio_samples`).  
 `SynthesisResult` field: `samples` (not `audio_samples`).
 
+### Vision & Input subsystem
+
+| Class | Import path | Constructor |
+|---|---|---|
+| `PrivacyShield` | `tom.vision.privacy` | `PrivacyShield()` |
+| `ScreenCaptureService` | `tom.vision.capture` | `ScreenCaptureService(backend=MockCaptureBackend())` |
+| `MockOCRProvider` | `tom.vision.ocr` | `MockOCRProvider()` |
+| `WindowsMediaOCRProvider` | `tom.vision.ocr` | Requires `[vision]` extras (`winocr`) |
+| `CVElementDetector` | `tom.vision.cv` | Requires `[vision]` extras (`opencv-python`) |
+| `MockVLMProvider` | `tom.vision.vlm` | `MockVLMProvider()` |
+| `LocalVLMProvider` | `tom.vision.vlm` | `LocalVLMProvider(base_url="http://localhost:1234/v1")` |
+| `VisionManager` | `tom.vision.manager` | `VisionManager(capture_service, ocr_provider, cv_detector, vlm_provider)` |
+
 ---
 
-*Setup guide verified: 2026-09-30 | Phase 6 CLOSED & COMPLETE | Python 3.11.9 | cargo 1.98.1*
+*Setup guide verified: 2026-10-01 | Phase 7 CLOSED & COMPLETE | Python 3.11.9 | cargo 1.98.1*

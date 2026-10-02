@@ -2,12 +2,19 @@
 
 ## Current Status
 
-- **Phases 0–7**: CLOSED & COMPLETE.
-- **Phase 7 (Vision & Multimodal / Extended OS Automation)**: CLOSED & COMPLETE — Iterations 0–5 complete and verified.
-- **Latest Verified Test Baseline**: 1004 Python tests passed + 8 skipped (870 unit + 134 integration) + 83 Rust tests passed = **1087 total passing** (8 skipped are optional-dep cv2/winocr tests).
+- **Phases 0–8**: CLOSED & COMPLETE.
+- **Phase 8 (Autonomous Proactive Agent & Long-Horizon Task Execution)**: CLOSED & COMPLETE (5/5 Iterations Verified).
+- **Phase 8 Iteration 0**: COMPLETE & VERIFIED — Task schemas, TaskManager, TaskConfig, SQLite audit tables (41 unit tests).
+- **Phase 8 Iteration 1**: COMPLETE & VERIFIED — Plan/PlanStep schemas, TaskPlanner DAG validation & cycle detection, LoopDetector (34 unit tests).
+- **Phase 8 Iteration 2**: COMPLETE & VERIFIED — TaskExecutor DAG execution, step budgets/timeouts, cancellation, confirmation transitions, checkpointing, VisualRevalidator (18 unit tests).
+- **Phase 8 Iteration 3**: COMPLETE & VERIFIED — ModelBenchmarkSuite (TTFT, tokens/sec, schema fidelity, VRAM residency), ResourceManager hardware governor (8 GB VRAM / 16 GB RAM, 500 MB headroom margin, NVML/psutil abstraction, reasoning/VLM mutual exclusion lock), benchmark scaffolding (`bench_llm.py`), RTX 4060 benchmark docs (21 unit/benchmark tests passed, 1 skipped live).
+- **Phase 8 Iteration 4**: COMPLETE & VERIFIED — ProactiveScheduler with cron/interval/system-event triggers, QuietHoursConfig (22:00–08:00 overnight window), RateLimitConfig (1 task/30 min), user preemption with CancellationToken, urgent_health bypass, deterministic policy evaluation. Proactive schemas & 65 unit tests (100% offline, 0 GPU required).
+- **Phase 8 Iteration 5**: COMPLETE & VERIFIED — End-to-end integration tests (`test_long_horizon_pipeline.py`, `test_confirmation_pipeline.py`, `test_cancellation_pipeline.py` — 36 tests), live empirical benchmark against `qwen3-8b` on RTX 4060 GPU (TTFT: 411.31 ms, TPS: 25.93, 100% schema fidelity, 6,714.4 MB peak VRAM), full regression suite pass.
+- **Verified Final Baseline (Phase 8 Exit Gate)**: 1218 Python passed (1048 unit + 170 integration), 8 skipped; 83 Rust passed (76 unit + 7 integration); 1301 total tests passing (0 failures).
 - **Quality Gates**: Ruff check clean (0 violations), Ruff format clean (0 diffs), Cargo fmt clean, Cargo clippy clean (0 warnings).
-- **Active Implementation Plan**: None (Phase 7 closed; awaiting Phase 8 planning).
-- **Current / Immediate Next Action**: Phase 8 (Autonomous Proactive Agent & Long-Horizon Task Execution).
+- **Active Implementation Plan**: None (Phase 8 CLOSED; Phase 9 planning pending).
+- **Current / Immediate Next Action**: Phase 8 Exit Gate fully satisfied. All 5 iterations verified and documented. Await user instruction for Phase 9 roadmap.
+
 
 ---
 

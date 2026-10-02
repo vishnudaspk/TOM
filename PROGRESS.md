@@ -12,19 +12,20 @@
 | **Phase 5** | Memory Architecture (SQLite Relational + Qdrant Vector) | CLOSED | 621 passed | 2026-09-24 |
 | **Phase 6** | Voice Pipeline (Audio IPC + STT + TTS + Barge-in) | CLOSED | 931 passed (848 Py + 83 Rust) | 2026-09-30 |
 | **Phase 7** | Vision & Multimodal Capabilities / Extended OS Automation | CLOSED | 1087 passed (1004 Py + 83 Rust) | 2026-10-01 |
+| **Phase 8** | Autonomous Proactive Agent & Long-Horizon Execution | CLOSED | 1301 passed (1218 Py + 83 Rust) | 2026-10-02 |
 
 ---
 
 ## Latest Verified Test Baseline
 
-- **Total Python Tests**: 1004 passed + 8 skipped (870 unit + 134 integration)
-  - Unit tests: 870 passed (81 vision + 180 voice + 156 tools + 149 IPC + 102 agents + 61 models + 54 core + 50 memory + 33 security + 4 telemetry)
-  - Integration tests: 134 passed (42 vision + 23 voice + 32 tools + 15 python_rust + 13 agents + 6 memory + 3 models)
+- **Total Python Tests**: 1218 passed + 8 skipped (1048 unit + 170 integration)
+  - Unit tests: 1048 passed (198 Phase 8 agents/resources/models [+65 proactive, +14 resource manager, +6 benchmark suite, +11 executor, +7 revalidator, +20 planner, +14 loop detector, +41 task manager, +20 core agent loop] + 81 vision + 180 voice + 156 tools + 149 IPC + 61 models + 54 core + 50 memory + 33 security + 4 telemetry)
+  - Integration tests: 170 passed (49 agents [+15 long horizon, +10 confirmation, +11 cancellation, +13 agent pipeline] + 42 vision + 32 tools + 23 voice + 15 python_rust + 6 memory + 3 models)
   - Skipped: 8 optional-dep vision tests (cv2/winocr guards; pass when `pip install opencv-python winocr`)
 - **Total Rust Tests**: 83 passed (76 unit + 7 integration in `tom-engine`)
-- **Combined Repository Total**: 1087 tests passing (+ 8 skipped) across the repository
+- **Combined Repository Total**: 1301 tests passing (+ 8 skipped) across the repository
 - **Quality Gates**: Ruff check clean (0 violations), Ruff format clean (0 diffs), Cargo fmt clean, Cargo clippy clean (0 warnings)
-- **Baseline Date**: 2026-10-01
+- **Baseline Date**: 2026-10-02
 
 ---
 
@@ -165,3 +166,63 @@
 | **SpeechFormatter (Markdown-Heavy)** | 100 | 0.061 ms | **0.064 ms** | 0.110 ms | 0.235 ms | < 15 ms | PASSED |
 | **Turn Orchestration Overhead** | 50 | 0.103 ms | **0.110 ms** | 0.229 ms | 0.253 ms | < 25 ms | PASSED |
 | **Barge-in Stop & Invalidation** | 10 | 0.065 ms | **0.084 ms** | 0.125 ms | 0.142 ms | < 10 ms | PASSED |
+
+---
+
+---
+
+## Phase 8: Autonomous Proactive Agent & Long-Horizon Execution (CLOSED)
+
+- **Iteration 0: Task Lifecycle, Schemas & TaskManager**:
+  - `python/tom/schemas/task.py`: 9-state task lifecycle (`TaskState`), Pydantic schemas (`Task`, `StepResult`, `TaskMetadata`).
+  - `python/tom/agents/task_manager.py`: `TaskManager` handling creation, state transitions, step tracking, cooperative cancellation, and SQLite audit logging.
+  - Verification: 41 unit tests in `tests/unit/agents/test_task_manager.py`.
+- **Iteration 1: Structured TaskPlanner, Step Decomposition & Loop Detection**:
+  - `python/tom/schemas/planner.py`: `Plan`, `PlanStep`, `StepDependency` Pydantic schemas.
+  - `python/tom/agents/planner.py`: `TaskPlanner` with DAG validation, cycle detection, and tool schema context injection.
+  - `python/tom/agents/loop_detector.py`: `LoopDetector` tracking action repetitions and cyclic failures.
+  - Verification: 34 unit tests in `tests/unit/agents/test_planner.py` and `test_loop_detector.py`.
+- **Iteration 2: Execution Engine, Checkpointing & Vision->Action Revalidation**:
+  - `python/tom/agents/executor.py`: `TaskExecutor` coordinating DAG execution, cooperative cancellation via `CancellationToken`, step budgeting, wall-clock timeout enforcement, and SQLite checkpointing.
+  - `python/tom/agents/revalidator.py`: `VisualRevalidator` pre-action safety gate querying `VisionManager.find_element`.
+  - Verification: 18 unit tests in `tests/unit/agents/test_executor.py` and `test_revalidator.py`.
+- **Iteration 3: Staged Model Acquisition, Benchmarking & Resource Governor**:
+  - `python/tom/models/benchmark.py`: `ModelBenchmarkSuite` measuring TTFT (ms), throughput (tokens/sec), JSON schema fidelity (% valid Pydantic), and dedicated VRAM residency/peak.
+  - `python/tom/resources/manager.py`: `ResourceManager` hardware governor enforcing RTX 4060 limits (8 GB VRAM, 16 GB RAM), 500 MB VRAM safety headroom margin, NVML/psutil telemetry abstraction, and mutual exclusion lock between heavy reasoning models and local VLMs.
+  - `tests/benchmarks/models/bench_llm.py`: Offline benchmark scaffolding and opt-in live endpoint benchmarking harness.
+  - `docs/development/RTX4060_MODEL_BENCHMARKING.md`: Architectural documentation for RTX 4060 candidate model evaluation.
+  - Verification: 21 unit/benchmark tests passing (14 resource manager + 6 benchmark suite + 1 benchmark scaffolding) + 1 skipped live test. Zero regressions.
+- **Iteration 4: Bounded Proactive Behavior & Event Scheduling**:
+  - `python/tom/schemas/proactive.py`: `QuietHoursConfig`, `RateLimitConfig`, `CronTrigger`, `IntervalTrigger`, `SystemEventTrigger`, `ProactivePolicyDecision`. Hard safety invariants encoded in Pydantic schema.
+  - `python/tom/agents/proactive.py`: `ProactiveScheduler` with 5-stage policy pipeline (enabled -> user-active -> quiet-hours -> rate-limit -> trigger-due), user preemption via `CancellationToken`, `urgent_health` bypass for critical triggers, async dispatch lock.
+  - Verification: 65 unit tests in `tests/unit/agents/test_proactive.py`.
+- **Iteration 5: End-to-End Integration, Scenario Tests & Phase 8 Exit Gate**:
+  - `tests/integration/agents/test_long_horizon_pipeline.py`: 15 integration tests covering full stack `TaskManager -> TaskPlanner -> TaskExecutor -> ToolExecutor`, sequential and DAG plans, topological ordering, checkpoints, step failure recovery, step budget enforcement, timeout enforcement, LoopDetector halting, and permission authority.
+  - `tests/integration/agents/test_confirmation_pipeline.py`: 10 integration tests verifying `ASK_USER` confirmation boundary, `WAITING_CONFIRMATION` lifecycle state, pause/resume on approval, denial halts, and PermissionEngine authority.
+  - `tests/integration/agents/test_cancellation_pipeline.py`: 11 integration tests verifying cooperative cancellation via `CancellationToken` before/between/during execution, propagation across boundaries, zero orphan steps, and terminal state correctness.
+  - Verification: 36 new integration tests passing (170 total integration tests across repository). Full regression clean (1218 Python + 83 Rust = 1301 passed, 8 skipped).
+
+## Empirical Hardware Benchmarks (Phase 8 Verified — RTX 4060)
+
+Measured empirical benchmark against local OpenAI-compatible endpoint with candidate reasoning model `qwen3-8b` on reference hardware (NVIDIA GeForce RTX 4060 Laptop GPU, 8,192 MB VRAM):
+
+| Metric | Target SLA | Measured Value (qwen3-8b) | Status |
+|---|---|---|---|
+| **TTFT (Time to First Token)** | < 1,200 ms | **411.31 ms** (Min: 393.64 ms, Max: 428.84 ms, P50: 411.45 ms, P95: 428.84 ms) | PASS |
+| **Generation Throughput** | > 18 tokens/sec | **25.93 tokens/sec** (Min: 25.86, Max: 26.05) | PASS |
+| **JSON Schema Fidelity** | > 95.0% | **100.0%** (3/3 valid Pydantic `BenchmarkTaskSchema`) | PASS |
+| **Dedicated VRAM Peak** | < 7,200 MB | **6,714.4 MB** (81.9% of 8,192 MB; 1,477.6 MB free VRAM margin) | PASS |
+| **Net VRAM Residency Increase** | Minimal (< 100 MB) | **0.0 MB** net residency | PASS |
+
+## Architectural Decisions Summary (Phase 8)
+
+- **Decision 051: Global Task Lifecycle & Decoupled State Machines (ADR-051)**
+  Decouples the high-level task lifecycle (`TaskState`: 9 states — `CREATED`, `PLANNING`, `READY`, `RUNNING`, `WAITING_CONFIRMATION`, `PAUSED`, `COMPLETED`, `FAILED`, `CANCELLED`) from low-level turn execution (`AgentState`: 6 states). `TaskManager` acts as the single source of truth for task lifecycle mutations, audit checkpoints, and state transitions, isolating long-running task orchestration from interactive conversation turns.
+- **Decision 052: Structured Pydantic Plan Decomposition & Dynamic Replanning (ADR-052)**
+  Enforces explicit, strongly-typed DAG and sequential plans via `Plan`, `PlanStep`, and `StepDependency` Pydantic models. Plan validation executes deterministically prior to step execution, verifying that all step IDs are unique, dependencies are non-cyclical, dependency references exist, and tools exist in `ToolRegistry`. Step failures trigger structured replanning or terminal failure without unchecked loops, governed by `LoopDetector`.
+- **Decision 053: Closed-Loop Visual Target Revalidation (ADR-053)**
+  Enforces a mandatory pre-actuation visual check via `VisualRevalidator` immediately prior to physical input tool execution (`os.input.click`, `os.input.type_text`, `os.input.hotkey`). Takes a fresh screen frame and re-locates target coordinates. If UI elements drift or disappear, the action is aborted before OS actuation occurs, preventing stale coordinate misclicks.
+- **Decision 054: Hardware-Constrained Model Staging & Empirical Benchmarking (ADR-054)**
+  Defines hardware allocation rules for the reference 8 GB GPU (RTX 4060) and 16 GB RAM. `ResourceManager` acts as a hardware governor enforcing a 500 MB safety headroom margin, NVML/psutil telemetry monitoring, and a strict mutual exclusion lock (`_heavy_lock`) between heavy reasoning LLMs (~5.2 GB) and local multimodal VLMs (~5.5 GB) to eliminate GPU Out-Of-Memory crashes. Benchmarks verify TTFT < 1,200 ms, throughput > 18 tps, and schema fidelity > 95% on local quantizations.
+- **Decision 055: Bounded Proactive Scheduling & Safety Controls (ADR-055)**
+  Constrains autonomous proactive actions through `ProactiveScheduler` using a 5-stage policy pipeline: global enable flag, active user preemption (user actions preempt background tasks), quiet hours window (22:00–08:00 overnight, bypassable only by `urgent_health` events), rate limits (maximum 1 task per 30 minutes), and trigger due verification. Proactive tasks proposing mutating tools must route through the `PermissionEngine` `ASK_USER` tier for explicit user confirmation.

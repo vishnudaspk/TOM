@@ -183,6 +183,53 @@ class ResourcesConfig(BaseModel):
     )
 
 
+class TaskConfig(BaseModel):
+    """Phase 8 task execution configuration."""
+
+    default_max_steps: int = Field(
+        default=15,
+        ge=1,
+        le=30,
+        description="Default step budget per task",
+    )
+    hard_max_steps: int = Field(
+        default=30,
+        ge=1,
+        le=50,
+        description="Absolute ceiling on step budget",
+    )
+    default_timeout_seconds: float = Field(
+        default=300.0,
+        gt=0.0,
+        le=900.0,
+        description="Default wall-clock timeout per task in seconds",
+    )
+    hard_timeout_seconds: float = Field(
+        default=900.0,
+        gt=0.0,
+        le=3600.0,
+        description="Absolute ceiling on task wall-clock timeout",
+    )
+    max_replans: int = Field(
+        default=2,
+        ge=0,
+        le=5,
+        description="Maximum number of replanning attempts per task",
+    )
+    confirmation_timeout_seconds: float = Field(
+        default=120.0,
+        gt=0.0,
+        le=600.0,
+        description="Seconds to wait for ASK_USER confirmation before expiry",
+    )
+    loop_detection_window: int = Field(
+        default=3,
+        ge=2,
+        le=10,
+        description="Consecutive identical tool calls before loop detection triggers",
+    )
+
+
 class IpcConfig(BaseModel):
     """Python <-> Rust IPC configuration."""
 
@@ -193,6 +240,32 @@ class IpcConfig(BaseModel):
     connection_timeout_ms: int = Field(default=3000, gt=100)
     request_timeout_ms: int = Field(default=5000, gt=100)
     max_reconnect_attempts: int = Field(default=5, ge=0)
+
+
+class VisionConfig(BaseModel):
+    """Vision and screen capture configuration."""
+
+    enabled: bool = Field(default=True, description="Enable vision capabilities")
+    backend: Literal["auto", "mss", "pillow", "mock"] = Field(
+        default="auto",
+        description="Screen capture backend: auto, mss, pillow, or mock",
+    )
+    enable_privacy_shield: bool = Field(
+        default=True,
+        description="Enforce privacy checks before capturing screen",
+    )
+    sensitive_window_patterns: list[str] = Field(
+        default_factory=lambda: [
+            "*password*",
+            "*bitwarden*",
+            "*1password*",
+            "*keepass*",
+            "*bank*",
+            "*private browsing*",
+            "*incognito*",
+        ],
+        description="Glob/substring patterns for sensitive window titles to block",
+    )
 
 
 class TOMConfig(BaseModel):
@@ -207,3 +280,5 @@ class TOMConfig(BaseModel):
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
     resources: ResourcesConfig = Field(default_factory=ResourcesConfig)
     ipc: IpcConfig = Field(default_factory=IpcConfig)
+    vision: VisionConfig = Field(default_factory=VisionConfig)
+    task: TaskConfig = Field(default_factory=TaskConfig)

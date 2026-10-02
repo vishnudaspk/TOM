@@ -45,6 +45,8 @@ class AgentDependencies(BaseModel):
     memory_manager: object | None = Field(default=None)
     # Injectable voice coordinator or pipeline manager (Phase 6 Iteration 4).
     voice_manager: object | None = Field(default=None)
+    # Injectable vision coordinator or perception manager (Phase 7 Iteration 4).
+    vision_manager: object | None = Field(default=None)
 
     def get_executor(self) -> ToolExecutor:
         """Return or lazily construct a ToolExecutor bound to the registry."""
@@ -55,3 +57,7 @@ class AgentDependencies(BaseModel):
     def get_voice_manager(self) -> object | None:
         """Return injected voice interaction or pipeline manager if configured."""
         return self.voice_manager
+
+    def get_vision_manager(self) -> object | None:
+        """Return injected vision manager if configured."""
+        return self.vision_manager

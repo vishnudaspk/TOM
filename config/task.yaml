@@ -1,0 +1,11 @@
+# Phase 8 task execution configuration.
+# Controls step budgets, timeouts, replanning limits, and loop detection.
+# All values are bounded by the RTX 4060 hardware profile (8GB VRAM, 16GB RAM).
+
+default_max_steps: 15
+hard_max_steps: 30
+default_timeout_seconds: 300.0
+hard_timeout_seconds: 900.0
+max_replans: 2
+confirmation_timeout_seconds: 120.0
+loop_detection_window: 3

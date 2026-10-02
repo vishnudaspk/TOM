@@ -39,7 +39,10 @@ models = [
 vision = [
     "opencv-python>=4.8.0",
     "pillow>=10.0.0",
+    "mss>=9.0.0",
     "screeninfo>=0.8.0",
+    "numpy>=1.24.0",
+    "winocr",
 ]
 memory = [
     "qdrant-client>=1.7.0",
