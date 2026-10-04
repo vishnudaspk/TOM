@@ -1,76 +1,48 @@
-# TOM - Current State Snapshot
+# TOM — Current State
 
-## Current Status
+Last updated: 2026-10-04
 
-- **Phases 0–8**: CLOSED & COMPLETE.
-- **Phase 8 (Autonomous Proactive Agent & Long-Horizon Task Execution)**: CLOSED & COMPLETE (5/5 Iterations Verified).
-- **Phase 8 Iteration 0**: COMPLETE & VERIFIED — Task schemas, TaskManager, TaskConfig, SQLite audit tables (41 unit tests).
-- **Phase 8 Iteration 1**: COMPLETE & VERIFIED — Plan/PlanStep schemas, TaskPlanner DAG validation & cycle detection, LoopDetector (34 unit tests).
-- **Phase 8 Iteration 2**: COMPLETE & VERIFIED — TaskExecutor DAG execution, step budgets/timeouts, cancellation, confirmation transitions, checkpointing, VisualRevalidator (18 unit tests).
-- **Phase 8 Iteration 3**: COMPLETE & VERIFIED — ModelBenchmarkSuite (TTFT, tokens/sec, schema fidelity, VRAM residency), ResourceManager hardware governor (8 GB VRAM / 16 GB RAM, 500 MB headroom margin, NVML/psutil abstraction, reasoning/VLM mutual exclusion lock), benchmark scaffolding (`bench_llm.py`), RTX 4060 benchmark docs (21 unit/benchmark tests passed, 1 skipped live).
-- **Phase 8 Iteration 4**: COMPLETE & VERIFIED — ProactiveScheduler with cron/interval/system-event triggers, QuietHoursConfig (22:00–08:00 overnight window), RateLimitConfig (1 task/30 min), user preemption with CancellationToken, urgent_health bypass, deterministic policy evaluation. Proactive schemas & 65 unit tests (100% offline, 0 GPU required).
-- **Phase 8 Iteration 5**: COMPLETE & VERIFIED — End-to-end integration tests (`test_long_horizon_pipeline.py`, `test_confirmation_pipeline.py`, `test_cancellation_pipeline.py` — 36 tests), live empirical benchmark against `qwen3-8b` on RTX 4060 GPU (TTFT: 411.31 ms, TPS: 25.93, 100% schema fidelity, 6,714.4 MB peak VRAM), full regression suite pass.
-- **Verified Final Baseline (Phase 8 Exit Gate)**: 1218 Python passed (1048 unit + 170 integration), 8 skipped; 83 Rust passed (76 unit + 7 integration); 1301 total tests passing (0 failures).
-- **Quality Gates**: Ruff check clean (0 violations), Ruff format clean (0 diffs), Cargo fmt clean, Cargo clippy clean (0 warnings).
-- **Active Implementation Plan**: None (Phase 8 CLOSED; Phase 9 planning pending).
-- **Current / Immediate Next Action**: Phase 8 Exit Gate fully satisfied. All 5 iterations verified and documented. Await user instruction for Phase 9 roadmap.
+## Now
 
+| Item | Value |
+|---|---|
+| **Phases 0–8** | CLOSED & COMPLETE |
+| **Phase 9** | IN PROGRESS — Iteration **9.0 COMPLETE & VERIFIED**; **9.1 not started** |
+| **Plan** | `docs/development/PHASE9_IMPLEMENTATIONPLAN.md` |
+| **Next** | Iteration **9.1 Streaming STT**, only when instructed. Do not implement 9.1+. |
+| **Full-repo baseline** | 2026-10-02 Phase 8 exit: **1301 passed** (1218 Python + 83 Rust), **8 skipped**. Ruff/Cargo fmt/clippy clean. |
+| **9.0 incremental** | 17 new unit tests (`tests/unit/voice/test_microphone_loop.py`). Targeted voice suite green (**220** = 197 unit incl. 17 new + 23 integration). **Full repo suite not re-run.** |
 
----
+## Architecture (locked Phases 0–8; 9.0 additive)
 
-## High-Level Architecture
+Python brain ↔ Rust `tom-engine` over Named Pipe `\\.\pipe\tom-engine`.
 
-TOM is a local-first personal AI operating layer operating across two core engines over Windows Named Pipe IPC (`\\.\pipe\tom-engine`):
+| Layer | Owns |
+|---|---|
+| **Python** | Router; `Agent` / `AgentOrchestrator` (6-state); 28 tools via `ToolExecutor` + `PermissionEngine`; `MemoryManager`; Phase 6 voice (`STTProvider`, `TTSProvider`, `VoicePipelineManager`, `VoiceInteractionManager`); Phase 7 vision; Phase 8 `TaskManager` / `TaskPlanner` / `TaskExecutor` / `ResourceManager` / `ProactiveScheduler`; **9.0** `MicrophoneLoop` + `VADDetector` |
+| **Rust** | IPC server; telemetry; `AudioManager` (capture/playback, ring buffer); `InputManager` (`SendInput`, clamp, cancel hotkey) |
 
-```text
-TOM
-├── Python Brain
-│   ├── Router (Qwen3 1.7B intent/model router)
-│   ├── Agents (Agent / AgentOrchestrator, 6-state lifecycle)
-│   │   └── AgentDependencies (executor, memory_manager, voice_manager, vision_manager [Phase 7])
-│   ├── Models (LLMProvider ABC: Mock, LMStudio / Bionic / local OpenAI-compatible)
-│   ├── Tools (28 built-ins through ToolExecutor + PermissionEngine; 8 new tools in Phase 7)
-│   │   ├── System Tools (7: system.ping, system.status, system.cpu, etc.)
-│   │   ├── File Tools (6: file.read, file.write, file.list, etc.)
-│   │   ├── Memory Tools (5: memory.remember, memory.recall, memory.forget, etc.)
-│   │   ├── Voice Tools (2: voice.announce, voice.status)
-│   │   ├── Vision Tools (4: vision.capture, vision.ocr, vision.find_element, vision.ask [SAFE])
-│   │   └── OS Input Tools (4: os.input.click [ASK_USER], os.input.type_text [ASK_USER], os.input.hotkey [ASK_USER], os.input.get_cursor_pos [SAFE])
-│   ├── Security (PermissionEngine: SAFE, ASK_USER, BLOCK; ConfirmationHook; Sandbox; explicit DEFAULT_TOOL_PERMISSIONS)
-│   ├── Memory (Phase 5: MemoryManager, SQLite authoritative store, optional Qdrant, CPU embeddings)
-│   ├── Voice (Phase 6: STT FasterWhisper CPU, TTS Kokoro CPU, SpeechFormatter, VoicePipelineManager, VoiceInteractionManager)
-│   └── Vision (Phase 7: ScreenCaptureService, PrivacyShield, OCRProvider, CVElementDetector, VisionManager, LocalVLMProvider, Vision Tools, OS Input Tools)
-└── Rust Engine (tom-engine)
-    ├── IPC Server (Named Pipe \\.\pipe\tom-engine)
-    ├── System Telemetry (CPU, memory, GPU, disk, battery, processes)
-    ├── Audio (AudioManager: capture/playback buffers, ring buffer, device enumeration)
-    ├── Input (Phase 7: InputManager: SendInput mouse/keyboard primitives, coordinate clamping, cancel hotkey)
-    └── Lifecycle & Event Bus
-```
+Tools (28): system 7, file 6, memory 5, voice 2 (`voice.announce`, `voice.status` SAFE), vision 4 (`SAFE`), OS input 4 (`get_cursor_pos` SAFE; `click` / `type_text` / `hotkey` ASK_USER).
 
----
+## Invariants (do not violate)
 
-## Active Architectural Invariants
+1. **Extend, do not replace** closed Phase 0–8 subsystems (`AudioManager`, `VoicePipelineManager`, `ToolExecutor`, `PermissionEngine`, `MemoryManager`, `VisionManager`, `InputManager`, `AgentOrchestrator.run()`, `CancellationToken`, `ResourceManager`).
+2. Deterministic routing, permissions, clamping, and audio/task state machines stay **outside** LLM prompts.
+3. All agent tools go through `ToolExecutor` → `PermissionEngine`. Permissions are **data-driven** (`DEFAULT_TOOL_PERMISSIONS`), never string-prefix inferred.
+4. **SQLite** is memory ground truth; Qdrant is optional index only.
+5. Voice turns and screen frames are **ephemeral RAM**; no raw speech/screenshots into SQLite/Qdrant.
+6. **Local-only**: no cloud LLM/VLM, no cloud fallback, no remote screenshot send.
+7. Offline tests: no GPU, network, or neural-weight downloads.
+8. **VAD owns speech boundaries** (Phase 9). STT must not add a competing endpoint detector.
+9. Python never injects mouse/keyboard; OS input is Rust `InputManager` via IPC.
 
-1. **Phases 0–7 are CLOSED**: Core architecture, tools, agents, memory, voice, vision, and OS input actuation are complete, verified, and locked. Do not rewrite or redesign these subsystems.
-2. **Deterministic Code Outside the LLM**: Tool routing, permission verification, security checks, coordinate clamping, and audio state machines execute in deterministic code, never inside LLM prompts.
-3. **Non-Bypassable Tool Execution**: All agent tool calls flow strictly through `ToolExecutor` and `PermissionEngine`.
-4. **Data-Driven Tool Permissions**: Tool security levels (`SAFE`, `ASK_USER`, `BLOCK`) are explicitly registered metadata in `ToolRegistry` and `PermissionEngine`, never inferred via string prefixes.
-5. **SQLite is Authoritative for Memory**: Qdrant provides optional semantic indexing and never acts as ground truth.
-6. **Ephemeral Modality Lifecycles**:
-   - Voice conversation turns live in volatile RAM (`ConversationHistory`); raw speech is not dumped into persistent vector memory.
-   - Screen captures live ephemerally in RAM during request execution; zero persistent screenshot caching or automatic ingestion into SQLite/Qdrant.
-7. **Local-Only Runtime**: No cloud LLM/VLM execution, no cloud fallback, and no remote screenshot transmission in active development phases.
-8. **Hardware & Resource Limits**: Intel i9-13900H, 16 GB RAM, RTX 4060 Laptop GPU (8 GB VRAM). CPU-first defaults for STT, TTS, and Tier 1 OCR/CV preserve scarce VRAM for primary LLM inference.
-9. **Offline Deterministic Tests**: Automated unit/integration tests must never require GPU availability, external network access, or downloaded neural weights.
+## Hardware / env
 
----
+- Windows 11; Python 3.11+ `.venv`; Rust stable `rust/tom-engine`
+- Intel i9-13900H, **16 GB RAM**, RTX 4060 Laptop **8 GB VRAM**
+- CPU-first STT/TTS/OCR/CV; VRAM reserved for primary LLM. `ResourceManager`: 500 MB VRAM headroom; `_heavy_lock` between heavy LLM (~5.2 GB) and VLM (~5.5 GB)
+- STT FasterWhisper int8 CPU; TTS Kokoro CPU (0 VRAM)
 
-## Environment & Hardware Baseline
+## Phase 9.0 (done)
 
-- **OS**: Windows 11
-- **Python**: 3.11+ in `.venv` (dependencies: Pydantic v2, HTTPX, PyYAML, psutil, pytest, ruff)
-- **Rust**: `rustc` / `cargo` stable (`rust/tom-engine`)
-- **IPC Pipe**: `\\.\pipe\tom-engine`
-- **GPU / VRAM**: NVIDIA GeForce RTX 4060 Laptop GPU (8 GB VRAM)
-- **System Memory**: 16 GB RAM
+`MicrophoneLoop`: 16 kHz 16-bit mono ~20 ms frames → energy VAD → `SpeechStartEvent` → `AudioFrameEvent*` → `SpeechEndEvent`. Mute/pause/stop. See `HANDOFF.md` for files, gaps, 9.1 contract.
