@@ -1,0 +1,462 @@
+{
+  "lm_studio_loaded": false,
+  "hangover_ms": 300,
+  "results": {
+    "complete_turn": [
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      }
+    ],
+    "hesitation_prefix": [
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": true,
+        "endpoint": false
+      }
+    ],
+    "hesitation_full": [
+      {
+        "correct": true,
+        "endpoint": true
+      },
+      {
+        "correct": true,
+        "endpoint": true
+      },
+      {
+        "correct": true,
+        "endpoint": true
+      },
+      {
+        "correct": true,
+        "endpoint": true
+      },
+      {
+        "correct": true,
+        "endpoint": true
+      },
+      {
+        "correct": true,
+        "endpoint": true
+      },
+      {
+        "correct": true,
+        "endpoint": true
+      },
+      {
+        "correct": true,
+        "endpoint": true
+      },
+      {
+        "correct": true,
+        "endpoint": true
+      },
+      {
+        "correct": true,
+        "endpoint": true
+      },
+      {
+        "correct": true,
+        "endpoint": true
+      },
+      {
+        "correct": true,
+        "endpoint": true
+      },
+      {
+        "correct": true,
+        "endpoint": true
+      },
+      {
+        "correct": true,
+        "endpoint": true
+      },
+      {
+        "correct": true,
+        "endpoint": true
+      }
+    ],
+    "synthetic": [
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": true,
+        "endpoint": false
+      },
+      {
+        "correct": false,
+        "endpoint": true
+      },
+      {
+        "correct": true,
+        "endpoint": false
+      }
+    ]
+  }
+}

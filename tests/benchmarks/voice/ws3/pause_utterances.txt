@@ -1,0 +1,26 @@
+# WS3 Pause Utterances
+# 15 realistic commands/questions with natural mid-sentence hesitation
+# Format: utterance with <pause> marker indicating hesitation point
+
+# Commands with hesitation (5)
+turn off the <pause> lights
+open the <pause> settings window
+set a timer for <pause> ten minutes
+take a <pause> screenshot
+close the <pause> current tab
+
+# Questions with hesitation (5)
+what is the <pause> current time
+how much <pause> disk space is left
+where is the <pause> config file located
+when was the <pause> last backup made
+can you explain <pause> this error message
+
+# Names/Products with hesitation (3)
+TOM show me the <pause> dashboard
+TOM what is the status of the <pause> build
+TOM open the <pause> project settings
+
+# Numbers/Times with hesitation (2)
+set an alarm for <pause> seven thirty AM
+remind me at <pause> three fifteen PM

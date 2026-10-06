@@ -1,0 +1,43 @@
+{
+  "lm_studio_loaded": false,
+  "cpu_threads": 4,
+  "timestamp": "2026-10-07",
+  "results": {
+    "complete_turn": {
+      "total": 41,
+      "correct": 40,
+      "accuracy": 0.975609756097561,
+      "false_incomplete": 1,
+      "false_complete": 0,
+      "latency_p50_ms": 53,
+      "latency_p95_ms": 56
+    },
+    "hesitation_prefix": {
+      "total": 15,
+      "correct": 0,
+      "accuracy": 0,
+      "false_incomplete": 0,
+      "false_complete": 15,
+      "latency_p50_ms": 53,
+      "latency_p95_ms": 56
+    },
+    "hesitation_full": {
+      "total": 15,
+      "correct": 14,
+      "accuracy": 0.9333333333333333,
+      "false_incomplete": 1,
+      "false_complete": 0,
+      "latency_p50_ms": 53,
+      "latency_p95_ms": 56
+    },
+    "synthetic": {
+      "total": 41,
+      "correct": 6,
+      "accuracy": 0.14634146341463414,
+      "false_incomplete": 0,
+      "false_complete": 35,
+      "latency_p50_ms": 53,
+      "latency_p95_ms": 56
+    }
+  }
+}

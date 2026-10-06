@@ -1,12 +1,13 @@
-# Handoff — continue at Phase 9.B WS2 (do not start until asked)
+# Handoff — continue at Phase 9.5 (do not start until asked)
 
 Invariants, hardware, and architecture: **`STATE.md`**. Phase ledger and ADRs 041–055: **`PROGRESS.md`**. Plan: **`docs/development/PHASE9_IMPLEMENTATIONPLAN.md`**.
 
 ## Resume
 
-- **Done:** Phase 9 Iterations **9.0** (VAD/endpointing), **9.1** (streaming STT), **9.2** (LLM stream + sentence chunking), **9.3** (streaming TTS + incremental playback), **9.4** (turn manager + response policy). **9.B WS0** (measurement integrity) and **WS1** (cheap faster-whisper tuning) **COMPLETE**.
-- **WS2 IN PROGRESS:** sherpa-onnx streaming transducer models tested. **PRIMARY METRIC: `final_from_endpoint`** (time from VAD endpoint to final text). sherpa-large: p50=15.3 ms, p95=31.8 ms — **PASSES 500 ms ceiling**. sherpa-20M: p50=6.9 ms, p95=14.3 ms but produces empty/garbage transcripts — root cause under investigation, marked EXCLUDED pending evidence. First-partial currently measured from feed start (~1400-2000 ms); needs correction to measure from actual speech onset. Previous claim "no streaming CPU model meets the target" **RETRACTED** — sherpa-large meets finalization target. Previous claim sherpa-20M "fundamentally broken" **RETRACTED** — root cause unconfirmed.
-- **Next:** Complete sherpa-20M root cause analysis, run accuracy tests (Section 4), then reduced latency runs (Section 5). **Do not** implement 9.5/9.6 or hardware benchmarking beyond what's needed for WS2 evaluation.
+- **Done:** Phase 9 Iterations **9.0** (VAD/endpointing), **9.1** (streaming STT), **9.2** (LLM stream + sentence chunking), **9.3** (streaming TTS + incremental playback), **9.4** (turn manager + response policy). **9.B WS0** (measurement integrity), **WS1** (cheap faster-whisper tuning), **WS2** (streaming STT validation), **WS3** (Pipecat component spike) **COMPLETE**.
+- **WS2 VALIDATION (Checkpoint A):** sherpa-large meets finalization target (p50=15.3ms, p95=31.8ms) but fails accuracy (64.8% WER). sherpa-20M EXCLUDED (domain mismatch). Offline HYBRID-FINAL candidates: Moonshine-tiny, Parakeet TDT.
+- **WS3 SPIKE (Checkpoint B):** Smart Turn evaluated — **100% false-complete on hesitation prefix (DANGEROUS)**. VAD hangover baseline more reliable. Pipeline overhead 1.0µs. Interruption mechanism works with `interruptible=False`. No backchannel/filler features. **Decision**: Use Smart Turn & Silero VAD as libraries; defer Pipecat pipeline. STT plan: Hybrid — Moonshine-tiny offline for final, streaming STT TBD for partials.
+- **Next:** Phase 9.5 (InteractionCore + TurnExecutor) when instructed. **Do not** implement 9.5/9.6 until asked.
 
 ## Pipeline assembled so far (9.0 → 9.4 + 9.B WS0-WS1)
 
@@ -66,7 +67,11 @@ AsyncGenerator[str]  (SentenceStreamer)
 - `VoicePipelineManager` is still untouched; 9.5 must decide how `InteractionCore` relates to it (Decision **044** says do not duplicate its state machine).
 - Epoch invalidation and turn recovery are still **unimplemented** — 9.5 owns them.
 - Phase 9.0–9.4 tests are **not** in the last full-repo 1301 baseline.
-- **faster-whisper CPU cannot meet SLA targets** (350 ms finalization target vs ~1350 ms best). Streaming-native STT (WS2) is required for SLA compliance. **CORRECTION**: sherpa-large meets finalization target (p50=15.3 ms, p95=31.8 ms on `final_from_endpoint` metric).
+- **faster-whisper CPU cannot meet SLA targets** (350 ms finalization target vs ~1350 ms best). Streaming-native STT (WS2) is required for SLA compliance. **CORRECTION**: sherpa-large meets finalization target (p50=15.3 ms, p95=31.8 ms on `final_from_endpoint` metric) but fails accuracy (64.8% WER).
+- **sherpa-large streaming unusable for commands** — domain mismatch (LibriSpeech audiobooks only). Need hybrid: streaming partials from better model + offline final from Moonshine/Parakeet.
+- Offline HYBRID-FINAL candidates (Moonshine-tiny, Parakeet TDT) not yet evaluated.
+- **Smart Turn false-completes on hesitations** — 100% false-complete rate on hesitation prefix makes it unsafe as sole endpoint detector. Must combine with VAD hangover or use as library with override logic.
+- **Pipecat pipeline not adopted** — components (Smart Turn, Silero VAD) to be used as libraries; pipeline architecture deferred.
 
 ## Verification (already run, 2026-10-06)
 

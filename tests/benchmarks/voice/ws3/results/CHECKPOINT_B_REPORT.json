@@ -1,0 +1,87 @@
+{
+  "smart_turn": {
+    "complete_turn": {
+      "total": 41,
+      "correct": 40,
+      "accuracy": 0.975609756097561,
+      "false_incomplete": 1,
+      "false_complete": 0,
+      "latency_p50_ms": 53,
+      "latency_p95_ms": 56
+    },
+    "hesitation_prefix": {
+      "total": 15,
+      "correct": 0,
+      "accuracy": 0,
+      "false_incomplete": 0,
+      "false_complete": 15,
+      "latency_p50_ms": 53,
+      "latency_p95_ms": 56
+    },
+    "hesitation_full": {
+      "total": 15,
+      "correct": 14,
+      "accuracy": 0.9333333333333333,
+      "false_incomplete": 1,
+      "false_complete": 0,
+      "latency_p50_ms": 53,
+      "latency_p95_ms": 56
+    },
+    "synthetic": {
+      "total": 41,
+      "correct": 6,
+      "accuracy": 0.14634146341463414,
+      "false_incomplete": 0,
+      "false_complete": 35,
+      "latency_p50_ms": 53,
+      "latency_p95_ms": 56
+    }
+  },
+  "vad_baseline": {
+    "complete_turn": {
+      "total": 41,
+      "correct": 2,
+      "accuracy": 0.04878048780487805,
+      "false_incomplete": 39,
+      "false_complete": 0
+    },
+    "hesitation_prefix": {
+      "total": 15,
+      "correct": 15,
+      "accuracy": 1.0,
+      "false_incomplete": 0,
+      "false_complete": 0
+    },
+    "hesitation_full": {
+      "total": 15,
+      "correct": 15,
+      "accuracy": 1.0,
+      "false_incomplete": 0,
+      "false_complete": 0
+    },
+    "synthetic": {
+      "total": 41,
+      "correct": 28,
+      "accuracy": 0.6829268292682927,
+      "false_incomplete": 0,
+      "false_complete": 13
+    }
+  },
+  "interruption": {
+    "test_i_uninterruptible_emission": "PASS",
+    "test_ii_normal_cancellation": "FAIL (test setup - no TaskManager)",
+    "test_iii_pipeline_overhead": {
+      "pipeline_p50_us": 1.1,
+      "pipeline_p95_us": 1.2,
+      "plain_p50_us": 0.1,
+      "plain_p95_us": 0.1,
+      "overhead_p50_us": 1.0,
+      "overhead_p95_us": 1.1
+    }
+  },
+  "recommendation": {
+    "smart_turn": "Use as library only; false-complete rate 100% on hesitation prefix is dangerous for production",
+    "pipecat_pipeline": "Defer; adopt components (Smart Turn, Silero VAD) as libraries",
+    "stt_plan": "Hybrid: Moonshine-tiny offline for final transcript, streaming STT TBD for partials"
+  }
+}

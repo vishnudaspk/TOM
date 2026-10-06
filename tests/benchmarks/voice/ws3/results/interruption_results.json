@@ -1,0 +1,12 @@
+{
+  "test_i_uninterruptible_emission": "PASS",
+  "test_ii_normal_cancellation": "FAIL",
+  "test_iii_pipeline_overhead": {
+    "pipeline_p50_us": 1.1000010999850929,
+    "pipeline_p95_us": 1.2000018614344299,
+    "plain_p50_us": 0.100000761449337,
+    "plain_p95_us": 0.100000761449337,
+    "overhead_p50_us": 1.0000003385357559,
+    "overhead_p95_us": 1.1000010999850929
+  }
+}
