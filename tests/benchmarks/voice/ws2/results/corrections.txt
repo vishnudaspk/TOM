@@ -1,0 +1,5 @@
+# WS2 Recording Corrections
+# Format: <file_number> <actual_spoken_text>
+# This file overrides the reference utterances for WER calculation when the recorded audio differs from utterances.txt
+
+036 schedule a meeting for next Thursday

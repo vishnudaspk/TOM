@@ -1,0 +1,744 @@
+{
+  "sherpa-large": [
+    {
+      "file": "001_open_the_settings_window.wav",
+      "idx": 0,
+      "reference": "open the settings window",
+      "hypothesis": "OPENED THE SITTINGS WIND",
+      "ref_normalized": "open the settings window",
+      "hyp_normalized": "opened the sittings wind",
+      "wer": 0.75
+    },
+    {
+      "file": "002_close_the_current_tab.wav",
+      "idx": 1,
+      "reference": "close the current tab",
+      "hypothesis": "CLOSE THE CURRENT",
+      "ref_normalized": "close the current tab",
+      "hyp_normalized": "close the current",
+      "wer": 0.25
+    },
+    {
+      "file": "003_minimize_all_windows.wav",
+      "idx": 2,
+      "reference": "minimize all windows",
+      "hypothesis": "MINNI MICE ALL WIND",
+      "ref_normalized": "minimize all windows",
+      "hyp_normalized": "minni mice all wind",
+      "wer": 1.0
+    },
+    {
+      "file": "004_take_a_screenshot.wav",
+      "idx": 3,
+      "reference": "take a screenshot",
+      "hypothesis": "SPEAKEST GREEN",
+      "ref_normalized": "take a screenshot",
+      "hyp_normalized": "speakest green",
+      "wer": 1.0
+    },
+    {
+      "file": "005_set_a_timer_for_five_minutes.wav",
+      "idx": 4,
+      "reference": "set a timer for five minutes",
+      "hypothesis": "SITANIMA FO FI",
+      "ref_normalized": "set a timer for 5 minutes",
+      "hyp_normalized": "sitanima fo fi",
+      "wer": 1.0
+    },
+    {
+      "file": "006_turn_up_the_volume.wav",
+      "idx": 5,
+      "reference": "turn up the volume",
+      "hypothesis": "DO HE UP THE",
+      "ref_normalized": "turn up the volume",
+      "hyp_normalized": "do he up the",
+      "wer": 0.75
+    },
+    {
+      "file": "007_mute_the_microphone.wav",
+      "idx": 6,
+      "reference": "mute the microphone",
+      "hypothesis": "MUTE THE MI",
+      "ref_normalized": "mute the microphone",
+      "hyp_normalized": "mute the mi",
+      "wer": 0.3333
+    },
+    {
+      "file": "008_open_the_downloads_folder.wav",
+      "idx": 7,
+      "reference": "open the downloads folder",
+      "hypothesis": "OPENED THE DOWNWARDS",
+      "ref_normalized": "open the downloads folder",
+      "hyp_normalized": "opened the downwards",
+      "wer": 0.75
+    },
+    {
+      "file": "009_delete_the_temporary_files.wav",
+      "idx": 8,
+      "reference": "delete the temporary files",
+      "hypothesis": "THEY'LL LEAD THE TEMPORARY",
+      "ref_normalized": "delete the temporary files",
+      "hyp_normalized": "they'll lead the temporary",
+      "wer": 0.75
+    },
+    {
+      "file": "010_run_the_test_suite.wav",
+      "idx": 9,
+      "reference": "run the test suite",
+      "hypothesis": "RAN THE PEST",
+      "ref_normalized": "run the test suite",
+      "hyp_normalized": "ran the pest",
+      "wer": 0.75
+    },
+    {
+      "file": "011_restart_the_application.wav",
+      "idx": 10,
+      "reference": "restart the application",
+      "hypothesis": "BRISTOWED THE APPLICATION",
+      "ref_normalized": "restart the application",
+      "hyp_normalized": "bristowed the application",
+      "wer": 0.3333
+    },
+    {
+      "file": "012_show_me_the_task_manager.wav",
+      "idx": 11,
+      "reference": "show me the task manager",
+      "hypothesis": "SHOW ME THE DUST",
+      "ref_normalized": "show me the task manager",
+      "hyp_normalized": "show me the dust",
+      "wer": 0.4
+    },
+    {
+      "file": "013_lock_the_screen.wav",
+      "idx": 12,
+      "reference": "lock the screen",
+      "hypothesis": "LOGGED THE",
+      "ref_normalized": "lock the screen",
+      "hyp_normalized": "logged the",
+      "wer": 0.6667
+    },
+    {
+      "file": "014_empty_the_recycle_bin.wav",
+      "idx": 13,
+      "reference": "empty the recycle bin",
+      "hypothesis": "EMPTIER AS I",
+      "ref_normalized": "empty the recycle bin",
+      "hyp_normalized": "emptier as i",
+      "wer": 1.0
+    },
+    {
+      "file": "015_switch_to_dark_mode.wav",
+      "idx": 14,
+      "reference": "switch to dark mode",
+      "hypothesis": "SWEETS TO",
+      "ref_normalized": "switch to dark mode",
+      "hyp_normalized": "sweets to",
+      "wer": 0.75
+    },
+    {
+      "file": "016_what_is_the_current_time.wav",
+      "idx": 15,
+      "reference": "what is the current time",
+      "hypothesis": "HE'S A GRINDER",
+      "ref_normalized": "what is the current time",
+      "hyp_normalized": "he's a grinder",
+      "wer": 1.0
+    },
+    {
+      "file": "017_how_much_disk_space_is_left.wav",
+      "idx": 16,
+      "reference": "how much disk space is left",
+      "hypothesis": "HOW MUCH DISPACE IS",
+      "ref_normalized": "how much disk space is left",
+      "hyp_normalized": "how much dispace is",
+      "wer": 0.5
+    },
+    {
+      "file": "018_what_version_of_python_is_installed.wav",
+      "idx": 17,
+      "reference": "what version of python is installed",
+      "hypothesis": "WHAT MOTION OF BYTONE IS IN",
+      "ref_normalized": "what version of python is installed",
+      "hyp_normalized": "what motion of bytone is in",
+      "wer": 0.5
+    },
+    {
+      "file": "019_where_is_the_config_file_located.wav",
+      "idx": 18,
+      "reference": "where is the config file located",
+      "hypothesis": "WHERE IS THE CONVICT",
+      "ref_normalized": "where is the config file located",
+      "hyp_normalized": "where is the convict",
+      "wer": 0.5
+    },
+    {
+      "file": "020_why_is_the_build_failing.wav",
+      "idx": 19,
+      "reference": "why is the build failing",
+      "hypothesis": "WAS THE BILL FAIL",
+      "ref_normalized": "why is the build failing",
+      "hyp_normalized": "was the bill fail",
+      "wer": 0.8
+    },
+    {
+      "file": "021_which_process_is_using_the_most_memory.wav",
+      "idx": 20,
+      "reference": "which process is using the most memory",
+      "hypothesis": "WHICH BROUGHT US THIS USING THE MOST",
+      "ref_normalized": "which process is using the most memory",
+      "hyp_normalized": "which brought us this using the most",
+      "wer": 0.5714
+    },
+    {
+      "file": "022_when_was_the_last_backup_made.wav",
+      "idx": 21,
+      "reference": "when was the last backup made",
+      "hypothesis": "WE'RE NOT THE LAST BACK",
+      "ref_normalized": "when was the last backup made",
+      "hyp_normalized": "we're not the last back",
+      "wer": 0.6667
+    },
+    {
+      "file": "023_can_you_explain_this_error_message.wav",
+      "idx": 22,
+      "reference": "can you explain this error message",
+      "hypothesis": "CAN YOU EXPLAIN THESE ARAMIS",
+      "ref_normalized": "can you explain this error message",
+      "hyp_normalized": "can you explain these aramis",
+      "wer": 0.5
+    },
+    {
+      "file": "024_what_are_the_system_requirements.wav",
+      "idx": 23,
+      "reference": "what are the system requirements",
+      "hypothesis": "WHAT OF THE SYSTEM REQUIREMENT",
+      "ref_normalized": "what are the system requirements",
+      "hyp_normalized": "what of the system requirement",
+      "wer": 0.4
+    },
+    {
+      "file": "025_how_do_i_enable_the_dark_theme.wav",
+      "idx": 24,
+      "reference": "how do i enable the dark theme",
+      "hypothesis": "HOW DO I ENABLE D'ARTA",
+      "ref_normalized": "how do i enable the dark theme",
+      "hyp_normalized": "how do i enable d'arta",
+      "wer": 0.4286
+    },
+    {
+      "file": "026_tom_show_me_the_dashboard.wav",
+      "idx": 25,
+      "reference": "tom show me the dashboard",
+      "hypothesis": "DON'T SHOW ME TO",
+      "ref_normalized": "tom show me the dashboard",
+      "hyp_normalized": "don't show me to",
+      "wer": 0.6
+    },
+    {
+      "file": "027_tom_what_is_the_status_of_the_build.wav",
+      "idx": 26,
+      "reference": "tom what is the status of the build",
+      "hypothesis": "NO WHAT IS THE STATUS OF",
+      "ref_normalized": "tom what is the status of the build",
+      "hyp_normalized": "no what is the status of",
+      "wer": 0.375
+    },
+    {
+      "file": "028_tom_open_the_project_settings.wav",
+      "idx": 27,
+      "reference": "tom open the project settings",
+      "hypothesis": "DON'T OPEN THE BRIDGE SIT",
+      "ref_normalized": "tom open the project settings",
+      "hyp_normalized": "don't open the bridge sit",
+      "wer": 0.6
+    },
+    {
+      "file": "029_tom_search_for_the_resource_manager.wav",
+      "idx": 28,
+      "reference": "tom search for the resource manager",
+      "hypothesis": "DON'T SEARCH FOR THE RESOURCE",
+      "ref_normalized": "tom search for the resource manager",
+      "hyp_normalized": "don't search for the resource",
+      "wer": 0.3333
+    },
+    {
+      "file": "030_tom_minimize_the_terminal_silently.wav",
+      "idx": 29,
+      "reference": "tom minimize the terminal silently",
+      "hypothesis": "TOM MANY MONTH THE DOMINIO VALENT",
+      "ref_normalized": "tom minimize the terminal silently",
+      "hyp_normalized": "tom many month the dominio valent",
+      "wer": 0.8
+    },
+    {
+      "file": "031_tom_read_the_last_commit_message.wav",
+      "idx": 30,
+      "reference": "tom read the last commit message",
+      "hypothesis": "DON'T READ THE LAST COMING",
+      "ref_normalized": "tom read the last commit message",
+      "hyp_normalized": "don't read the last coming",
+      "wer": 0.5
+    },
+    {
+      "file": "032_tom_run_the_integration_tests.wav",
+      "idx": 31,
+      "reference": "tom run the integration tests",
+      "hypothesis": "DON'T RUNNING TO GRECIAN",
+      "ref_normalized": "tom run the integration tests",
+      "hyp_normalized": "don't running to grecian",
+      "wer": 1.0
+    },
+    {
+      "file": "033_tom_what_changed_in_the_last_commit.wav",
+      "idx": 32,
+      "reference": "tom what changed in the last commit",
+      "hypothesis": "DUMB WHAT CHANGED IN LALA",
+      "ref_normalized": "tom what changed in the last commit",
+      "hyp_normalized": "dumb what changed in lala",
+      "wer": 0.5714
+    },
+    {
+      "file": "034_set_an_alarm_for_seven_thirty_am.wav",
+      "idx": 33,
+      "reference": "set an alarm for seven thirty am",
+      "hypothesis": "THE LAMB FOR SE",
+      "ref_normalized": "set an alarm for 7 30 am",
+      "hyp_normalized": "the lamb for se",
+      "wer": 0.8571
+    },
+    {
+      "file": "035_remind_me_at_three_fifteen_pm.wav",
+      "idx": 34,
+      "reference": "remind me at three fifteen pm",
+      "hypothesis": "REMIND ME OF THE FIF",
+      "ref_normalized": "remind me at 3 15 pm",
+      "hyp_normalized": "remind me of the fif",
+      "wer": 0.6667
+    },
+    {
+      "file": "036_schedule_a_meeting_for_next_tuesday.wav",
+      "idx": 35,
+      "reference": "schedule a meeting for next thursday",
+      "hypothesis": "SKIDULE A MEETING FOR NEXT TH",
+      "ref_normalized": "schedule a meeting for next thursday",
+      "hyp_normalized": "skidule a meeting for next th",
+      "wer": 0.3333
+    },
+    {
+      "file": "037_delete_files_older_than_thirty_days.wav",
+      "idx": 36,
+      "reference": "delete files older than thirty days",
+      "hypothesis": "DID HE ADVISE OLDER THAN",
+      "ref_normalized": "delete files older than 30 days",
+      "hyp_normalized": "did he advise older than",
+      "wer": 0.8333
+    },
+    {
+      "file": "038_show_logs_from_the_last_hour.wav",
+      "idx": 37,
+      "reference": "show logs from the last hour",
+      "hypothesis": "SHE LAST HOUR",
+      "ref_normalized": "show logs from the last hour",
+      "hyp_normalized": "she last hour",
+      "wer": 0.6667
+    },
+    {
+      "file": "039_calculate_fifteen_percent_of_two_hundred.wav",
+      "idx": 38,
+      "reference": "calculate fifteen percent of two hundred",
+      "hypothesis": "GALID FIFTEEN BIRTH IN AGE OF",
+      "ref_normalized": "calculate 15 percent of 2 100",
+      "hyp_normalized": "galid 15 birth in age of",
+      "wer": 0.8333
+    },
+    {
+      "file": "040_what_is_the_date_next_friday.wav",
+      "idx": 39,
+      "reference": "what is the date next friday",
+      "hypothesis": "WHAT IS THE DEED NEXT FRIDAY",
+      "ref_normalized": "what is the date next friday",
+      "hyp_normalized": "what is the deed next friday",
+      "wer": 0.1667
+    },
+    {
+      "file": "041_run_the_backup_at_midnight.wav",
+      "idx": 40,
+      "reference": "run the backup at midnight",
+      "hypothesis": "MIRANDA BAG UP",
+      "ref_normalized": "run the backup at midnight",
+      "hyp_normalized": "miranda bag up",
+      "wer": 1.0
+    }
+  ],
+  "faster-whisper-small.en": [
+    {
+      "file": "001_open_the_settings_window.wav",
+      "idx": 0,
+      "reference": "open the settings window",
+      "hypothesis": "Open the settings window.",
+      "ref_normalized": "open the settings window",
+      "hyp_normalized": "open the settings window",
+      "wer": 0.0
+    },
+    {
+      "file": "002_close_the_current_tab.wav",
+      "idx": 1,
+      "reference": "close the current tab",
+      "hypothesis": "Close the current app.",
+      "ref_normalized": "close the current tab",
+      "hyp_normalized": "close the current app",
+      "wer": 0.25
+    },
+    {
+      "file": "003_minimize_all_windows.wav",
+      "idx": 2,
+      "reference": "minimize all windows",
+      "hypothesis": "Minimize all windows.",
+      "ref_normalized": "minimize all windows",
+      "hyp_normalized": "minimize all windows",
+      "wer": 0.0
+    },
+    {
+      "file": "004_take_a_screenshot.wav",
+      "idx": 3,
+      "reference": "take a screenshot",
+      "hypothesis": "Take a screenshot.",
+      "ref_normalized": "take a screenshot",
+      "hyp_normalized": "take a screenshot",
+      "wer": 0.0
+    },
+    {
+      "file": "005_set_a_timer_for_five_minutes.wav",
+      "idx": 4,
+      "reference": "set a timer for five minutes",
+      "hypothesis": "Set a timer for 5 minutes.",
+      "ref_normalized": "set a timer for 5 minutes",
+      "hyp_normalized": "set a timer for 5 minutes",
+      "wer": 0.0
+    },
+    {
+      "file": "006_turn_up_the_volume.wav",
+      "idx": 5,
+      "reference": "turn up the volume",
+      "hypothesis": "Do help the volume.",
+      "ref_normalized": "turn up the volume",
+      "hyp_normalized": "do help the volume",
+      "wer": 0.5
+    },
+    {
+      "file": "007_mute_the_microphone.wav",
+      "idx": 6,
+      "reference": "mute the microphone",
+      "hypothesis": "Mute the microphone.",
+      "ref_normalized": "mute the microphone",
+      "hyp_normalized": "mute the microphone",
+      "wer": 0.0
+    },
+    {
+      "file": "008_open_the_downloads_folder.wav",
+      "idx": 7,
+      "reference": "open the downloads folder",
+      "hypothesis": "Open the downloads folder.",
+      "ref_normalized": "open the downloads folder",
+      "hyp_normalized": "open the downloads folder",
+      "wer": 0.0
+    },
+    {
+      "file": "009_delete_the_temporary_files.wav",
+      "idx": 8,
+      "reference": "delete the temporary files",
+      "hypothesis": "Delete the temporary files.",
+      "ref_normalized": "delete the temporary files",
+      "hyp_normalized": "delete the temporary files",
+      "wer": 0.0
+    },
+    {
+      "file": "010_run_the_test_suite.wav",
+      "idx": 9,
+      "reference": "run the test suite",
+      "hypothesis": "Run the test suite.",
+      "ref_normalized": "run the test suite",
+      "hyp_normalized": "run the test suite",
+      "wer": 0.0
+    },
+    {
+      "file": "011_restart_the_application.wav",
+      "idx": 10,
+      "reference": "restart the application",
+      "hypothesis": "Restart the application.",
+      "ref_normalized": "restart the application",
+      "hyp_normalized": "restart the application",
+      "wer": 0.0
+    },
+    {
+      "file": "012_show_me_the_task_manager.wav",
+      "idx": 11,
+      "reference": "show me the task manager",
+      "hypothesis": "Show me the task manager.",
+      "ref_normalized": "show me the task manager",
+      "hyp_normalized": "show me the task manager",
+      "wer": 0.0
+    },
+    {
+      "file": "013_lock_the_screen.wav",
+      "idx": 12,
+      "reference": "lock the screen",
+      "hypothesis": "Log the screen.",
+      "ref_normalized": "lock the screen",
+      "hyp_normalized": "log the screen",
+      "wer": 0.3333
+    },
+    {
+      "file": "014_empty_the_recycle_bin.wav",
+      "idx": 13,
+      "reference": "empty the recycle bin",
+      "hypothesis": "Empty the recycle bin.",
+      "ref_normalized": "empty the recycle bin",
+      "hyp_normalized": "empty the recycle bin",
+      "wer": 0.0
+    },
+    {
+      "file": "015_switch_to_dark_mode.wav",
+      "idx": 14,
+      "reference": "switch to dark mode",
+      "hypothesis": "Switch to dark mode.",
+      "ref_normalized": "switch to dark mode",
+      "hyp_normalized": "switch to dark mode",
+      "wer": 0.0
+    },
+    {
+      "file": "016_what_is_the_current_time.wav",
+      "idx": 15,
+      "reference": "what is the current time",
+      "hypothesis": "Is it going down?",
+      "ref_normalized": "what is the current time",
+      "hyp_normalized": "is it going down",
+      "wer": 0.8
+    },
+    {
+      "file": "017_how_much_disk_space_is_left.wav",
+      "idx": 16,
+      "reference": "how much disk space is left",
+      "hypothesis": "How much space is left?",
+      "ref_normalized": "how much disk space is left",
+      "hyp_normalized": "how much space is left",
+      "wer": 0.1667
+    },
+    {
+      "file": "018_what_version_of_python_is_installed.wav",
+      "idx": 17,
+      "reference": "what version of python is installed",
+      "hypothesis": "What version of Python is installed?",
+      "ref_normalized": "what version of python is installed",
+      "hyp_normalized": "what version of python is installed",
+      "wer": 0.0
+    },
+    {
+      "file": "019_where_is_the_config_file_located.wav",
+      "idx": 18,
+      "reference": "where is the config file located",
+      "hypothesis": "Where is the config file located?",
+      "ref_normalized": "where is the config file located",
+      "hyp_normalized": "where is the config file located",
+      "wer": 0.0
+    },
+    {
+      "file": "020_why_is_the_build_failing.wav",
+      "idx": 19,
+      "reference": "why is the build failing",
+      "hypothesis": "Why is the build failing?",
+      "ref_normalized": "why is the build failing",
+      "hyp_normalized": "why is the build failing",
+      "wer": 0.0
+    },
+    {
+      "file": "021_which_process_is_using_the_most_memory.wav",
+      "idx": 20,
+      "reference": "which process is using the most memory",
+      "hypothesis": "Which process is using the most memory?",
+      "ref_normalized": "which process is using the most memory",
+      "hyp_normalized": "which process is using the most memory",
+      "wer": 0.0
+    },
+    {
+      "file": "022_when_was_the_last_backup_made.wav",
+      "idx": 21,
+      "reference": "when was the last backup made",
+      "hypothesis": "When was the last backup made?",
+      "ref_normalized": "when was the last backup made",
+      "hyp_normalized": "when was the last backup made",
+      "wer": 0.0
+    },
+    {
+      "file": "023_can_you_explain_this_error_message.wav",
+      "idx": 22,
+      "reference": "can you explain this error message",
+      "hypothesis": "Can you explain this error message?",
+      "ref_normalized": "can you explain this error message",
+      "hyp_normalized": "can you explain this error message",
+      "wer": 0.0
+    },
+    {
+      "file": "024_what_are_the_system_requirements.wav",
+      "idx": 23,
+      "reference": "what are the system requirements",
+      "hypothesis": "What are the system requirements?",
+      "ref_normalized": "what are the system requirements",
+      "hyp_normalized": "what are the system requirements",
+      "wer": 0.0
+    },
+    {
+      "file": "025_how_do_i_enable_the_dark_theme.wav",
+      "idx": 24,
+      "reference": "how do i enable the dark theme",
+      "hypothesis": "How do I enable dark theme?",
+      "ref_normalized": "how do i enable the dark theme",
+      "hyp_normalized": "how do i enable dark theme",
+      "wer": 0.1429
+    },
+    {
+      "file": "026_tom_show_me_the_dashboard.wav",
+      "idx": 25,
+      "reference": "tom show me the dashboard",
+      "hypothesis": "down show me the dashboard",
+      "ref_normalized": "tom show me the dashboard",
+      "hyp_normalized": "down show me the dashboard",
+      "wer": 0.2
+    },
+    {
+      "file": "027_tom_what_is_the_status_of_the_build.wav",
+      "idx": 26,
+      "reference": "tom what is the status of the build",
+      "hypothesis": "Yo, what is the status of the build?",
+      "ref_normalized": "tom what is the status of the build",
+      "hyp_normalized": "yo what is the status of the build",
+      "wer": 0.125
+    },
+    {
+      "file": "028_tom_open_the_project_settings.wav",
+      "idx": 27,
+      "reference": "tom open the project settings",
+      "hypothesis": "Don't open the project settings.",
+      "ref_normalized": "tom open the project settings",
+      "hyp_normalized": "don't open the project settings",
+      "wer": 0.2
+    },
+    {
+      "file": "029_tom_search_for_the_resource_manager.wav",
+      "idx": 28,
+      "reference": "tom search for the resource manager",
+      "hypothesis": "Don't search for the resource manager.",
+      "ref_normalized": "tom search for the resource manager",
+      "hyp_normalized": "don't search for the resource manager",
+      "wer": 0.1667
+    },
+    {
+      "file": "030_tom_minimize_the_terminal_silently.wav",
+      "idx": 29,
+      "reference": "tom minimize the terminal silently",
+      "hypothesis": "Dom, minimize the terminal silently.",
+      "ref_normalized": "tom minimize the terminal silently",
+      "hyp_normalized": "dom minimize the terminal silently",
+      "wer": 0.2
+    },
+    {
+      "file": "031_tom_read_the_last_commit_message.wav",
+      "idx": 30,
+      "reference": "tom read the last commit message",
+      "hypothesis": "don't ring the last commit message",
+      "ref_normalized": "tom read the last commit message",
+      "hyp_normalized": "don't ring the last commit message",
+      "wer": 0.3333
+    },
+    {
+      "file": "032_tom_run_the_integration_tests.wav",
+      "idx": 31,
+      "reference": "tom run the integration tests",
+      "hypothesis": "Don't run the integration test.",
+      "ref_normalized": "tom run the integration tests",
+      "hyp_normalized": "don't run the integration test",
+      "wer": 0.4
+    },
+    {
+      "file": "033_tom_what_changed_in_the_last_commit.wav",
+      "idx": 32,
+      "reference": "tom what changed in the last commit",
+      "hypothesis": "Tom, what changed in the last commit?",
+      "ref_normalized": "tom what changed in the last commit",
+      "hyp_normalized": "tom what changed in the last commit",
+      "wer": 0.0
+    },
+    {
+      "file": "034_set_an_alarm_for_seven_thirty_am.wav",
+      "idx": 33,
+      "reference": "set an alarm for seven thirty am",
+      "hypothesis": "The team alarm for 7.30 am",
+      "ref_normalized": "set an alarm for 7 30 am",
+      "hyp_normalized": "the team alarm for 7 30 am",
+      "wer": 0.2857
+    },
+    {
+      "file": "035_remind_me_at_three_fifteen_pm.wav",
+      "idx": 34,
+      "reference": "remind me at three fifteen pm",
+      "hypothesis": "Remind me at 3.15 PM.",
+      "ref_normalized": "remind me at 3 15 pm",
+      "hyp_normalized": "remind me at 3 15 pm",
+      "wer": 0.0
+    },
+    {
+      "file": "036_schedule_a_meeting_for_next_tuesday.wav",
+      "idx": 35,
+      "reference": "schedule a meeting for next thursday",
+      "hypothesis": "Schedule a meeting for next Thursday.",
+      "ref_normalized": "schedule a meeting for next thursday",
+      "hyp_normalized": "schedule a meeting for next thursday",
+      "wer": 0.0
+    },
+    {
+      "file": "037_delete_files_older_than_thirty_days.wav",
+      "idx": 36,
+      "reference": "delete files older than thirty days",
+      "hypothesis": "till it files older than 30 days",
+      "ref_normalized": "delete files older than 30 days",
+      "hyp_normalized": "till it files older than 30 days",
+      "wer": 0.3333
+    },
+    {
+      "file": "038_show_logs_from_the_last_hour.wav",
+      "idx": 37,
+      "reference": "show logs from the last hour",
+      "hypothesis": "Show logs for the last hour",
+      "ref_normalized": "show logs from the last hour",
+      "hyp_normalized": "show logs for the last hour",
+      "wer": 0.1667
+    },
+    {
+      "file": "039_calculate_fifteen_percent_of_two_hundred.wav",
+      "idx": 38,
+      "reference": "calculate fifteen percent of two hundred",
+      "hypothesis": "Calculate 15% of 200.",
+      "ref_normalized": "calculate 15 percent of 2 100",
+      "hyp_normalized": "calculate 15 of 200",
+      "wer": 0.5
+    },
+    {
+      "file": "040_what_is_the_date_next_friday.wav",
+      "idx": 39,
+      "reference": "what is the date next friday",
+      "hypothesis": "What is the date next Friday?",
+      "ref_normalized": "what is the date next friday",
+      "hyp_normalized": "what is the date next friday",
+      "wer": 0.0
+    },
+    {
+      "file": "041_run_the_backup_at_midnight.wav",
+      "idx": 40,
+      "reference": "run the backup at midnight",
+      "hypothesis": "Run the backup at midnight.",
+      "ref_normalized": "run the backup at midnight",
+      "hyp_normalized": "run the backup at midnight",
+      "wer": 0.0
+    }
+  ]
+}

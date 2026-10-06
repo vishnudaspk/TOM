@@ -1,0 +1,19 @@
+# WS2 Latency Benchmark Utterance Subset
+# 15 utterances stratified by duration
+# Format: filename | reference_text
+
+001_open_the_settings_window.wav | open the settings window
+002_close_the_current_tab.wav | close the current tab
+004_take_a_screenshot.wav | take a screenshot
+006_turn_up_the_volume.wav | turn up the volume
+007_mute_the_microphone.wav | mute the microphone
+014_empty_the_recycle_bin.wav | empty the recycle bin
+015_switch_to_dark_mode.wav | switch to dark mode
+016_what_is_the_current_time.wav | what is the current time
+018_what_version_of_python_is_installed.wav | what version of python is installed
+022_when_was_the_last_backup_made.wav | when was the last backup made
+023_can_you_explain_this_error_message.wav | can you explain this error message
+031_tom_read_the_last_commit_message.wav | tom read the last commit message
+037_delete_files_older_than_thirty_days.wav | delete files older than thirty days
+036_schedule_a_meeting_for_next_tuesday.wav | schedule a meeting for next Thursday
+041_run_the_backup_at_midnight.wav | run the backup at midnight

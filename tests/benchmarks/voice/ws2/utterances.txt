@@ -1,0 +1,53 @@
+# TOM WS2 Benchmark Utterances
+# Format: one utterance per line
+# Categories: commands (15), questions (10), names/products (8), numbers/times/dates (8)
+# Target lengths: 1s to 4s when spoken
+
+# Commands (15)
+open the settings window
+close the current tab
+minimize all windows
+take a screenshot
+set a timer for five minutes
+turn up the volume
+mute the microphone
+open the downloads folder
+delete the temporary files
+run the test suite
+restart the application
+show me the task manager
+lock the screen
+empty the recycle bin
+switch to dark mode
+
+# Questions (10)
+what is the current time
+how much disk space is left
+what version of python is installed
+where is the config file located
+why is the build failing
+which process is using the most memory
+when was the last backup made
+can you explain this error message
+what are the system requirements
+how do I enable the dark theme
+
+# Names/Products with "TOM" (8)
+TOM show me the dashboard
+TOM what is the status of the build
+TOM open the project settings
+TOM search for the resource manager
+TOM minimize the terminal silently
+TOM read the last commit message
+TOM run the integration tests
+TOM what changed in the last commit
+
+# Numbers/Times/Dates (8)
+set an alarm for seven thirty AM
+remind me at three fifteen PM
+schedule a meeting for next Tuesday
+delete files older than thirty days
+show logs from the last hour
+calculate fifteen percent of two hundred
+what is the date next Friday
+run the backup at midnight

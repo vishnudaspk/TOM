@@ -1,0 +1,330 @@
+[
+  {
+    "file": "001_open_the_settings_window.wav",
+    "leading_silence_ms": 1130.0,
+    "first_partial_from_onset_ms": 1183.7,
+    "first_partial_text": "'S",
+    "final_from_endpoint_ms": 5.8,
+    "final_text": "'S WINDOW"
+  },
+  {
+    "file": "002_close_the_current_tab.wav",
+    "leading_silence_ms": 860.0,
+    "first_partial_from_onset_ms": null,
+    "first_partial_text": "",
+    "final_from_endpoint_ms": 5.6,
+    "final_text": ""
+  },
+  {
+    "file": "003_minimize_all_windows.wav",
+    "leading_silence_ms": 990.0,
+    "first_partial_from_onset_ms": 1323.8,
+    "first_partial_text": "'S ALL",
+    "final_from_endpoint_ms": 6.8,
+    "final_text": "'S ALL WINDOWS"
+  },
+  {
+    "file": "004_take_a_screenshot.wav",
+    "leading_silence_ms": 1290.0,
+    "first_partial_from_onset_ms": 721.9,
+    "first_partial_text": "'S",
+    "final_from_endpoint_ms": 5.8,
+    "final_text": "'S GREEN SHOT"
+  },
+  {
+    "file": "005_set_a_timer_for_five_minutes.wav",
+    "leading_silence_ms": 1150.0,
+    "first_partial_from_onset_ms": null,
+    "first_partial_text": "",
+    "final_from_endpoint_ms": 5.2,
+    "final_text": ""
+  },
+  {
+    "file": "006_turn_up_the_volume.wav",
+    "leading_silence_ms": 780.0,
+    "first_partial_from_onset_ms": null,
+    "first_partial_text": "",
+    "final_from_endpoint_ms": 15.0,
+    "final_text": ""
+  },
+  {
+    "file": "007_mute_the_microphone.wav",
+    "leading_silence_ms": 780.0,
+    "first_partial_from_onset_ms": null,
+    "first_partial_text": "",
+    "final_from_endpoint_ms": 8.5,
+    "final_text": ""
+  },
+  {
+    "file": "008_open_the_downloads_folder.wav",
+    "leading_silence_ms": 1050.0,
+    "first_partial_from_onset_ms": 1266.0,
+    "first_partial_text": "U",
+    "final_from_endpoint_ms": 21.4,
+    "final_text": "UDS FOLDER"
+  },
+  {
+    "file": "009_delete_the_temporary_files.wav",
+    "leading_silence_ms": 1010.0,
+    "first_partial_from_onset_ms": 602.1,
+    "first_partial_text": "U",
+    "final_from_endpoint_ms": 5.5,
+    "final_text": "UDE THE TEMPORARY FILES"
+  },
+  {
+    "file": "010_run_the_test_suite.wav",
+    "leading_silence_ms": 1180.0,
+    "first_partial_from_onset_ms": null,
+    "first_partial_text": "",
+    "final_from_endpoint_ms": 9.0,
+    "final_text": "UT"
+  },
+  {
+    "file": "011_restart_the_application.wav",
+    "leading_silence_ms": 690.0,
+    "first_partial_from_onset_ms": 1627.6,
+    "first_partial_text": "ATION",
+    "final_from_endpoint_ms": 5.3,
+    "final_text": "ATION"
+  },
+  {
+    "file": "012_show_me_the_task_manager.wav",
+    "leading_silence_ms": 890.0,
+    "first_partial_from_onset_ms": null,
+    "first_partial_text": "",
+    "final_from_endpoint_ms": 7.6,
+    "final_text": ""
+  },
+  {
+    "file": "013_lock_the_screen.wav",
+    "leading_silence_ms": 1130.0,
+    "first_partial_from_onset_ms": null,
+    "first_partial_text": "",
+    "final_from_endpoint_ms": 7.0,
+    "final_text": ""
+  },
+  {
+    "file": "014_empty_the_recycle_bin.wav",
+    "leading_silence_ms": 850.0,
+    "first_partial_from_onset_ms": null,
+    "first_partial_text": "",
+    "final_from_endpoint_ms": 5.4,
+    "final_text": ""
+  },
+  {
+    "file": "015_switch_to_dark_mode.wav",
+    "leading_silence_ms": 1160.0,
+    "first_partial_from_onset_ms": 853.2,
+    "first_partial_text": "'S TO DARK",
+    "final_from_endpoint_ms": 5.5,
+    "final_text": "'S TO DARK MO"
+  },
+  {
+    "file": "016_what_is_the_current_time.wav",
+    "leading_silence_ms": 500.0,
+    "first_partial_from_onset_ms": 508.2,
+    "first_partial_text": "'S",
+    "final_from_endpoint_ms": 5.6,
+    "final_text": "'S A GOIN DAM"
+  },
+  {
+    "file": "017_how_much_disk_space_is_left.wav",
+    "leading_silence_ms": 580.0,
+    "first_partial_from_onset_ms": 1031.1,
+    "first_partial_text": "'S DIS",
+    "final_from_endpoint_ms": 6.0,
+    "final_text": "'S DISPLACE IS LEFT"
+  },
+  {
+    "file": "018_what_version_of_python_is_installed.wav",
+    "leading_silence_ms": 520.0,
+    "first_partial_from_onset_ms": 1496.8,
+    "first_partial_text": "ON",
+    "final_from_endpoint_ms": 6.2,
+    "final_text": "ON IS INSTALLED"
+  },
+  {
+    "file": "019_where_is_the_config_file_located.wav",
+    "leading_silence_ms": 1020.0,
+    "first_partial_from_onset_ms": 591.9,
+    "first_partial_text": "'S",
+    "final_from_endpoint_ms": 5.6,
+    "final_text": "'S THE CONVIC FIRE REPE"
+  },
+  {
+    "file": "020_why_is_the_build_failing.wav",
+    "leading_silence_ms": 1080.0,
+    "first_partial_from_onset_ms": 531.5,
+    "first_partial_text": "'",
+    "final_from_endpoint_ms": 6.4,
+    "final_text": "'S THE BILL FEELING"
+  },
+  {
+    "file": "021_which_process_is_using_the_most_memory.wav",
+    "leading_silence_ms": 710.0,
+    "first_partial_from_onset_ms": 600.1,
+    "first_partial_text": "'S",
+    "final_from_endpoint_ms": 6.5,
+    "final_text": "'S PROTECTS USING THE MOST MEMORY"
+  },
+  {
+    "file": "022_when_was_the_last_backup_made.wav",
+    "leading_silence_ms": 1010.0,
+    "first_partial_from_onset_ms": 1303.5,
+    "first_partial_text": "'S BACK",
+    "final_from_endpoint_ms": 5.4,
+    "final_text": "'S BACK OF MEAT"
+  },
+  {
+    "file": "023_can_you_explain_this_error_message.wav",
+    "leading_silence_ms": 970.0,
+    "first_partial_from_onset_ms": 1645.2,
+    "first_partial_text": "'S ER",
+    "final_from_endpoint_ms": 6.4,
+    "final_text": "'S ERROR MESSAGE"
+  },
+  {
+    "file": "024_what_are_the_system_requirements.wav",
+    "leading_silence_ms": 730.0,
+    "first_partial_from_onset_ms": 1282.9,
+    "first_partial_text": "REQUI",
+    "final_from_endpoint_ms": 7.0,
+    "final_text": "REQUIREMENTS"
+  },
+  {
+    "file": "025_how_do_i_enable_the_dark_theme.wav",
+    "leading_silence_ms": 870.0,
+    "first_partial_from_onset_ms": 742.3,
+    "first_partial_text": "O I",
+    "final_from_endpoint_ms": 5.3,
+    "final_text": "O I ENABLE ANE"
+  },
+  {
+    "file": "026_tom_show_me_the_dashboard.wav",
+    "leading_silence_ms": 560.0,
+    "first_partial_from_onset_ms": null,
+    "first_partial_text": "",
+    "final_from_endpoint_ms": 9.2,
+    "final_text": ""
+  },
+  {
+    "file": "027_tom_what_is_the_status_of_the_build.wav",
+    "leading_silence_ms": 640.0,
+    "first_partial_from_onset_ms": 974.8,
+    "first_partial_text": "WHAT",
+    "final_from_endpoint_ms": 18.6,
+    "final_text": "WHAT IS THE STATICS OF THE BUIL"
+  },
+  {
+    "file": "028_tom_open_the_project_settings.wav",
+    "leading_silence_ms": 1000.0,
+    "first_partial_from_onset_ms": null,
+    "first_partial_text": "",
+    "final_from_endpoint_ms": 12.2,
+    "final_text": "S"
+  },
+  {
+    "file": "029_tom_search_for_the_resource_manager.wav",
+    "leading_silence_ms": 900.0,
+    "first_partial_from_onset_ms": null,
+    "first_partial_text": "",
+    "final_from_endpoint_ms": 7.2,
+    "final_text": "ER"
+  },
+  {
+    "file": "030_tom_minimize_the_terminal_silently.wav",
+    "leading_silence_ms": 670.0,
+    "first_partial_from_onset_ms": 1943.4,
+    "first_partial_text": "INIAL",
+    "final_from_endpoint_ms": 5.5,
+    "final_text": "INIAL VALENTY"
+  },
+  {
+    "file": "031_tom_read_the_last_commit_message.wav",
+    "leading_silence_ms": 900.0,
+    "first_partial_from_onset_ms": 1717.3,
+    "first_partial_text": "'S COM",
+    "final_from_endpoint_ms": 11.1,
+    "final_text": "'S COMING MESSAGE"
+  },
+  {
+    "file": "032_tom_run_the_integration_tests.wav",
+    "leading_silence_ms": 840.0,
+    "first_partial_from_onset_ms": null,
+    "first_partial_text": "",
+    "final_from_endpoint_ms": 5.1,
+    "final_text": ""
+  },
+  {
+    "file": "033_tom_what_changed_in_the_last_commit.wav",
+    "leading_silence_ms": 630.0,
+    "first_partial_from_onset_ms": 1385.1,
+    "first_partial_text": "WHAT",
+    "final_from_endpoint_ms": 8.4,
+    "final_text": "WHAT CHANGED IN THE LAST COMMIT"
+  },
+  {
+    "file": "034_set_an_alarm_for_seven_thirty_am.wav",
+    "leading_silence_ms": 1120.0,
+    "first_partial_from_onset_ms": 893.0,
+    "first_partial_text": "ALAR",
+    "final_from_endpoint_ms": 9.6,
+    "final_text": "ALARM FOR SEVEN THIRTY A M"
+  },
+  {
+    "file": "035_remind_me_at_three_fifteen_pm.wav",
+    "leading_silence_ms": 680.0,
+    "first_partial_from_onset_ms": 632.0,
+    "first_partial_text": "D",
+    "final_from_endpoint_ms": 6.2,
+    "final_text": "D ME AT THE REEF FIFTEEN P"
+  },
+  {
+    "file": "036_schedule_a_meeting_for_next_tuesday.wav",
+    "leading_silence_ms": 680.0,
+    "first_partial_from_onset_ms": 630.4,
+    "first_partial_text": "U",
+    "final_from_endpoint_ms": 5.9,
+    "final_text": "ULE A MEETING FOR NEXT TO THE STAY"
+  },
+  {
+    "file": "037_delete_files_older_than_thirty_days.wav",
+    "leading_silence_ms": 730.0,
+    "first_partial_from_onset_ms": 1284.9,
+    "first_partial_text": "S",
+    "final_from_endpoint_ms": 8.4,
+    "final_text": "S OLDER THAN THIRTY DAYS"
+  },
+  {
+    "file": "038_show_logs_from_the_last_hour.wav",
+    "leading_silence_ms": 670.0,
+    "first_partial_from_onset_ms": 640.0,
+    "first_partial_text": "ULO",
+    "final_from_endpoint_ms": 9.1,
+    "final_text": "ULOG FOR THE LAST HOUR"
+  },
+  {
+    "file": "039_calculate_fifteen_percent_of_two_hundred.wav",
+    "leading_silence_ms": 670.0,
+    "first_partial_from_onset_ms": 945.9,
+    "first_partial_text": "T FIF",
+    "final_from_endpoint_ms": 6.7,
+    "final_text": "T FIFTEEN BIRTHDANGAGE OF TWO HUNDRED"
+  },
+  {
+    "file": "040_what_is_the_date_next_friday.wav",
+    "leading_silence_ms": 680.0,
+    "first_partial_from_onset_ms": 1331.8,
+    "first_partial_text": "NEXT",
+    "final_from_endpoint_ms": 6.4,
+    "final_text": "NEXT FRIDAY"
+  },
+  {
+    "file": "041_run_the_backup_at_midnight.wav",
+    "leading_silence_ms": 520.0,
+    "first_partial_from_onset_ms": null,
+    "first_partial_text": "",
+    "final_from_endpoint_ms": 6.0,
+    "final_text": ""
+  }
+]

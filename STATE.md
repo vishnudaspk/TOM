@@ -1,25 +1,25 @@
 # TOM — Current State
 
-Last updated: 2026-10-04
+Last updated: 2026-10-06
 
 ## Now
 
 | Item | Value |
 |---|---|
 | **Phases 0–8** | CLOSED & COMPLETE |
-| **Phase 9** | IN PROGRESS — Iteration **9.0 COMPLETE & VERIFIED**; **9.1 not started** |
+| **Phase 9** | **IN PROGRESS** — Iterations **9.0–9.4 COMPLETE & VERIFIED**; **9.5 not started**; **9.B WS0-WS1 COMPLETE** |
 | **Plan** | `docs/development/PHASE9_IMPLEMENTATIONPLAN.md` |
-| **Next** | Iteration **9.1 Streaming STT**, only when instructed. Do not implement 9.1+. |
-| **Full-repo baseline** | 2026-10-02 Phase 8 exit: **1301 passed** (1218 Python + 83 Rust), **8 skipped**. Ruff/Cargo fmt/clippy clean. |
-| **9.0 incremental** | 17 new unit tests (`tests/unit/voice/test_microphone_loop.py`). Targeted voice suite green (**220** = 197 unit incl. 17 new + 23 integration). **Full repo suite not re-run.** |
+| **Next** | Iteration **9.B WS2** (Streaming-native STT evaluation), only when instructed. Do not implement 9.5+. |
+| **Full-repo baseline** | 2026-10-02 Phase 8 exit: **1301 passed** (1218 Python + 83 Rust), **8 skipped**. Ruff/Cargo fmt/clippy clean. **Not rerun** since then. |
+| **9.1–9.4 incremental** | Targeted verification **833 passed** (`tests/unit/voice`, `tests/integration/voice`, `tests/unit/agents`, `tests/integration/agents`, `tests/unit/core`, `tests/unit/ipc`). Voice alone: **317**. Full repo **not** re-run. |
 
-## Architecture (locked Phases 0–8; 9.0 additive)
+## Architecture (locked Phases 0–8; 9.0–9.4 additive)
 
 Python brain ↔ Rust `tom-engine` over Named Pipe `\\.\pipe\tom-engine`.
 
 | Layer | Owns |
 |---|---|
-| **Python** | Router; `Agent` / `AgentOrchestrator` (6-state); 28 tools via `ToolExecutor` + `PermissionEngine`; `MemoryManager`; Phase 6 voice (`STTProvider`, `TTSProvider`, `VoicePipelineManager`, `VoiceInteractionManager`); Phase 7 vision; Phase 8 `TaskManager` / `TaskPlanner` / `TaskExecutor` / `ResourceManager` / `ProactiveScheduler`; **9.0** `MicrophoneLoop` + `VADDetector` |
+| **Python** | Router; `Agent` / `AgentOrchestrator` (6-state; **9.2** `stream()`); 28 tools via `ToolExecutor` + `PermissionEngine`; `MemoryManager`; Phase 6 voice (`STTProvider`, `TTSProvider`, `VoicePipelineManager`, `VoiceInteractionManager`); Phase 7 vision; Phase 8 `TaskManager` / `TaskPlanner` / `TaskExecutor` / `ResourceManager` / `ProactiveScheduler`; **9.0** `MicrophoneLoop` + `VADDetector`; **9.1** `StreamingSTTProvider`; **9.2** `SentenceStreamer`; **9.3** `StreamingTTSProvider` + `IncrementalTTSStreamer`; **9.4** `ConversationTurnManager` + `ResponsePolicy` |
 | **Rust** | IPC server; telemetry; `AudioManager` (capture/playback, ring buffer); `InputManager` (`SendInput`, clamp, cancel hotkey) |
 
 Tools (28): system 7, file 6, memory 5, voice 2 (`voice.announce`, `voice.status` SAFE), vision 4 (`SAFE`), OS input 4 (`get_cursor_pos` SAFE; `click` / `type_text` / `hotkey` ASK_USER).
@@ -27,7 +27,7 @@ Tools (28): system 7, file 6, memory 5, voice 2 (`voice.announce`, `voice.status
 ## Invariants (do not violate)
 
 1. **Extend, do not replace** closed Phase 0–8 subsystems (`AudioManager`, `VoicePipelineManager`, `ToolExecutor`, `PermissionEngine`, `MemoryManager`, `VisionManager`, `InputManager`, `AgentOrchestrator.run()`, `CancellationToken`, `ResourceManager`).
-2. Deterministic routing, permissions, clamping, and audio/task state machines stay **outside** LLM prompts.
+2. Deterministic routing, permissions, clamping, sentence parsing, and audio/task state machines stay **outside** LLM prompts.
 3. All agent tools go through `ToolExecutor` → `PermissionEngine`. Permissions are **data-driven** (`DEFAULT_TOOL_PERMISSIONS`), never string-prefix inferred.
 4. **SQLite** is memory ground truth; Qdrant is optional index only.
 5. Voice turns and screen frames are **ephemeral RAM**; no raw speech/screenshots into SQLite/Qdrant.
@@ -43,6 +43,15 @@ Tools (28): system 7, file 6, memory 5, voice 2 (`voice.announce`, `voice.status
 - CPU-first STT/TTS/OCR/CV; VRAM reserved for primary LLM. `ResourceManager`: 500 MB VRAM headroom; `_heavy_lock` between heavy LLM (~5.2 GB) and VLM (~5.5 GB)
 - STT FasterWhisper int8 CPU; TTS Kokoro CPU (0 VRAM)
 
-## Phase 9.0 (done)
+## Phase 9 so far (done)
 
-`MicrophoneLoop`: 16 kHz 16-bit mono ~20 ms frames → energy VAD → `SpeechStartEvent` → `AudioFrameEvent*` → `SpeechEndEvent`. Mute/pause/stop. See `HANDOFF.md` for files, gaps, 9.1 contract.
+- **9.0** `MicrophoneLoop`: 16 kHz 16-bit mono ~20 ms frames → energy VAD → `SpeechStartEvent` → `AudioFrameEvent*` → `SpeechEndEvent`.
+- **9.1** `StreamingSTTProvider` / `FasterWhisperStreamingAdapter`: VAD-delimited PCM → partials + final; no second endpointer.
+- **9.2** `AgentOrchestrator.stream()` (token/delta generator; `run()` unchanged) + `SentenceStreamer` (speakable chunks).
+- **9.3** `StreamingTTSProvider` (sentence → ordered `SynthesisChunk`) + `IncrementalTTSStreamer`: sentence N plays while N+1 synthesizes; cancellation discards pending work and calls `stop_audio_playback()` exactly once.
+- **9.4** `ConversationTurnManager` (turn lifecycle, bounded history, entity referents, Phase 8 `TaskManager` snapshots) + `ResponsePolicy` (`SPEAK_DIRECT` / `FAST_ACK_THEN_WORK` / `SILENT_ACT` / `CLARIFY` / `REPORT_PROGRESS`). Referent *resolution* stays with the model; no NLP engine.
+- **9.B WS0** Measurement integrity: fixed first-partial measurement (was 2 ms artifact from lazy generator; true first partial ~1500 ms from feed start). Fixed streaming STT adapter to mark first partial only when non-empty text is yielded. **PRELIMINARY** — measured from feed start, not speech onset.
+- **9.B WS1** Cheap faster-whisper tuning: tested beam_size=1,2,3; without_timestamps; condition_on_previous_text; cpu_threads 4-12. **beam_size=1 is optimal** (~1350-1470 ms p50 vs ~1500 ms baseline, ~10-15% improvement). without_timestamps, condition_on_previous_text=False, and higher cpu_threads all make it slower. The 30 s window padding in faster-whisper is the fundamental bottleneck. **PRELIMINARY** — measured from feed start.
+- **9.B WS2** Streaming-native STT evaluation — **IN PROGRESS**. sherpa-onnx streaming transducer models tested. **PRIMARY METRIC: `final_from_endpoint`** (time from VAD endpoint to final text). sherpa-large: p50=15.3 ms, p95=31.8 ms — **PASSES 500 ms ceiling**. sherpa-20M: p50=6.9 ms, p95=14.3 ms but produces empty/garbage transcripts — root cause under investigation, marked EXCLUDED pending evidence. First-partial currently measured from feed start (~1400-2000 ms); needs correction to measure from actual speech onset. Previous claim "no streaming CPU model meets the target" **RETRACTED** — sherpa-large meets finalization target. Previous claim sherpa-20M "fundamentally broken" **RETRACTED** — root cause unconfirmed.
+
+Files, gaps, and 9.5 contract: **`HANDOFF.md`**. Ledger and ADRs: **`PROGRESS.md`**.
