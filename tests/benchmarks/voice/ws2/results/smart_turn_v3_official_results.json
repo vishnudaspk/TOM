@@ -1,0 +1,330 @@
+[
+  {
+    "file": "C:\\Users\\vishnuu\\Projects\\TOM\\tests\\benchmarks\\voice\\ws2\\recordings\\001_open_the_settings_window.wav",
+    "duration_s": 2.7,
+    "state": "EndOfTurnState.COMPLETE",
+    "is_complete": true,
+    "probability": 0.9848582744598389,
+    "processing_time_ms": 65.9565000000839
+  },
+  {
+    "file": "C:\\Users\\vishnuu\\Projects\\TOM\\tests\\benchmarks\\voice\\ws2\\recordings\\002_close_the_current_tab.wav",
+    "duration_s": 2.3,
+    "state": "EndOfTurnState.COMPLETE",
+    "is_complete": true,
+    "probability": 0.9823201894760132,
+    "processing_time_ms": 56.03999999993903
+  },
+  {
+    "file": "C:\\Users\\vishnuu\\Projects\\TOM\\tests\\benchmarks\\voice\\ws2\\recordings\\003_minimize_all_windows.wav",
+    "duration_s": 2.8,
+    "state": "EndOfTurnState.COMPLETE",
+    "is_complete": true,
+    "probability": 0.9848582744598389,
+    "processing_time_ms": 85.9280999998191
+  },
+  {
+    "file": "C:\\Users\\vishnuu\\Projects\\TOM\\tests\\benchmarks\\voice\\ws2\\recordings\\004_take_a_screenshot.wav",
+    "duration_s": 2.4,
+    "state": "EndOfTurnState.COMPLETE",
+    "is_complete": true,
+    "probability": 0.9719371795654297,
+    "processing_time_ms": 60.746000000108324
+  },
+  {
+    "file": "C:\\Users\\vishnuu\\Projects\\TOM\\tests\\benchmarks\\voice\\ws2\\recordings\\005_set_a_timer_for_five_minutes.wav",
+    "duration_s": 2.7,
+    "state": "EndOfTurnState.COMPLETE",
+    "is_complete": true,
+    "probability": 0.9842595458030701,
+    "processing_time_ms": 61.49639999966894
+  },
+  {
+    "file": "C:\\Users\\vishnuu\\Projects\\TOM\\tests\\benchmarks\\voice\\ws2\\recordings\\006_turn_up_the_volume.wav",
+    "duration_s": 2.0,
+    "state": "EndOfTurnState.COMPLETE",
+    "is_complete": true,
+    "probability": 0.8447034358978271,
+    "processing_time_ms": 61.67009999990114
+  },
+  {
+    "file": "C:\\Users\\vishnuu\\Projects\\TOM\\tests\\benchmarks\\voice\\ws2\\recordings\\007_mute_the_microphone.wav",
+    "duration_s": 2.0,
+    "state": "EndOfTurnState.COMPLETE",
+    "is_complete": true,
+    "probability": 0.9660363793373108,
+    "processing_time_ms": 61.83359999977256
+  },
+  {
+    "file": "C:\\Users\\vishnuu\\Projects\\TOM\\tests\\benchmarks\\voice\\ws2\\recordings\\008_open_the_downloads_folder.wav",
+    "duration_s": 2.9,
+    "state": "EndOfTurnState.COMPLETE",
+    "is_complete": true,
+    "probability": 0.9199748635292053,
+    "processing_time_ms": 55.75140000019019
+  },
+  {
+    "file": "C:\\Users\\vishnuu\\Projects\\TOM\\tests\\benchmarks\\voice\\ws2\\recordings\\009_delete_the_temporary_files.wav",
+    "duration_s": 2.8,
+    "state": "EndOfTurnState.COMPLETE",
+    "is_complete": true,
+    "probability": 0.9729918241500854,
+    "processing_time_ms": 58.534100000088074
+  },
+  {
+    "file": "C:\\Users\\vishnuu\\Projects\\TOM\\tests\\benchmarks\\voice\\ws2\\recordings\\010_run_the_test_suite.wav",
+    "duration_s": 2.6,
+    "state": "EndOfTurnState.COMPLETE",
+    "is_complete": true,
+    "probability": 0.9255857467651367,
+    "processing_time_ms": 65.90719999985595
+  },
+  {
+    "file": "C:\\Users\\vishnuu\\Projects\\TOM\\tests\\benchmarks\\voice\\ws2\\recordings\\011_restart_the_application.wav",
+    "duration_s": 2.4,
+    "state": "EndOfTurnState.COMPLETE",
+    "is_complete": true,
+    "probability": 0.9522762298583984,
+    "processing_time_ms": 61.39020000000528
+  },
+  {
+    "file": "C:\\Users\\vishnuu\\Projects\\TOM\\tests\\benchmarks\\voice\\ws2\\recordings\\012_show_me_the_task_manager.wav",
+    "duration_s": 2.3,
+    "state": "EndOfTurnState.COMPLETE",
+    "is_complete": true,
+    "probability": 0.9740077257156372,
+    "processing_time_ms": 57.87660000032702
+  },
+  {
+    "file": "C:\\Users\\vishnuu\\Projects\\TOM\\tests\\benchmarks\\voice\\ws2\\recordings\\013_lock_the_screen.wav",
+    "duration_s": 2.3,
+    "state": "EndOfTurnState.COMPLETE",
+    "is_complete": true,
+    "probability": 0.9466100931167603,
+    "processing_time_ms": 53.463299999748415
+  },
+  {
+    "file": "C:\\Users\\vishnuu\\Projects\\TOM\\tests\\benchmarks\\voice\\ws2\\recordings\\014_empty_the_recycle_bin.wav",
+    "duration_s": 2.2,
+    "state": "EndOfTurnState.COMPLETE",
+    "is_complete": true,
+    "probability": 0.9170267581939697,
+    "processing_time_ms": 62.48390000018844
+  },
+  {
+    "file": "C:\\Users\\vishnuu\\Projects\\TOM\\tests\\benchmarks\\voice\\ws2\\recordings\\015_switch_to_dark_mode.wav",
+    "duration_s": 2.2,
+    "state": "EndOfTurnState.COMPLETE",
+    "is_complete": true,
+    "probability": 0.5684942007064819,
+    "processing_time_ms": 45.55190000019138
+  },
+  {
+    "file": "C:\\Users\\vishnuu\\Projects\\TOM\\tests\\benchmarks\\voice\\ws2\\recordings\\016_what_is_the_current_time.wav",
+    "duration_s": 1.8,
+    "state": "EndOfTurnState.COMPLETE",
+    "is_complete": true,
+    "probability": 0.9836374521255493,
+    "processing_time_ms": 39.896300000236806
+  },
+  {
+    "file": "C:\\Users\\vishnuu\\Projects\\TOM\\tests\\benchmarks\\voice\\ws2\\recordings\\017_how_much_disk_space_is_left.wav",
+    "duration_s": 2.5,
+    "state": "EndOfTurnState.COMPLETE",
+    "is_complete": true,
+    "probability": 0.9870367050170898,
+    "processing_time_ms": 59.85780000037266
+  },
+  {
+    "file": "C:\\Users\\vishnuu\\Projects\\TOM\\tests\\benchmarks\\voice\\ws2\\recordings\\018_what_version_of_python_is_installed.wav",
+    "duration_s": 3.0,
+    "state": "EndOfTurnState.COMPLETE",
+    "is_complete": true,
+    "probability": 0.8688222169876099,
+    "processing_time_ms": 53.87280000013561
+  },
+  {
+    "file": "C:\\Users\\vishnuu\\Projects\\TOM\\tests\\benchmarks\\voice\\ws2\\recordings\\019_where_is_the_config_file_located.wav",
+    "duration_s": 2.6,
+    "state": "EndOfTurnState.COMPLETE",
+    "is_complete": true,
+    "probability": 0.9740077257156372,
+    "processing_time_ms": 60.620900000230904
+  },
+  {
+    "file": "C:\\Users\\vishnuu\\Projects\\TOM\\tests\\benchmarks\\voice\\ws2\\recordings\\020_why_is_the_build_failing.wav",
+    "duration_s": 2.9,
+    "state": "EndOfTurnState.COMPLETE",
+    "is_complete": true,
+    "probability": 0.9604700207710266,
+    "processing_time_ms": 60.62500000007276
+  },
+  {
+    "file": "C:\\Users\\vishnuu\\Projects\\TOM\\tests\\benchmarks\\voice\\ws2\\recordings\\021_which_process_is_using_the_most_memory.wav",
+    "duration_s": 2.9,
+    "state": "EndOfTurnState.COMPLETE",
+    "is_complete": true,
+    "probability": 0.9808988571166992,
+    "processing_time_ms": 71.43210000003819
+  },
+  {
+    "file": "C:\\Users\\vishnuu\\Projects\\TOM\\tests\\benchmarks\\voice\\ws2\\recordings\\022_when_was_the_last_backup_made.wav",
+    "duration_s": 3.0,
+    "state": "EndOfTurnState.COMPLETE",
+    "is_complete": true,
+    "probability": 0.9403132200241089,
+    "processing_time_ms": 56.15620000025956
+  },
+  {
+    "file": "C:\\Users\\vishnuu\\Projects\\TOM\\tests\\benchmarks\\voice\\ws2\\recordings\\023_can_you_explain_this_error_message.wav",
+    "duration_s": 3.2,
+    "state": "EndOfTurnState.COMPLETE",
+    "is_complete": true,
+    "probability": 0.9836374521255493,
+    "processing_time_ms": 55.41140000013911
+  },
+  {
+    "file": "C:\\Users\\vishnuu\\Projects\\TOM\\tests\\benchmarks\\voice\\ws2\\recordings\\024_what_are_the_system_requirements.wav",
+    "duration_s": 2.4,
+    "state": "EndOfTurnState.COMPLETE",
+    "is_complete": true,
+    "probability": 0.9749865531921387,
+    "processing_time_ms": 64.9423999998362
+  },
+  {
+    "file": "C:\\Users\\vishnuu\\Projects\\TOM\\tests\\benchmarks\\voice\\ws2\\recordings\\025_how_do_i_enable_the_dark_theme.wav",
+    "duration_s": 2.8,
+    "state": "EndOfTurnState.COMPLETE",
+    "is_complete": true,
+    "probability": 0.9719371795654297,
+    "processing_time_ms": 51.683199999843055
+  },
+  {
+    "file": "C:\\Users\\vishnuu\\Projects\\TOM\\tests\\benchmarks\\voice\\ws2\\recordings\\026_tom_show_me_the_dashboard.wav",
+    "duration_s": 2.3,
+    "state": "EndOfTurnState.COMPLETE",
+    "is_complete": true,
+    "probability": 0.5877046585083008,
+    "processing_time_ms": 53.630100000191305
+  },
+  {
+    "file": "C:\\Users\\vishnuu\\Projects\\TOM\\tests\\benchmarks\\voice\\ws2\\recordings\\027_tom_what_is_the_status_of_the_build.wav",
+    "duration_s": 2.9,
+    "state": "EndOfTurnState.COMPLETE",
+    "is_complete": true,
+    "probability": 0.9875311851501465,
+    "processing_time_ms": 52.63890000014726
+  },
+  {
+    "file": "C:\\Users\\vishnuu\\Projects\\TOM\\tests\\benchmarks\\voice\\ws2\\recordings\\028_tom_open_the_project_settings.wav",
+    "duration_s": 3.7,
+    "state": "EndOfTurnState.COMPLETE",
+    "is_complete": true,
+    "probability": 0.9808988571166992,
+    "processing_time_ms": 78.1701000000794
+  },
+  {
+    "file": "C:\\Users\\vishnuu\\Projects\\TOM\\tests\\benchmarks\\voice\\ws2\\recordings\\029_tom_search_for_the_resource_manager.wav",
+    "duration_s": 3.3,
+    "state": "EndOfTurnState.COMPLETE",
+    "is_complete": true,
+    "probability": 0.9823201894760132,
+    "processing_time_ms": 66.70869999970819
+  },
+  {
+    "file": "C:\\Users\\vishnuu\\Projects\\TOM\\tests\\benchmarks\\voice\\ws2\\recordings\\030_tom_minimize_the_terminal_silently.wav",
+    "duration_s": 3.3,
+    "state": "EndOfTurnState.COMPLETE",
+    "is_complete": true,
+    "probability": 0.9875311851501465,
+    "processing_time_ms": 62.89460000016334
+  },
+  {
+    "file": "C:\\Users\\vishnuu\\Projects\\TOM\\tests\\benchmarks\\voice\\ws2\\recordings\\031_tom_read_the_last_commit_message.wav",
+    "duration_s": 3.2,
+    "state": "EndOfTurnState.COMPLETE",
+    "is_complete": true,
+    "probability": 0.87754225730896,
+    "processing_time_ms": 69.20930000023873
+  },
+  {
+    "file": "C:\\Users\\vishnuu\\Projects\\TOM\\tests\\benchmarks\\voice\\ws2\\recordings\\032_tom_run_the_integration_tests.wav",
+    "duration_s": 3.2,
+    "state": "EndOfTurnState.COMPLETE",
+    "is_complete": true,
+    "probability": 0.9589470624923706,
+    "processing_time_ms": 62.119800000346004
+  },
+  {
+    "file": "C:\\Users\\vishnuu\\Projects\\TOM\\tests\\benchmarks\\voice\\ws2\\recordings\\033_tom_what_changed_in_the_last_commit.wav",
+    "duration_s": 3.3,
+    "state": "EndOfTurnState.COMPLETE",
+    "is_complete": true,
+    "probability": 0.5295060873031616,
+    "processing_time_ms": 67.21390000029714
+  },
+  {
+    "file": "C:\\Users\\vishnuu\\Projects\\TOM\\tests\\benchmarks\\voice\\ws2\\recordings\\034_set_an_alarm_for_seven_thirty_am.wav",
+    "duration_s": 3.3,
+    "state": "EndOfTurnState.COMPLETE",
+    "is_complete": true,
+    "probability": 0.5781289935112,
+    "processing_time_ms": 58.74979999998686
+  },
+  {
+    "file": "C:\\Users\\vishnuu\\Projects\\TOM\\tests\\benchmarks\\voice\\ws2\\recordings\\035_remind_me_at_three_fifteen_pm.wav",
+    "duration_s": 2.9,
+    "state": "EndOfTurnState.COMPLETE",
+    "is_complete": true,
+    "probability": 0.9466100931167603,
+    "processing_time_ms": 48.18139999997584
+  },
+  {
+    "file": "C:\\Users\\vishnuu\\Projects\\TOM\\tests\\benchmarks\\voice\\ws2\\recordings\\036_schedule_a_meeting_for_next_tuesday.wav",
+    "duration_s": 3.3,
+    "state": "EndOfTurnState.COMPLETE",
+    "is_complete": true,
+    "probability": 0.9889053702354431,
+    "processing_time_ms": 49.55499999960011
+  },
+  {
+    "file": "C:\\Users\\vishnuu\\Projects\\TOM\\tests\\benchmarks\\voice\\ws2\\recordings\\037_delete_files_older_than_thirty_days.wav",
+    "duration_s": 3.0,
+    "state": "EndOfTurnState.COMPLETE",
+    "is_complete": true,
+    "probability": 0.9870367050170898,
+    "processing_time_ms": 64.10180000011678
+  },
+  {
+    "file": "C:\\Users\\vishnuu\\Projects\\TOM\\tests\\benchmarks\\voice\\ws2\\recordings\\038_show_logs_from_the_last_hour.wav",
+    "duration_s": 3.7,
+    "state": "EndOfTurnState.COMPLETE",
+    "is_complete": true,
+    "probability": 0.7580885291099548,
+    "processing_time_ms": 75.1869999999144
+  },
+  {
+    "file": "C:\\Users\\vishnuu\\Projects\\TOM\\tests\\benchmarks\\voice\\ws2\\recordings\\039_calculate_fifteen_percent_of_two_hundred.wav",
+    "duration_s": 2.9,
+    "state": "EndOfTurnState.COMPLETE",
+    "is_complete": true,
+    "probability": 0.6788204908370972,
+    "processing_time_ms": 61.69640000007348
+  },
+  {
+    "file": "C:\\Users\\vishnuu\\Projects\\TOM\\tests\\benchmarks\\voice\\ws2\\recordings\\040_what_is_the_date_next_friday.wav",
+    "duration_s": 2.7,
+    "state": "EndOfTurnState.COMPLETE",
+    "is_complete": true,
+    "probability": 0.9880069494247437,
+    "processing_time_ms": 59.69279999999344
+  },
+  {
+    "file": "C:\\Users\\vishnuu\\Projects\\TOM\\tests\\benchmarks\\voice\\ws2\\recordings\\041_run_the_backup_at_midnight.wav",
+    "duration_s": 2.0,
+    "state": "EndOfTurnState.COMPLETE",
+    "is_complete": true,
+    "probability": 0.975929319858551,
+    "processing_time_ms": 77.3444000001291
+  }
+]

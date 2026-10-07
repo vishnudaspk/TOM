@@ -1,0 +1,1330 @@
+{
+  "moonshine-base-en-int8": {
+    "model_name": "moonshine-base-en-int8",
+    "model_info": {
+      "source_repo": "csukuangfj/sherpa-onnx-moonshine-base-en-int8",
+      "license": "MIT",
+      "size_disk_mb": 273.6,
+      "num_threads": 4
+    },
+    "peak_ram_mb": 349.1,
+    "accuracy": {
+      "overall_wer": 0.2655,
+      "by_category": {
+        "commands": 0.1389,
+        "questions": 0.3505,
+        "names": 0.349,
+        "numbers": 0.3131
+      },
+      "numbers_exact_match": "1/8",
+      "numbers_exact_rate": 0.125,
+      "name_errors": [
+        {
+          "file": "026_tom_show_me_the_dashboard.wav",
+          "ref": "tom show me the dashboard",
+          "hyp": "don t show me the dashboard",
+          "wer": 0.4
+        },
+        {
+          "file": "027_tom_what_is_the_status_of_the_build.wav",
+          "ref": "tom what is the status of the build",
+          "hyp": "no what is the status of the build",
+          "wer": 0.125
+        },
+        {
+          "file": "028_tom_open_the_project_settings.wav",
+          "ref": "tom open the project settings",
+          "hyp": "don t open the brush settings",
+          "wer": 0.6
+        },
+        {
+          "file": "029_tom_search_for_the_resource_manager.wav",
+          "ref": "tom search for the resource manager",
+          "hyp": "don t search for the resource manager",
+          "wer": 0.3333333333333333
+        },
+        {
+          "file": "030_tom_minimize_the_terminal_silently.wav",
+          "ref": "tom minimize the terminal silently",
+          "hyp": "dom minimize the terminal salinity",
+          "wer": 0.4
+        },
+        {
+          "file": "031_tom_read_the_last_commit_message.wav",
+          "ref": "tom read the last commit message",
+          "hyp": "don t read the last commit message",
+          "wer": 0.3333333333333333
+        },
+        {
+          "file": "032_tom_run_the_integration_tests.wav",
+          "ref": "tom run the integration tests",
+          "hyp": "don t run the integration tis",
+          "wer": 0.6
+        }
+      ],
+      "number_errors": [
+        {
+          "file": "034_set_an_alarm_for_seven_thirty_am.wav",
+          "ref": "set an alarm for 7 30 am",
+          "hyp": "attention alarm for 7 00am",
+          "wer": 0.5714285714285714
+        },
+        {
+          "file": "036_schedule_a_meeting_for_next_tuesday.wav",
+          "ref": "schedule a meeting for next thursday",
+          "hyp": "schedule a meeting for next thosti",
+          "wer": 0.16666666666666666
+        },
+        {
+          "file": "037_delete_files_older_than_thirty_days.wav",
+          "ref": "delete files older than 30 days",
+          "hyp": "there are files all in 30 days",
+          "wer": 0.6666666666666666
+        },
+        {
+          "file": "038_show_logs_from_the_last_hour.wav",
+          "ref": "show logs from the last hour",
+          "hyp": "show log for the last hour",
+          "wer": 0.3333333333333333
+        },
+        {
+          "file": "039_calculate_fifteen_percent_of_two_hundred.wav",
+          "ref": "calculate 15 percent of 200",
+          "hyp": "calculate 15 10 of 200",
+          "wer": 0.2
+        },
+        {
+          "file": "040_what_is_the_date_next_friday.wav",
+          "ref": "what is the date next friday",
+          "hyp": "what is a date next friday",
+          "wer": 0.16666666666666666
+        },
+        {
+          "file": "041_run_the_backup_at_midnight.wav",
+          "ref": "run the backup at midnight",
+          "hyp": "run the bag up at midnight",
+          "wer": 0.4
+        }
+      ]
+    },
+    "latency_by_bucket": {
+      "<2s": {
+        "n_runs": 10,
+        "mean_ms": 69.37,
+        "p50_ms": 66.82,
+        "p95_ms": 84.37,
+        "stdev_ms": 8.1,
+        "high_variance": false
+      },
+      "2-3s": {
+        "n_runs": 300,
+        "mean_ms": 72.53,
+        "p50_ms": 70.42,
+        "p95_ms": 99.99,
+        "stdev_ms": 14.42,
+        "high_variance": false
+      },
+      ">3s": {
+        "n_runs": 100,
+        "mean_ms": 93.78,
+        "p50_ms": 92.87,
+        "p95_ms": 111.71,
+        "stdev_ms": 11.97,
+        "high_variance": false
+      }
+    },
+    "per_file_accuracy": [
+      {
+        "file": "001_open_the_settings_window.wav",
+        "idx": 0,
+        "category": "commands",
+        "bucket": "2-3s",
+        "raw_ref": "open the settings window",
+        "raw_hyp": "Open the settings window.",
+        "norm_ref": "open the settings window",
+        "norm_hyp": "open the settings window",
+        "wer": 0.0
+      },
+      {
+        "file": "002_close_the_current_tab.wav",
+        "idx": 1,
+        "category": "commands",
+        "bucket": "2-3s",
+        "raw_ref": "close the current tab",
+        "raw_hyp": "Close the button, tap.",
+        "norm_ref": "close the current tab",
+        "norm_hyp": "close the button tap",
+        "wer": 0.5
+      },
+      {
+        "file": "003_minimize_all_windows.wav",
+        "idx": 2,
+        "category": "commands",
+        "bucket": "2-3s",
+        "raw_ref": "minimize all windows",
+        "raw_hyp": "Minimize all windows.",
+        "norm_ref": "minimize all windows",
+        "norm_hyp": "minimize all windows",
+        "wer": 0.0
+      },
+      {
+        "file": "004_take_a_screenshot.wav",
+        "idx": 3,
+        "category": "commands",
+        "bucket": "2-3s",
+        "raw_ref": "take a screenshot",
+        "raw_hyp": "Take a screenshot",
+        "norm_ref": "take a screenshot",
+        "norm_hyp": "take a screenshot",
+        "wer": 0.0
+      },
+      {
+        "file": "005_set_a_timer_for_five_minutes.wav",
+        "idx": 4,
+        "category": "commands",
+        "bucket": "2-3s",
+        "raw_ref": "set a timer for five minutes",
+        "raw_hyp": "Set a timer for 5 minutes.",
+        "norm_ref": "set a timer for 5 minutes",
+        "norm_hyp": "set a timer for 5 minutes",
+        "wer": 0.0
+      },
+      {
+        "file": "006_turn_up_the_volume.wav",
+        "idx": 5,
+        "category": "commands",
+        "bucket": "2-3s",
+        "raw_ref": "turn up the volume",
+        "raw_hyp": "You have the volume.",
+        "norm_ref": "turn up the volume",
+        "norm_hyp": "you have the volume",
+        "wer": 0.5
+      },
+      {
+        "file": "007_mute_the_microphone.wav",
+        "idx": 6,
+        "category": "commands",
+        "bucket": "2-3s",
+        "raw_ref": "mute the microphone",
+        "raw_hyp": "Mute the microphone.",
+        "norm_ref": "mute the microphone",
+        "norm_hyp": "mute the microphone",
+        "wer": 0.0
+      },
+      {
+        "file": "008_open_the_downloads_folder.wav",
+        "idx": 7,
+        "category": "commands",
+        "bucket": "2-3s",
+        "raw_ref": "open the downloads folder",
+        "raw_hyp": "Open the downwards folder.",
+        "norm_ref": "open the downloads folder",
+        "norm_hyp": "open the downwards folder",
+        "wer": 0.25
+      },
+      {
+        "file": "009_delete_the_temporary_files.wav",
+        "idx": 8,
+        "category": "commands",
+        "bucket": "2-3s",
+        "raw_ref": "delete the temporary files",
+        "raw_hyp": "Delete the temporary files.",
+        "norm_ref": "delete the temporary files",
+        "norm_hyp": "delete the temporary files",
+        "wer": 0.0
+      },
+      {
+        "file": "010_run_the_test_suite.wav",
+        "idx": 9,
+        "category": "commands",
+        "bucket": "2-3s",
+        "raw_ref": "run the test suite",
+        "raw_hyp": "Run the test suit.",
+        "norm_ref": "run the test suite",
+        "norm_hyp": "run the test suit",
+        "wer": 0.25
+      },
+      {
+        "file": "011_restart_the_application.wav",
+        "idx": 10,
+        "category": "commands",
+        "bucket": "2-3s",
+        "raw_ref": "restart the application",
+        "raw_hyp": "Bristad the application.",
+        "norm_ref": "restart the application",
+        "norm_hyp": "bristad the application",
+        "wer": 0.3333
+      },
+      {
+        "file": "012_show_me_the_task_manager.wav",
+        "idx": 11,
+        "category": "commands",
+        "bucket": "2-3s",
+        "raw_ref": "show me the task manager",
+        "raw_hyp": "Show me the task manager.",
+        "norm_ref": "show me the task manager",
+        "norm_hyp": "show me the task manager",
+        "wer": 0.0
+      },
+      {
+        "file": "013_lock_the_screen.wav",
+        "idx": 12,
+        "category": "commands",
+        "bucket": "2-3s",
+        "raw_ref": "lock the screen",
+        "raw_hyp": "Lock the screen.",
+        "norm_ref": "lock the screen",
+        "norm_hyp": "lock the screen",
+        "wer": 0.0
+      },
+      {
+        "file": "014_empty_the_recycle_bin.wav",
+        "idx": 13,
+        "category": "commands",
+        "bucket": "2-3s",
+        "raw_ref": "empty the recycle bin",
+        "raw_hyp": "Empty the recycle bin.",
+        "norm_ref": "empty the recycle bin",
+        "norm_hyp": "empty the recycle bin",
+        "wer": 0.0
+      },
+      {
+        "file": "015_switch_to_dark_mode.wav",
+        "idx": 14,
+        "category": "commands",
+        "bucket": "2-3s",
+        "raw_ref": "switch to dark mode",
+        "raw_hyp": "Speech to dark mode",
+        "norm_ref": "switch to dark mode",
+        "norm_hyp": "speech to dark mode",
+        "wer": 0.25
+      },
+      {
+        "file": "016_what_is_the_current_time.wav",
+        "idx": 15,
+        "category": "questions",
+        "bucket": "<2s",
+        "raw_ref": "what is the current time",
+        "raw_hyp": "He's a girl and dad.",
+        "norm_ref": "what is the current time",
+        "norm_hyp": "he s a girl and dad",
+        "wer": 1.2
+      },
+      {
+        "file": "017_how_much_disk_space_is_left.wav",
+        "idx": 16,
+        "category": "questions",
+        "bucket": "2-3s",
+        "raw_ref": "how much disk space is left",
+        "raw_hyp": "How much disgrace is left?",
+        "norm_ref": "how much disk space is left",
+        "norm_hyp": "how much disgrace is left",
+        "wer": 0.3333
+      },
+      {
+        "file": "018_what_version_of_python_is_installed.wav",
+        "idx": 17,
+        "category": "questions",
+        "bucket": "2-3s",
+        "raw_ref": "what version of python is installed",
+        "raw_hyp": "What version of Python is installed?",
+        "norm_ref": "what version of python is installed",
+        "norm_hyp": "what version of python is installed",
+        "wer": 0.0
+      },
+      {
+        "file": "019_where_is_the_config_file_located.wav",
+        "idx": 18,
+        "category": "questions",
+        "bucket": "2-3s",
+        "raw_ref": "where is the config file located",
+        "raw_hyp": "Where is the config file repeated?",
+        "norm_ref": "where is the config file located",
+        "norm_hyp": "where is the config file repeated",
+        "wer": 0.1667
+      },
+      {
+        "file": "020_why_is_the_build_failing.wav",
+        "idx": 19,
+        "category": "questions",
+        "bucket": "2-3s",
+        "raw_ref": "why is the build failing",
+        "raw_hyp": "Why is the build failing?",
+        "norm_ref": "why is the build failing",
+        "norm_hyp": "why is the build failing",
+        "wer": 0.0
+      },
+      {
+        "file": "021_which_process_is_using_the_most_memory.wav",
+        "idx": 20,
+        "category": "questions",
+        "bucket": "2-3s",
+        "raw_ref": "which process is using the most memory",
+        "raw_hyp": "Fish process is using the most memory,",
+        "norm_ref": "which process is using the most memory",
+        "norm_hyp": "fish process is using the most memory",
+        "wer": 0.1429
+      },
+      {
+        "file": "022_when_was_the_last_backup_made.wav",
+        "idx": 21,
+        "category": "questions",
+        "bucket": "2-3s",
+        "raw_ref": "when was the last backup made",
+        "raw_hyp": "We know the last back of mate.",
+        "norm_ref": "when was the last backup made",
+        "norm_hyp": "we know the last back of mate",
+        "wer": 0.8333
+      },
+      {
+        "file": "023_can_you_explain_this_error_message.wav",
+        "idx": 22,
+        "category": "questions",
+        "bucket": ">3s",
+        "raw_ref": "can you explain this error message",
+        "raw_hyp": "Can you explain this error message?",
+        "norm_ref": "can you explain this error message",
+        "norm_hyp": "can you explain this error message",
+        "wer": 0.0
+      },
+      {
+        "file": "024_what_are_the_system_requirements.wav",
+        "idx": 23,
+        "category": "questions",
+        "bucket": "2-3s",
+        "raw_ref": "what are the system requirements",
+        "raw_hyp": "What up system requirements?",
+        "norm_ref": "what are the system requirements",
+        "norm_hyp": "what up system requirements",
+        "wer": 0.4
+      },
+      {
+        "file": "025_how_do_i_enable_the_dark_theme.wav",
+        "idx": 24,
+        "category": "questions",
+        "bucket": "2-3s",
+        "raw_ref": "how do I enable the dark theme",
+        "raw_hyp": "How do I enable Dafting?",
+        "norm_ref": "how do i enable the dark theme",
+        "norm_hyp": "how do i enable dafting",
+        "wer": 0.4286
+      },
+      {
+        "file": "026_tom_show_me_the_dashboard.wav",
+        "idx": 25,
+        "category": "names",
+        "bucket": "2-3s",
+        "raw_ref": "TOM show me the dashboard",
+        "raw_hyp": "Don't show me the dashboard",
+        "norm_ref": "tom show me the dashboard",
+        "norm_hyp": "don t show me the dashboard",
+        "wer": 0.4
+      },
+      {
+        "file": "027_tom_what_is_the_status_of_the_build.wav",
+        "idx": 26,
+        "category": "names",
+        "bucket": "2-3s",
+        "raw_ref": "TOM what is the status of the build",
+        "raw_hyp": "No, what is the status of the build?",
+        "norm_ref": "tom what is the status of the build",
+        "norm_hyp": "no what is the status of the build",
+        "wer": 0.125
+      },
+      {
+        "file": "028_tom_open_the_project_settings.wav",
+        "idx": 27,
+        "category": "names",
+        "bucket": ">3s",
+        "raw_ref": "TOM open the project settings",
+        "raw_hyp": "Don't open the brush settings.",
+        "norm_ref": "tom open the project settings",
+        "norm_hyp": "don t open the brush settings",
+        "wer": 0.6
+      },
+      {
+        "file": "029_tom_search_for_the_resource_manager.wav",
+        "idx": 28,
+        "category": "names",
+        "bucket": ">3s",
+        "raw_ref": "TOM search for the resource manager",
+        "raw_hyp": "Don't search for the resource manager.",
+        "norm_ref": "tom search for the resource manager",
+        "norm_hyp": "don t search for the resource manager",
+        "wer": 0.3333
+      },
+      {
+        "file": "030_tom_minimize_the_terminal_silently.wav",
+        "idx": 29,
+        "category": "names",
+        "bucket": ">3s",
+        "raw_ref": "TOM minimize the terminal silently",
+        "raw_hyp": "Dom, minimize the terminal salinity.",
+        "norm_ref": "tom minimize the terminal silently",
+        "norm_hyp": "dom minimize the terminal salinity",
+        "wer": 0.4
+      },
+      {
+        "file": "031_tom_read_the_last_commit_message.wav",
+        "idx": 30,
+        "category": "names",
+        "bucket": ">3s",
+        "raw_ref": "TOM read the last commit message",
+        "raw_hyp": "Don't read the last commit message.",
+        "norm_ref": "tom read the last commit message",
+        "norm_hyp": "don t read the last commit message",
+        "wer": 0.3333
+      },
+      {
+        "file": "032_tom_run_the_integration_tests.wav",
+        "idx": 31,
+        "category": "names",
+        "bucket": ">3s",
+        "raw_ref": "TOM run the integration tests",
+        "raw_hyp": "Don't run the integration, Tis?",
+        "norm_ref": "tom run the integration tests",
+        "norm_hyp": "don t run the integration tis",
+        "wer": 0.6
+      },
+      {
+        "file": "033_tom_what_changed_in_the_last_commit.wav",
+        "idx": 32,
+        "category": "names",
+        "bucket": ">3s",
+        "raw_ref": "TOM what changed in the last commit",
+        "raw_hyp": "Tom, what changed in the last commit?",
+        "norm_ref": "tom what changed in the last commit",
+        "norm_hyp": "tom what changed in the last commit",
+        "wer": 0.0
+      },
+      {
+        "file": "034_set_an_alarm_for_seven_thirty_am.wav",
+        "idx": 33,
+        "category": "numbers",
+        "bucket": ">3s",
+        "raw_ref": "set an alarm for seven thirty AM",
+        "raw_hyp": "Attention alarm for 7:00am",
+        "norm_ref": "set an alarm for 7 30 am",
+        "norm_hyp": "attention alarm for 7 00am",
+        "wer": 0.5714
+      },
+      {
+        "file": "035_remind_me_at_three_fifteen_pm.wav",
+        "idx": 34,
+        "category": "numbers",
+        "bucket": "2-3s",
+        "raw_ref": "remind me at three fifteen PM",
+        "raw_hyp": "Remind me at 3:15 pm",
+        "norm_ref": "remind me at 3 15 pm",
+        "norm_hyp": "remind me at 3 15 pm",
+        "wer": 0.0
+      },
+      {
+        "file": "036_schedule_a_meeting_for_next_tuesday.wav",
+        "idx": 35,
+        "category": "numbers",
+        "bucket": ">3s",
+        "raw_ref": "schedule a meeting for next Thursday",
+        "raw_hyp": "Schedule a meeting for next Thosti.",
+        "norm_ref": "schedule a meeting for next thursday",
+        "norm_hyp": "schedule a meeting for next thosti",
+        "wer": 0.1667
+      },
+      {
+        "file": "037_delete_files_older_than_thirty_days.wav",
+        "idx": 36,
+        "category": "numbers",
+        "bucket": "2-3s",
+        "raw_ref": "delete files older than thirty days",
+        "raw_hyp": "There are files all in 30 days.",
+        "norm_ref": "delete files older than 30 days",
+        "norm_hyp": "there are files all in 30 days",
+        "wer": 0.6667
+      },
+      {
+        "file": "038_show_logs_from_the_last_hour.wav",
+        "idx": 37,
+        "category": "numbers",
+        "bucket": ">3s",
+        "raw_ref": "show logs from the last hour",
+        "raw_hyp": "Show log for the last hour.",
+        "norm_ref": "show logs from the last hour",
+        "norm_hyp": "show log for the last hour",
+        "wer": 0.3333
+      },
+      {
+        "file": "039_calculate_fifteen_percent_of_two_hundred.wav",
+        "idx": 38,
+        "category": "numbers",
+        "bucket": "2-3s",
+        "raw_ref": "calculate fifteen percent of two hundred",
+        "raw_hyp": "Calculate 15/10 of 200.",
+        "norm_ref": "calculate 15 percent of 200",
+        "norm_hyp": "calculate 15 10 of 200",
+        "wer": 0.2
+      },
+      {
+        "file": "040_what_is_the_date_next_friday.wav",
+        "idx": 39,
+        "category": "numbers",
+        "bucket": "2-3s",
+        "raw_ref": "what is the date next Friday",
+        "raw_hyp": "What is a date next Friday?",
+        "norm_ref": "what is the date next friday",
+        "norm_hyp": "what is a date next friday",
+        "wer": 0.1667
+      },
+      {
+        "file": "041_run_the_backup_at_midnight.wav",
+        "idx": 40,
+        "category": "numbers",
+        "bucket": "2-3s",
+        "raw_ref": "run the backup at midnight",
+        "raw_hyp": "Run the bag up at midnight.",
+        "norm_ref": "run the backup at midnight",
+        "norm_hyp": "run the bag up at midnight",
+        "wer": 0.4
+      }
+    ],
+    "per_file_latency": {
+      "001_open_the_settings_window.wav": {
+        "mean_ms": 67.81,
+        "p50_ms": 66.44,
+        "p95_ms": 77.07,
+        "stdev_ms": 5.85,
+        "runs": [
+          60.92,
+          78.44,
+          73.56,
+          63.04,
+          68.7,
+          63.21,
+          61.91,
+          75.39,
+          64.46,
+          68.42
+        ]
+      },
+      "002_close_the_current_tab.wav": {
+        "mean_ms": 70.33,
+        "p50_ms": 70.16,
+        "p95_ms": 77.04,
+        "stdev_ms": 5.25,
+        "runs": [
+          67.76,
+          67.93,
+          77.68,
+          73.58,
+          75.88,
+          65.17,
+          64.71,
+          72.39,
+          61.96,
+          76.25
+        ]
+      },
+      "003_minimize_all_windows.wav": {
+        "mean_ms": 75.08,
+        "p50_ms": 69.96,
+        "p95_ms": 104.01,
+        "stdev_ms": 15.51,
+        "runs": [
+          68.2,
+          112.44,
+          72.77,
+          93.7,
+          58.06,
+          69.34,
+          61.83,
+          70.57,
+          77.99,
+          65.91
+        ]
+      },
+      "004_take_a_screenshot.wav": {
+        "mean_ms": 50.5,
+        "p50_ms": 50.81,
+        "p95_ms": 61.13,
+        "stdev_ms": 7.68,
+        "runs": [
+          50.16,
+          51.45,
+          63.75,
+          51.82,
+          57.83,
+          49.55,
+          39.61,
+          57.92,
+          38.35,
+          44.55
+        ]
+      },
+      "005_set_a_timer_for_five_minutes.wav": {
+        "mean_ms": 73.3,
+        "p50_ms": 72.14,
+        "p95_ms": 85.3,
+        "stdev_ms": 7.48,
+        "runs": [
+          63.22,
+          78.48,
+          64.49,
+          83.5,
+          67.78,
+          72.97,
+          76.17,
+          86.77,
+          71.31,
+          68.34
+        ]
+      },
+      "006_turn_up_the_volume.wav": {
+        "mean_ms": 58.05,
+        "p50_ms": 60.34,
+        "p95_ms": 65.33,
+        "stdev_ms": 6.88,
+        "runs": [
+          43.55,
+          48.14,
+          59.03,
+          62.89,
+          61.88,
+          61.66,
+          63.37,
+          66.94,
+          56.16,
+          56.93
+        ]
+      },
+      "007_mute_the_microphone.wav": {
+        "mean_ms": 65.97,
+        "p50_ms": 65.08,
+        "p95_ms": 77.84,
+        "stdev_ms": 7.95,
+        "runs": [
+          66.66,
+          75.9,
+          79.42,
+          73.83,
+          65.77,
+          58.65,
+          53.25,
+          64.16,
+          57.65,
+          64.39
+        ]
+      },
+      "008_open_the_downloads_folder.wav": {
+        "mean_ms": 73.92,
+        "p50_ms": 72.78,
+        "p95_ms": 84.21,
+        "stdev_ms": 6.42,
+        "runs": [
+          84.91,
+          83.36,
+          69.25,
+          76.34,
+          73.53,
+          76.88,
+          69.85,
+          70.72,
+          62.29,
+          72.02
+        ]
+      },
+      "009_delete_the_temporary_files.wav": {
+        "mean_ms": 69.61,
+        "p50_ms": 70.18,
+        "p95_ms": 78.89,
+        "stdev_ms": 8.14,
+        "runs": [
+          80.87,
+          76.47,
+          67.75,
+          66.08,
+          71.51,
+          75.95,
+          69.51,
+          48.98,
+          70.84,
+          68.14
+        ]
+      },
+      "010_run_the_test_suite.wav": {
+        "mean_ms": 65.65,
+        "p50_ms": 67.16,
+        "p95_ms": 76.69,
+        "stdev_ms": 7.82,
+        "runs": [
+          66.44,
+          56.38,
+          71.48,
+          68.72,
+          54.28,
+          67.88,
+          56.2,
+          62.31,
+          79.22,
+          73.6
+        ]
+      },
+      "011_restart_the_application.wav": {
+        "mean_ms": 67.64,
+        "p50_ms": 67.64,
+        "p95_ms": 76.01,
+        "stdev_ms": 7.63,
+        "runs": [
+          75.24,
+          50.56,
+          64.75,
+          61.11,
+          67.64,
+          64.35,
+          76.55,
+          67.65,
+          73.27,
+          75.34
+        ]
+      },
+      "012_show_me_the_task_manager.wav": {
+        "mean_ms": 66.42,
+        "p50_ms": 66.99,
+        "p95_ms": 76.27,
+        "stdev_ms": 7.09,
+        "runs": [
+          56.25,
+          69.5,
+          64.49,
+          70.27,
+          72.34,
+          58.27,
+          60.33,
+          60.2,
+          76.26,
+          76.28
+        ]
+      },
+      "013_lock_the_screen.wav": {
+        "mean_ms": 56.21,
+        "p50_ms": 55.44,
+        "p95_ms": 66.15,
+        "stdev_ms": 6.19,
+        "runs": [
+          53.09,
+          51.82,
+          55.47,
+          58.0,
+          60.19,
+          55.41,
+          68.96,
+          48.32,
+          48.07,
+          62.71
+        ]
+      },
+      "014_empty_the_recycle_bin.wav": {
+        "mean_ms": 65.3,
+        "p50_ms": 64.51,
+        "p95_ms": 72.61,
+        "stdev_ms": 4.52,
+        "runs": [
+          64.21,
+          67.14,
+          63.4,
+          61.0,
+          65.97,
+          64.8,
+          63.71,
+          66.2,
+          59.43,
+          77.08
+        ]
+      },
+      "015_switch_to_dark_mode.wav": {
+        "mean_ms": 55.72,
+        "p50_ms": 56.88,
+        "p95_ms": 61.74,
+        "stdev_ms": 4.81,
+        "runs": [
+          49.79,
+          56.73,
+          57.03,
+          57.86,
+          63.68,
+          58.2,
+          59.37,
+          55.1,
+          45.6,
+          53.8
+        ]
+      },
+      "016_what_is_the_current_time.wav": {
+        "mean_ms": 69.37,
+        "p50_ms": 66.82,
+        "p95_ms": 84.37,
+        "stdev_ms": 8.1,
+        "runs": [
+          71.04,
+          70.15,
+          68.73,
+          86.38,
+          62.18,
+          81.92,
+          61.14,
+          63.22,
+          64.92,
+          63.98
+        ]
+      },
+      "017_how_much_disk_space_is_left.wav": {
+        "mean_ms": 75.3,
+        "p50_ms": 75.23,
+        "p95_ms": 85.5,
+        "stdev_ms": 7.4,
+        "runs": [
+          64.57,
+          87.39,
+          73.49,
+          81.01,
+          75.2,
+          62.83,
+          83.18,
+          79.15,
+          75.25,
+          70.97
+        ]
+      },
+      "018_what_version_of_python_is_installed.wav": {
+        "mean_ms": 79.07,
+        "p50_ms": 77.5,
+        "p95_ms": 96.78,
+        "stdev_ms": 10.48,
+        "runs": [
+          90.54,
+          101.89,
+          68.18,
+          82.9,
+          67.4,
+          73.12,
+          82.27,
+          71.62,
+          70.86,
+          81.87
+        ]
+      },
+      "019_where_is_the_config_file_located.wav": {
+        "mean_ms": 70.94,
+        "p50_ms": 68.62,
+        "p95_ms": 78.57,
+        "stdev_ms": 5.33,
+        "runs": [
+          67.01,
+          75.75,
+          68.82,
+          80.2,
+          68.42,
+          63.85,
+          67.77,
+          75.8,
+          76.59,
+          65.22
+        ]
+      },
+      "020_why_is_the_build_failing.wav": {
+        "mean_ms": 69.54,
+        "p50_ms": 67.3,
+        "p95_ms": 87.15,
+        "stdev_ms": 10.44,
+        "runs": [
+          62.7,
+          76.11,
+          69.94,
+          96.17,
+          59.31,
+          60.05,
+          67.04,
+          74.63,
+          67.56,
+          61.86
+        ]
+      },
+      "021_which_process_is_using_the_most_memory.wav": {
+        "mean_ms": 79.15,
+        "p50_ms": 77.3,
+        "p95_ms": 93.67,
+        "stdev_ms": 8.85,
+        "runs": [
+          74.43,
+          93.25,
+          76.97,
+          94.01,
+          79.58,
+          65.14,
+          72.11,
+          72.53,
+          85.85,
+          77.63
+        ]
+      },
+      "022_when_was_the_last_backup_made.wav": {
+        "mean_ms": 84.58,
+        "p50_ms": 81.37,
+        "p95_ms": 99.52,
+        "stdev_ms": 10.57,
+        "runs": [
+          80.16,
+          73.1,
+          72.3,
+          72.43,
+          92.33,
+          78.42,
+          99.95,
+          95.56,
+          82.58,
+          99.01
+        ]
+      },
+      "023_can_you_explain_this_error_message.wav": {
+        "mean_ms": 87.96,
+        "p50_ms": 87.15,
+        "p95_ms": 107.43,
+        "stdev_ms": 13.08,
+        "runs": [
+          75.59,
+          81.75,
+          102.93,
+          70.05,
+          72.32,
+          81.31,
+          95.25,
+          96.73,
+          92.54,
+          111.11
+        ]
+      },
+      "024_what_are_the_system_requirements.wav": {
+        "mean_ms": 66.92,
+        "p50_ms": 67.29,
+        "p95_ms": 71.3,
+        "stdev_ms": 2.96,
+        "runs": [
+          63.9,
+          62.93,
+          64.34,
+          68.25,
+          64.13,
+          72.95,
+          69.28,
+          66.67,
+          68.82,
+          67.91
+        ]
+      },
+      "025_how_do_i_enable_the_dark_theme.wav": {
+        "mean_ms": 79.69,
+        "p50_ms": 77.19,
+        "p95_ms": 94.54,
+        "stdev_ms": 8.24,
+        "runs": [
+          78.48,
+          96.85,
+          70.68,
+          75.88,
+          70.01,
+          80.42,
+          74.55,
+          82.45,
+          91.71,
+          75.89
+        ]
+      },
+      "026_tom_show_me_the_dashboard.wav": {
+        "mean_ms": 65.96,
+        "p50_ms": 67.27,
+        "p95_ms": 78.22,
+        "stdev_ms": 7.9,
+        "runs": [
+          53.9,
+          67.48,
+          55.17,
+          61.55,
+          72.58,
+          67.79,
+          82.83,
+          67.05,
+          63.71,
+          67.52
+        ]
+      },
+      "027_tom_what_is_the_status_of_the_build.wav": {
+        "mean_ms": 84.61,
+        "p50_ms": 82.08,
+        "p95_ms": 100.24,
+        "stdev_ms": 8.7,
+        "runs": [
+          85.59,
+          78.4,
+          81.73,
+          82.45,
+          80.55,
+          77.68,
+          82.43,
+          78.6,
+          90.21,
+          108.45
+        ]
+      },
+      "028_tom_open_the_project_settings.wav": {
+        "mean_ms": 92.47,
+        "p50_ms": 93.5,
+        "p95_ms": 103.42,
+        "stdev_ms": 7.56,
+        "runs": [
+          102.27,
+          94.49,
+          84.25,
+          84.79,
+          104.35,
+          81.9,
+          99.46,
+          94.18,
+          92.82,
+          86.14
+        ]
+      },
+      "029_tom_search_for_the_resource_manager.wav": {
+        "mean_ms": 92.18,
+        "p50_ms": 88.59,
+        "p95_ms": 109.58,
+        "stdev_ms": 10.92,
+        "runs": [
+          95.19,
+          101.24,
+          83.69,
+          105.4,
+          74.67,
+          90.07,
+          85.0,
+          113.0,
+          86.46,
+          87.11
+        ]
+      },
+      "030_tom_minimize_the_terminal_silently.wav": {
+        "mean_ms": 92.58,
+        "p50_ms": 91.81,
+        "p95_ms": 110.08,
+        "stdev_ms": 11.19,
+        "runs": [
+          75.67,
+          87.37,
+          99.44,
+          92.3,
+          108.14,
+          111.66,
+          91.31,
+          97.07,
+          78.68,
+          84.13
+        ]
+      },
+      "031_tom_read_the_last_commit_message.wav": {
+        "mean_ms": 84.34,
+        "p50_ms": 82.61,
+        "p95_ms": 100.32,
+        "stdev_ms": 9.66,
+        "runs": [
+          81.51,
+          97.84,
+          83.98,
+          78.3,
+          91.79,
+          71.38,
+          102.35,
+          72.54,
+          80.03,
+          83.7
+        ]
+      },
+      "032_tom_run_the_integration_tests.wav": {
+        "mean_ms": 92.5,
+        "p50_ms": 90.74,
+        "p95_ms": 106.23,
+        "stdev_ms": 9.9,
+        "runs": [
+          81.59,
+          88.45,
+          80.38,
+          105.99,
+          85.02,
+          103.29,
+          93.04,
+          82.04,
+          106.44,
+          98.73
+        ]
+      },
+      "033_tom_what_changed_in_the_last_commit.wav": {
+        "mean_ms": 99.28,
+        "p50_ms": 96.95,
+        "p95_ms": 120.4,
+        "stdev_ms": 13.71,
+        "runs": [
+          89.89,
+          83.04,
+          112.6,
+          102.08,
+          104.39,
+          90.2,
+          91.82,
+          81.86,
+          110.19,
+          126.78
+        ]
+      },
+      "034_set_an_alarm_for_seven_thirty_am.wav": {
+        "mean_ms": 105.02,
+        "p50_ms": 103.41,
+        "p95_ms": 127.52,
+        "stdev_ms": 13.2,
+        "runs": [
+          138.98,
+          98.25,
+          100.86,
+          113.51,
+          92.91,
+          106.08,
+          105.95,
+          94.18,
+          107.85,
+          91.62
+        ]
+      },
+      "035_remind_me_at_three_fifteen_pm.wav": {
+        "mean_ms": 98.37,
+        "p50_ms": 96.3,
+        "p95_ms": 116.07,
+        "stdev_ms": 10.91,
+        "runs": [
+          85.9,
+          87.94,
+          106.15,
+          97.99,
+          101.63,
+          91.96,
+          86.68,
+          121.75,
+          94.6,
+          109.13
+        ]
+      },
+      "036_schedule_a_meeting_for_next_tuesday.wav": {
+        "mean_ms": 96.74,
+        "p50_ms": 98.02,
+        "p95_ms": 105.93,
+        "stdev_ms": 7.44,
+        "runs": [
+          106.28,
+          98.49,
+          105.51,
+          101.73,
+          85.64,
+          97.54,
+          86.59,
+          101.9,
+          86.54,
+          97.21
+        ]
+      },
+      "037_delete_files_older_than_thirty_days.wav": {
+        "mean_ms": 92.21,
+        "p50_ms": 95.03,
+        "p95_ms": 103.56,
+        "stdev_ms": 9.38,
+        "runs": [
+          89.32,
+          107.02,
+          99.33,
+          79.09,
+          88.91,
+          94.66,
+          73.57,
+          97.4,
+          97.39,
+          95.4
+        ]
+      },
+      "038_show_logs_from_the_last_hour.wav": {
+        "mean_ms": 94.68,
+        "p50_ms": 95.67,
+        "p95_ms": 103.46,
+        "stdev_ms": 7.36,
+        "runs": [
+          91.97,
+          85.18,
+          102.03,
+          99.37,
+          101.09,
+          83.23,
+          100.83,
+          88.8,
+          104.63,
+          89.66
+        ]
+      },
+      "039_calculate_fifteen_percent_of_two_hundred.wav": {
+        "mean_ms": 106.12,
+        "p50_ms": 110.35,
+        "p95_ms": 119.74,
+        "stdev_ms": 11.37,
+        "runs": [
+          100.88,
+          113.35,
+          107.89,
+          86.35,
+          117.99,
+          90.09,
+          96.72,
+          121.17,
+          114.0,
+          112.82
+        ]
+      },
+      "040_what_is_the_date_next_friday.wav": {
+        "mean_ms": 74.31,
+        "p50_ms": 75.71,
+        "p95_ms": 81.21,
+        "stdev_ms": 6.14,
+        "runs": [
+          71.33,
+          63.26,
+          70.78,
+          79.42,
+          81.53,
+          78.04,
+          65.57,
+          73.38,
+          79.0,
+          80.81
+        ]
+      },
+      "041_run_the_backup_at_midnight.wav": {
+        "mean_ms": 67.6,
+        "p50_ms": 68.02,
+        "p95_ms": 78.59,
+        "stdev_ms": 6.93,
+        "runs": [
+          59.2,
+          58.87,
+          82.47,
+          60.87,
+          68.37,
+          67.67,
+          71.13,
+          64.17,
+          73.85,
+          69.4
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "protocol": "correct (chunk feed + decode loop + tail padding + input_finished + final decode)",
+  "model": "sherpa-onnx-streaming-zipformer-en-2023-06-26",
+  "sherpa_onnx_version": "1.13.8",
+  "results": [
+    {
+      "file": "0.wav",
+      "reference": "AFTER EARLY NIGHTFALL THE YELLOW LAMPS WOULD LIGHT UP HERE AND THERE THE SQUALID QUARTER OF THE BROTHELS",
+      "hypothesis": "AFTER EARLY NIGHTFALL THE YELLOW LAMPS WOULD LIGHT UP HERE AND THERE THE SQUALID QUARTER OF THE BROTHELS",
+      "exact_match": true,
+      "decode_time_s": 0.3794,
+      "duration_s": 6.625
+    },
+    {
+      "file": "1.wav",
+      "reference": "GOD AS A DIRECT CONSEQUENCE OF THE SIN WHICH MAN THUS PUNISHED HAD GIVEN HER A LOVELY CHILD WHOSE PLACE WAS ON THAT SAME DISHONOURED BOSOM TO CONNECT HER PARENT FOR EVER WITH THE RACE AND DESCENT OF MORTALS AND TO BE FINALLY A BLESSED SOUL IN HEAVEN",
+      "hypothesis": "GOD AS A DIRECT CONSEQUENCE OF THE SIN WHICH MAN THUS PUNISHED HAD GIVEN HER A LOVELY CHILD WHOSE PLACE WAS ON THAT SAME DISHONOURED BOSOM TO CONNECT HER PARENT FOR EVER WITH THE RACE AND DESCENT OF MORTALS AND TO BE FINALLY A BLESSED SOUL IN HEAVEN",
+      "exact_match": true,
+      "decode_time_s": 0.8797,
+      "duration_s": 16.715
+    },
+    {
+      "file": "8k.wav",
+      "reference": "YET THESE THOUGHTS AFFECTED HESTER PRYNNE LESS WITH HOPE THAN APPREHENSION",
+      "hypothesis": "YET THESE THOUGHTS AFFECTED HESTER PRYNNE LESS WITH HOPE THAN APPREHENSION",
+      "exact_match": true,
+      "decode_time_s": 0.3135,
+      "duration_s": 4.825
+    }
+  ]
+}

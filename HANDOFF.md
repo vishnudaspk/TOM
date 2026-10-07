@@ -67,30 +67,46 @@ AsyncGenerator[str]  (SentenceStreamer)
 - `VoicePipelineManager` is still untouched; 9.5 must decide how `InteractionCore` relates to it (Decision **044** says do not duplicate its state machine).
 - Epoch invalidation and turn recovery are still **unimplemented** — 9.5 owns them.
 - Phase 9.0–9.4 tests are **not** in the last full-repo 1301 baseline.
-- **faster-whisper CPU cannot meet SLA targets** (350 ms finalization target vs ~1350 ms best). Streaming-native STT (WS2) is required for SLA compliance. **CORRECTION**: sherpa-large meets finalization target (p50=15.3 ms, p95=31.8 ms on `final_from_endpoint` metric) but fails accuracy (64.8% WER).
-- **sherpa-large streaming unusable for commands** — domain mismatch (LibriSpeech audiobooks only). Need hybrid: streaming partials from better model + offline final from Moonshine/Parakeet.
-- Offline HYBRID-FINAL candidates (Moonshine-tiny, Parakeet TDT) not yet evaluated.
-- **Smart Turn false-completes on hesitations** — 100% false-complete rate on hesitation prefix makes it unsafe as sole endpoint detector. Must combine with VAD hangover or use as library with override logic.
-- **Pipecat pipeline not adopted** — components (Smart Turn, Silero VAD) to be used as libraries; pipeline architecture deferred.
+- **STT tradeoffs observed (Checkpoint 1 Fix Round)**:
+  - `faster-whisper small.en (beam_size=1)`: Best accuracy overall (WER 13.02%, commands 7.22%, numbers exact 5/8, numbers WER 9.82%) [MEASURED: `tests/benchmarks/voice/ws2/results/rescored_accuracy.json`]. CPU scales cleanly with zero spin-waiting (406% of 1 core / 20.3% of machine at 4 threads) [MEASURED: `f5_cpu_rebuild.json`]. Latency is p50=1570.9 ms, p95=2195.2 ms from endpoint due to 30 s window padding.
+  - `Moonshine-base int8 offline`: Best latency-accuracy tradeoff among fast offline models (p50=70.42 ms, p95=99.99 ms in 2–3 s bucket, peak RAM 349.1 MB, zero high-variance flags) [MEASURED: `f4_candidate_models.json`]. Commands WER is 13.89%, but overall WER is 26.55% (questions 35.05%, names 34.90%). Exhibits ONNX Runtime spin-waiting at threads>=2 (1298% of 1 core / 64.9% of machine at 4 threads).
+  - `Moonshine-tiny int8 offline`: p50=33.93 ms, p95=57.17 ms, but high variance (31.7%) and overall WER is 40.92% (commands 35.22%).
+  - `sherpa-large streaming`: Meets latency (p50=28.98 ms with real H=600 ms) [MEASURED: `f6_h600_latency.json`], but REJECTED FOR ACCURACY (WER 55.40%, commands 55.78%, numbers exact 0/8) due to LibriSpeech training domain mismatch.
+  - `NeMo Parakeet TDT`: 110M model is NOT FOUND on HF (empty repo); 0.6B int8 model is NOT SUPPORTED in installed sherpa-onnx 1.13.8 (crashes with `InitDecoder:303 'vocab_size' does not exist in metadata`).
+  - `Real VAD hangover`: `H = 600 ms` in TOM config [SOURCE: `python/tom/voice/microphone.py` L48].
+  - `Smart Turn`: Suspect claims suspended; queued for Task 4 re-test using all 15 hesitation clips and real config H=600 ms.
 
-## Verification (already run, 2026-10-06)
+## Verification & Reproduction Commands (Checkpoint 1 Fix Round)
 
 ```powershell
-pytest tests/unit/voice tests/integration/voice tests/unit/agents tests/integration/agents tests/unit/core tests/unit/ipc
-# 833 passed
-pytest tests/unit/voice tests/integration/voice
-# 317 passed
-ruff check python/tom/schemas/turn.py python/tom/voice/turn_manager.py python/tom/voice/response_policy.py python/tom/voice/streaming_tts.py python/tom/voice/__init__.py tests/unit/voice/test_turn_manager.py tests/unit/voice/test_response_policy.py tests/unit/voice/test_streaming_tts.py
-ruff format --check <same paths>
+# F1: Package versions audit
+.venv-ws2-bench\Scripts\python.exe tests\benchmarks\voice\ws2\audit_versions.py
+
+# F2: Normalizer unit tests & rescoring across all engines
+.venv-ws2-bench\Scripts\python.exe tests\benchmarks\voice\ws2\normalizer.py
+.venv-ws2-bench\Scripts\python.exe tests\benchmarks\voice\ws2\rescore_all.py
+
+# F3: Clipped-start silence padding diagnostic (A/B)
+.venv-ws2-bench\Scripts\python.exe tests\benchmarks\voice\ws2\f3_clipped_diagnostic.py
+
+# F4: Candidate models evaluation (Moonshine-base & Parakeet)
+.venv-ws2-bench\Scripts\python.exe tests\benchmarks\voice\ws2\eval_candidates_f4.py
+.venv-ws2-bench\Scripts\python.exe tests\benchmarks\voice\ws2\test_parakeet.py
+
+# F5: CPU measurement rebuild (continuous 100ms sampling)
+.venv-ws2-bench\Scripts\python.exe tests\benchmarks\voice\ws2\f5_cpu_rebuild.py
+
+# F6: Latency recomputation with real H=600ms
+.venv-ws2-bench\Scripts\python.exe tests\benchmarks\voice\ws2\measure_h600.py
 ```
 
-Full `pytest tests/unit/ tests/integration/` **not** re-run. After WS2, run the targeted set above plus the new streaming STT adapter tests.
+## What NOT to do
+- Do NOT edit files under `python/tom/`, `config/`, `rust/`, or touch IPC protocol.
+- Do NOT modify production `.venv` (use throwaway `.venv-ws2-bench` or `.venv-ws3-bench`).
+- Do NOT start WS4–WS7 or revise `docs/design/turn_taking_controller.md` before user sign-off.
+- Do NOT use GPU STT (CPU-first invariant).
+- Do NOT trust unconsumed generator timings or unpaced streaming audio feeds.
 
-## Next Steps for WS2
-
-1. Create throwaway venv `.venv-ws2-bench` and install sherpa-onnx, Moonshine, Parakeet candidates.
-2. Verify model availability (sherpa-onnx English streaming Zipformer, Moonshine ONNX, Parakeet TDT ONNX via sherpa-onnx).
-3. Create test utterance set (`tests/benchmarks/voice/ws2/utterances.txt` — 40+ realistic utterances).
-4. Build benchmark harness with fixed streaming definitions (100 ms chunks, real-time pacing, first partial = first non-empty text yield, finalization = VAD endpoint to final text).
-5. Run 20+ runs per utterance per engine per condition (LM Studio loaded/unloaded), randomized order.
-6. Report latency tables (Table A), accuracy tables (Table B), practicality table (Table C), target check, recommendation.
+## Next Step (awaiting user review)
+- User review of Checkpoint 1 Fix Round report.
+- Upon approval, proceed immediately to **Task 4** (turn-taking re-test with all 15 clips, split points, H=600 ms, Smart Turn v3 official comparison, and Plan B rule-based completeness).

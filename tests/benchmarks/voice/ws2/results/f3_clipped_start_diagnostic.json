@@ -1,0 +1,2510 @@
+{
+  "onsets": {
+    "001_open_the_settings_window.wav": {
+      "idx": 0,
+      "total_duration_s": 2.7,
+      "pre_speech_silence_s": 1.13,
+      "pre_speech_silence_ms": 1130.0
+    },
+    "002_close_the_current_tab.wav": {
+      "idx": 1,
+      "total_duration_s": 2.3,
+      "pre_speech_silence_s": 0.86,
+      "pre_speech_silence_ms": 860.0
+    },
+    "003_minimize_all_windows.wav": {
+      "idx": 2,
+      "total_duration_s": 2.8,
+      "pre_speech_silence_s": 0.99,
+      "pre_speech_silence_ms": 990.0
+    },
+    "004_take_a_screenshot.wav": {
+      "idx": 3,
+      "total_duration_s": 2.4,
+      "pre_speech_silence_s": 1.29,
+      "pre_speech_silence_ms": 1290.0
+    },
+    "005_set_a_timer_for_five_minutes.wav": {
+      "idx": 4,
+      "total_duration_s": 2.7,
+      "pre_speech_silence_s": 1.15,
+      "pre_speech_silence_ms": 1150.0
+    },
+    "006_turn_up_the_volume.wav": {
+      "idx": 5,
+      "total_duration_s": 2.0,
+      "pre_speech_silence_s": 0.78,
+      "pre_speech_silence_ms": 780.0
+    },
+    "007_mute_the_microphone.wav": {
+      "idx": 6,
+      "total_duration_s": 2.0,
+      "pre_speech_silence_s": 0.78,
+      "pre_speech_silence_ms": 780.0
+    },
+    "008_open_the_downloads_folder.wav": {
+      "idx": 7,
+      "total_duration_s": 2.9,
+      "pre_speech_silence_s": 1.05,
+      "pre_speech_silence_ms": 1050.0
+    },
+    "009_delete_the_temporary_files.wav": {
+      "idx": 8,
+      "total_duration_s": 2.8,
+      "pre_speech_silence_s": 1.01,
+      "pre_speech_silence_ms": 1010.0
+    },
+    "010_run_the_test_suite.wav": {
+      "idx": 9,
+      "total_duration_s": 2.6,
+      "pre_speech_silence_s": 1.18,
+      "pre_speech_silence_ms": 1180.0
+    },
+    "011_restart_the_application.wav": {
+      "idx": 10,
+      "total_duration_s": 2.4,
+      "pre_speech_silence_s": 0.69,
+      "pre_speech_silence_ms": 690.0
+    },
+    "012_show_me_the_task_manager.wav": {
+      "idx": 11,
+      "total_duration_s": 2.3,
+      "pre_speech_silence_s": 0.89,
+      "pre_speech_silence_ms": 890.0
+    },
+    "013_lock_the_screen.wav": {
+      "idx": 12,
+      "total_duration_s": 2.3,
+      "pre_speech_silence_s": 1.13,
+      "pre_speech_silence_ms": 1130.0
+    },
+    "014_empty_the_recycle_bin.wav": {
+      "idx": 13,
+      "total_duration_s": 2.2,
+      "pre_speech_silence_s": 0.85,
+      "pre_speech_silence_ms": 850.0
+    },
+    "015_switch_to_dark_mode.wav": {
+      "idx": 14,
+      "total_duration_s": 2.2,
+      "pre_speech_silence_s": 1.16,
+      "pre_speech_silence_ms": 1160.0
+    },
+    "016_what_is_the_current_time.wav": {
+      "idx": 15,
+      "total_duration_s": 1.8,
+      "pre_speech_silence_s": 0.5,
+      "pre_speech_silence_ms": 500.0
+    },
+    "017_how_much_disk_space_is_left.wav": {
+      "idx": 16,
+      "total_duration_s": 2.5,
+      "pre_speech_silence_s": 0.58,
+      "pre_speech_silence_ms": 580.0
+    },
+    "018_what_version_of_python_is_installed.wav": {
+      "idx": 17,
+      "total_duration_s": 3.0,
+      "pre_speech_silence_s": 0.52,
+      "pre_speech_silence_ms": 520.0
+    },
+    "019_where_is_the_config_file_located.wav": {
+      "idx": 18,
+      "total_duration_s": 2.6,
+      "pre_speech_silence_s": 1.02,
+      "pre_speech_silence_ms": 1020.0
+    },
+    "020_why_is_the_build_failing.wav": {
+      "idx": 19,
+      "total_duration_s": 2.9,
+      "pre_speech_silence_s": 1.08,
+      "pre_speech_silence_ms": 1080.0
+    },
+    "021_which_process_is_using_the_most_memory.wav": {
+      "idx": 20,
+      "total_duration_s": 2.9,
+      "pre_speech_silence_s": 0.71,
+      "pre_speech_silence_ms": 710.0
+    },
+    "022_when_was_the_last_backup_made.wav": {
+      "idx": 21,
+      "total_duration_s": 3.0,
+      "pre_speech_silence_s": 1.01,
+      "pre_speech_silence_ms": 1010.0
+    },
+    "023_can_you_explain_this_error_message.wav": {
+      "idx": 22,
+      "total_duration_s": 3.2,
+      "pre_speech_silence_s": 0.97,
+      "pre_speech_silence_ms": 970.0
+    },
+    "024_what_are_the_system_requirements.wav": {
+      "idx": 23,
+      "total_duration_s": 2.4,
+      "pre_speech_silence_s": 0.73,
+      "pre_speech_silence_ms": 730.0
+    },
+    "025_how_do_i_enable_the_dark_theme.wav": {
+      "idx": 24,
+      "total_duration_s": 2.8,
+      "pre_speech_silence_s": 0.87,
+      "pre_speech_silence_ms": 870.0
+    },
+    "026_tom_show_me_the_dashboard.wav": {
+      "idx": 25,
+      "total_duration_s": 2.3,
+      "pre_speech_silence_s": 0.56,
+      "pre_speech_silence_ms": 560.0
+    },
+    "027_tom_what_is_the_status_of_the_build.wav": {
+      "idx": 26,
+      "total_duration_s": 2.9,
+      "pre_speech_silence_s": 0.64,
+      "pre_speech_silence_ms": 640.0
+    },
+    "028_tom_open_the_project_settings.wav": {
+      "idx": 27,
+      "total_duration_s": 3.7,
+      "pre_speech_silence_s": 1.0,
+      "pre_speech_silence_ms": 1000.0
+    },
+    "029_tom_search_for_the_resource_manager.wav": {
+      "idx": 28,
+      "total_duration_s": 3.3,
+      "pre_speech_silence_s": 0.9,
+      "pre_speech_silence_ms": 900.0
+    },
+    "030_tom_minimize_the_terminal_silently.wav": {
+      "idx": 29,
+      "total_duration_s": 3.3,
+      "pre_speech_silence_s": 0.67,
+      "pre_speech_silence_ms": 670.0
+    },
+    "031_tom_read_the_last_commit_message.wav": {
+      "idx": 30,
+      "total_duration_s": 3.2,
+      "pre_speech_silence_s": 0.9,
+      "pre_speech_silence_ms": 900.0
+    },
+    "032_tom_run_the_integration_tests.wav": {
+      "idx": 31,
+      "total_duration_s": 3.2,
+      "pre_speech_silence_s": 0.84,
+      "pre_speech_silence_ms": 840.0
+    },
+    "033_tom_what_changed_in_the_last_commit.wav": {
+      "idx": 32,
+      "total_duration_s": 3.3,
+      "pre_speech_silence_s": 0.63,
+      "pre_speech_silence_ms": 630.0
+    },
+    "034_set_an_alarm_for_seven_thirty_am.wav": {
+      "idx": 33,
+      "total_duration_s": 3.3,
+      "pre_speech_silence_s": 1.12,
+      "pre_speech_silence_ms": 1120.0
+    },
+    "035_remind_me_at_three_fifteen_pm.wav": {
+      "idx": 34,
+      "total_duration_s": 2.9,
+      "pre_speech_silence_s": 0.68,
+      "pre_speech_silence_ms": 680.0
+    },
+    "036_schedule_a_meeting_for_next_tuesday.wav": {
+      "idx": 35,
+      "total_duration_s": 3.3,
+      "pre_speech_silence_s": 0.68,
+      "pre_speech_silence_ms": 680.0
+    },
+    "037_delete_files_older_than_thirty_days.wav": {
+      "idx": 36,
+      "total_duration_s": 3.0,
+      "pre_speech_silence_s": 0.73,
+      "pre_speech_silence_ms": 730.0
+    },
+    "038_show_logs_from_the_last_hour.wav": {
+      "idx": 37,
+      "total_duration_s": 3.7,
+      "pre_speech_silence_s": 0.67,
+      "pre_speech_silence_ms": 670.0
+    },
+    "039_calculate_fifteen_percent_of_two_hundred.wav": {
+      "idx": 38,
+      "total_duration_s": 2.9,
+      "pre_speech_silence_s": 0.67,
+      "pre_speech_silence_ms": 670.0
+    },
+    "040_what_is_the_date_next_friday.wav": {
+      "idx": 39,
+      "total_duration_s": 2.7,
+      "pre_speech_silence_s": 0.68,
+      "pre_speech_silence_ms": 680.0
+    },
+    "041_run_the_backup_at_midnight.wav": {
+      "idx": 40,
+      "total_duration_s": 2.0,
+      "pre_speech_silence_s": 0.52,
+      "pre_speech_silence_ms": 520.0
+    }
+  },
+  "faster_whisper": {
+    "original": {
+      "overall_wer": 0.1302,
+      "first_word_error_rate": 0.2927,
+      "first_word_errors_count": 12,
+      "items": [
+        {
+          "file": "001_open_the_settings_window.wav",
+          "norm_ref": "open the settings window",
+          "norm_hyp": "open the settings window",
+          "wer": 0.0,
+          "ref_first_word": "open",
+          "hyp_first_word": "open",
+          "first_word_match": true
+        },
+        {
+          "file": "002_close_the_current_tab.wav",
+          "norm_ref": "close the current tab",
+          "norm_hyp": "close the current app",
+          "wer": 0.25,
+          "ref_first_word": "close",
+          "hyp_first_word": "close",
+          "first_word_match": true
+        },
+        {
+          "file": "003_minimize_all_windows.wav",
+          "norm_ref": "minimize all windows",
+          "norm_hyp": "minimize all windows",
+          "wer": 0.0,
+          "ref_first_word": "minimize",
+          "hyp_first_word": "minimize",
+          "first_word_match": true
+        },
+        {
+          "file": "004_take_a_screenshot.wav",
+          "norm_ref": "take a screenshot",
+          "norm_hyp": "take a screenshot",
+          "wer": 0.0,
+          "ref_first_word": "take",
+          "hyp_first_word": "take",
+          "first_word_match": true
+        },
+        {
+          "file": "005_set_a_timer_for_five_minutes.wav",
+          "norm_ref": "set a timer for 5 minutes",
+          "norm_hyp": "set a timer for 5 minutes",
+          "wer": 0.0,
+          "ref_first_word": "set",
+          "hyp_first_word": "set",
+          "first_word_match": true
+        },
+        {
+          "file": "006_turn_up_the_volume.wav",
+          "norm_ref": "turn up the volume",
+          "norm_hyp": "do help the volume",
+          "wer": 0.5,
+          "ref_first_word": "turn",
+          "hyp_first_word": "do",
+          "first_word_match": false
+        },
+        {
+          "file": "007_mute_the_microphone.wav",
+          "norm_ref": "mute the microphone",
+          "norm_hyp": "mute the microphone",
+          "wer": 0.0,
+          "ref_first_word": "mute",
+          "hyp_first_word": "mute",
+          "first_word_match": true
+        },
+        {
+          "file": "008_open_the_downloads_folder.wav",
+          "norm_ref": "open the downloads folder",
+          "norm_hyp": "open the downloads folder",
+          "wer": 0.0,
+          "ref_first_word": "open",
+          "hyp_first_word": "open",
+          "first_word_match": true
+        },
+        {
+          "file": "009_delete_the_temporary_files.wav",
+          "norm_ref": "delete the temporary files",
+          "norm_hyp": "delete the temporary files",
+          "wer": 0.0,
+          "ref_first_word": "delete",
+          "hyp_first_word": "delete",
+          "first_word_match": true
+        },
+        {
+          "file": "010_run_the_test_suite.wav",
+          "norm_ref": "run the test suite",
+          "norm_hyp": "run the test suite",
+          "wer": 0.0,
+          "ref_first_word": "run",
+          "hyp_first_word": "run",
+          "first_word_match": true
+        },
+        {
+          "file": "011_restart_the_application.wav",
+          "norm_ref": "restart the application",
+          "norm_hyp": "restart the application",
+          "wer": 0.0,
+          "ref_first_word": "restart",
+          "hyp_first_word": "restart",
+          "first_word_match": true
+        },
+        {
+          "file": "012_show_me_the_task_manager.wav",
+          "norm_ref": "show me the task manager",
+          "norm_hyp": "show me the task manager",
+          "wer": 0.0,
+          "ref_first_word": "show",
+          "hyp_first_word": "show",
+          "first_word_match": true
+        },
+        {
+          "file": "013_lock_the_screen.wav",
+          "norm_ref": "lock the screen",
+          "norm_hyp": "log the screen",
+          "wer": 0.3333,
+          "ref_first_word": "lock",
+          "hyp_first_word": "log",
+          "first_word_match": false
+        },
+        {
+          "file": "014_empty_the_recycle_bin.wav",
+          "norm_ref": "empty the recycle bin",
+          "norm_hyp": "empty the recycle bin",
+          "wer": 0.0,
+          "ref_first_word": "empty",
+          "hyp_first_word": "empty",
+          "first_word_match": true
+        },
+        {
+          "file": "015_switch_to_dark_mode.wav",
+          "norm_ref": "switch to dark mode",
+          "norm_hyp": "switch to dark mode",
+          "wer": 0.0,
+          "ref_first_word": "switch",
+          "hyp_first_word": "switch",
+          "first_word_match": true
+        },
+        {
+          "file": "016_what_is_the_current_time.wav",
+          "norm_ref": "what is the current time",
+          "norm_hyp": "is it going down",
+          "wer": 0.8,
+          "ref_first_word": "what",
+          "hyp_first_word": "is",
+          "first_word_match": false
+        },
+        {
+          "file": "017_how_much_disk_space_is_left.wav",
+          "norm_ref": "how much disk space is left",
+          "norm_hyp": "how much space is left",
+          "wer": 0.1667,
+          "ref_first_word": "how",
+          "hyp_first_word": "how",
+          "first_word_match": true
+        },
+        {
+          "file": "018_what_version_of_python_is_installed.wav",
+          "norm_ref": "what version of python is installed",
+          "norm_hyp": "what version of python is installed",
+          "wer": 0.0,
+          "ref_first_word": "what",
+          "hyp_first_word": "what",
+          "first_word_match": true
+        },
+        {
+          "file": "019_where_is_the_config_file_located.wav",
+          "norm_ref": "where is the config file located",
+          "norm_hyp": "where is the config file located",
+          "wer": 0.0,
+          "ref_first_word": "where",
+          "hyp_first_word": "where",
+          "first_word_match": true
+        },
+        {
+          "file": "020_why_is_the_build_failing.wav",
+          "norm_ref": "why is the build failing",
+          "norm_hyp": "why is the build failing",
+          "wer": 0.0,
+          "ref_first_word": "why",
+          "hyp_first_word": "why",
+          "first_word_match": true
+        },
+        {
+          "file": "021_which_process_is_using_the_most_memory.wav",
+          "norm_ref": "which process is using the most memory",
+          "norm_hyp": "which process is using the most memory",
+          "wer": 0.0,
+          "ref_first_word": "which",
+          "hyp_first_word": "which",
+          "first_word_match": true
+        },
+        {
+          "file": "022_when_was_the_last_backup_made.wav",
+          "norm_ref": "when was the last backup made",
+          "norm_hyp": "when was the last backup made",
+          "wer": 0.0,
+          "ref_first_word": "when",
+          "hyp_first_word": "when",
+          "first_word_match": true
+        },
+        {
+          "file": "023_can_you_explain_this_error_message.wav",
+          "norm_ref": "can you explain this error message",
+          "norm_hyp": "can you explain this error message",
+          "wer": 0.0,
+          "ref_first_word": "can",
+          "hyp_first_word": "can",
+          "first_word_match": true
+        },
+        {
+          "file": "024_what_are_the_system_requirements.wav",
+          "norm_ref": "what are the system requirements",
+          "norm_hyp": "what are the system requirements",
+          "wer": 0.0,
+          "ref_first_word": "what",
+          "hyp_first_word": "what",
+          "first_word_match": true
+        },
+        {
+          "file": "025_how_do_i_enable_the_dark_theme.wav",
+          "norm_ref": "how do i enable the dark theme",
+          "norm_hyp": "how do i enable dark theme",
+          "wer": 0.1429,
+          "ref_first_word": "how",
+          "hyp_first_word": "how",
+          "first_word_match": true
+        },
+        {
+          "file": "026_tom_show_me_the_dashboard.wav",
+          "norm_ref": "tom show me the dashboard",
+          "norm_hyp": "down show me the dashboard",
+          "wer": 0.2,
+          "ref_first_word": "tom",
+          "hyp_first_word": "down",
+          "first_word_match": false
+        },
+        {
+          "file": "027_tom_what_is_the_status_of_the_build.wav",
+          "norm_ref": "tom what is the status of the build",
+          "norm_hyp": "yo what is the status of the build",
+          "wer": 0.125,
+          "ref_first_word": "tom",
+          "hyp_first_word": "yo",
+          "first_word_match": false
+        },
+        {
+          "file": "028_tom_open_the_project_settings.wav",
+          "norm_ref": "tom open the project settings",
+          "norm_hyp": "don t open the project settings",
+          "wer": 0.4,
+          "ref_first_word": "tom",
+          "hyp_first_word": "don",
+          "first_word_match": false
+        },
+        {
+          "file": "029_tom_search_for_the_resource_manager.wav",
+          "norm_ref": "tom search for the resource manager",
+          "norm_hyp": "don t search for the resource manager",
+          "wer": 0.3333,
+          "ref_first_word": "tom",
+          "hyp_first_word": "don",
+          "first_word_match": false
+        },
+        {
+          "file": "030_tom_minimize_the_terminal_silently.wav",
+          "norm_ref": "tom minimize the terminal silently",
+          "norm_hyp": "dom minimize the terminal silently",
+          "wer": 0.2,
+          "ref_first_word": "tom",
+          "hyp_first_word": "dom",
+          "first_word_match": false
+        },
+        {
+          "file": "031_tom_read_the_last_commit_message.wav",
+          "norm_ref": "tom read the last commit message",
+          "norm_hyp": "don t ruin the last commit message",
+          "wer": 0.5,
+          "ref_first_word": "tom",
+          "hyp_first_word": "don",
+          "first_word_match": false
+        },
+        {
+          "file": "032_tom_run_the_integration_tests.wav",
+          "norm_ref": "tom run the integration tests",
+          "norm_hyp": "don t run the integration test",
+          "wer": 0.6,
+          "ref_first_word": "tom",
+          "hyp_first_word": "don",
+          "first_word_match": false
+        },
+        {
+          "file": "033_tom_what_changed_in_the_last_commit.wav",
+          "norm_ref": "tom what changed in the last commit",
+          "norm_hyp": "tom what changed in the last commit",
+          "wer": 0.0,
+          "ref_first_word": "tom",
+          "hyp_first_word": "tom",
+          "first_word_match": true
+        },
+        {
+          "file": "034_set_an_alarm_for_seven_thirty_am.wav",
+          "norm_ref": "set an alarm for 7 30 am",
+          "norm_hyp": "the team alarm for 7 30 am",
+          "wer": 0.2857,
+          "ref_first_word": "set",
+          "hyp_first_word": "the",
+          "first_word_match": false
+        },
+        {
+          "file": "035_remind_me_at_three_fifteen_pm.wav",
+          "norm_ref": "remind me at 3 15 pm",
+          "norm_hyp": "remind me at 3 15 pm",
+          "wer": 0.0,
+          "ref_first_word": "remind",
+          "hyp_first_word": "remind",
+          "first_word_match": true
+        },
+        {
+          "file": "036_schedule_a_meeting_for_next_tuesday.wav",
+          "norm_ref": "schedule a meeting for next thursday",
+          "norm_hyp": "schedule a meeting for next thursday",
+          "wer": 0.0,
+          "ref_first_word": "schedule",
+          "hyp_first_word": "schedule",
+          "first_word_match": true
+        },
+        {
+          "file": "037_delete_files_older_than_thirty_days.wav",
+          "norm_ref": "delete files older than 30 days",
+          "norm_hyp": "till it files older than 30 days",
+          "wer": 0.3333,
+          "ref_first_word": "delete",
+          "hyp_first_word": "till",
+          "first_word_match": false
+        },
+        {
+          "file": "038_show_logs_from_the_last_hour.wav",
+          "norm_ref": "show logs from the last hour",
+          "norm_hyp": "show logs for the last hour",
+          "wer": 0.1667,
+          "ref_first_word": "show",
+          "hyp_first_word": "show",
+          "first_word_match": true
+        },
+        {
+          "file": "039_calculate_fifteen_percent_of_two_hundred.wav",
+          "norm_ref": "calculate 15 percent of 200",
+          "norm_hyp": "calculate 15 percent of 200",
+          "wer": 0.0,
+          "ref_first_word": "calculate",
+          "hyp_first_word": "calculate",
+          "first_word_match": true
+        },
+        {
+          "file": "040_what_is_the_date_next_friday.wav",
+          "norm_ref": "what is the date next friday",
+          "norm_hyp": "what is the date next friday",
+          "wer": 0.0,
+          "ref_first_word": "what",
+          "hyp_first_word": "what",
+          "first_word_match": true
+        },
+        {
+          "file": "041_run_the_backup_at_midnight.wav",
+          "norm_ref": "run the backup at midnight",
+          "norm_hyp": "run the backup at midnight",
+          "wer": 0.0,
+          "ref_first_word": "run",
+          "hyp_first_word": "run",
+          "first_word_match": true
+        }
+      ]
+    },
+    "prepend_300ms": {
+      "overall_wer": 0.1324,
+      "first_word_error_rate": 0.3171,
+      "first_word_errors_count": 13,
+      "items": [
+        {
+          "file": "001_open_the_settings_window.wav",
+          "norm_ref": "open the settings window",
+          "norm_hyp": "open the settings window",
+          "wer": 0.0,
+          "ref_first_word": "open",
+          "hyp_first_word": "open",
+          "first_word_match": true
+        },
+        {
+          "file": "002_close_the_current_tab.wav",
+          "norm_ref": "close the current tab",
+          "norm_hyp": "close the current tab",
+          "wer": 0.0,
+          "ref_first_word": "close",
+          "hyp_first_word": "close",
+          "first_word_match": true
+        },
+        {
+          "file": "003_minimize_all_windows.wav",
+          "norm_ref": "minimize all windows",
+          "norm_hyp": "minimize all windows",
+          "wer": 0.0,
+          "ref_first_word": "minimize",
+          "hyp_first_word": "minimize",
+          "first_word_match": true
+        },
+        {
+          "file": "004_take_a_screenshot.wav",
+          "norm_ref": "take a screenshot",
+          "norm_hyp": "take a screenshot",
+          "wer": 0.0,
+          "ref_first_word": "take",
+          "hyp_first_word": "take",
+          "first_word_match": true
+        },
+        {
+          "file": "005_set_a_timer_for_five_minutes.wav",
+          "norm_ref": "set a timer for 5 minutes",
+          "norm_hyp": "set a timer for 5 minutes",
+          "wer": 0.0,
+          "ref_first_word": "set",
+          "hyp_first_word": "set",
+          "first_word_match": true
+        },
+        {
+          "file": "006_turn_up_the_volume.wav",
+          "norm_ref": "turn up the volume",
+          "norm_hyp": "do help the volume",
+          "wer": 0.5,
+          "ref_first_word": "turn",
+          "hyp_first_word": "do",
+          "first_word_match": false
+        },
+        {
+          "file": "007_mute_the_microphone.wav",
+          "norm_ref": "mute the microphone",
+          "norm_hyp": "mute the microphone",
+          "wer": 0.0,
+          "ref_first_word": "mute",
+          "hyp_first_word": "mute",
+          "first_word_match": true
+        },
+        {
+          "file": "008_open_the_downloads_folder.wav",
+          "norm_ref": "open the downloads folder",
+          "norm_hyp": "open the downloads folder",
+          "wer": 0.0,
+          "ref_first_word": "open",
+          "hyp_first_word": "open",
+          "first_word_match": true
+        },
+        {
+          "file": "009_delete_the_temporary_files.wav",
+          "norm_ref": "delete the temporary files",
+          "norm_hyp": "delete the temporary files",
+          "wer": 0.0,
+          "ref_first_word": "delete",
+          "hyp_first_word": "delete",
+          "first_word_match": true
+        },
+        {
+          "file": "010_run_the_test_suite.wav",
+          "norm_ref": "run the test suite",
+          "norm_hyp": "run the test suite",
+          "wer": 0.0,
+          "ref_first_word": "run",
+          "hyp_first_word": "run",
+          "first_word_match": true
+        },
+        {
+          "file": "011_restart_the_application.wav",
+          "norm_ref": "restart the application",
+          "norm_hyp": "restart the application",
+          "wer": 0.0,
+          "ref_first_word": "restart",
+          "hyp_first_word": "restart",
+          "first_word_match": true
+        },
+        {
+          "file": "012_show_me_the_task_manager.wav",
+          "norm_ref": "show me the task manager",
+          "norm_hyp": "show me the task manager",
+          "wer": 0.0,
+          "ref_first_word": "show",
+          "hyp_first_word": "show",
+          "first_word_match": true
+        },
+        {
+          "file": "013_lock_the_screen.wav",
+          "norm_ref": "lock the screen",
+          "norm_hyp": "log the screen",
+          "wer": 0.3333,
+          "ref_first_word": "lock",
+          "hyp_first_word": "log",
+          "first_word_match": false
+        },
+        {
+          "file": "014_empty_the_recycle_bin.wav",
+          "norm_ref": "empty the recycle bin",
+          "norm_hyp": "empty the recycle bin",
+          "wer": 0.0,
+          "ref_first_word": "empty",
+          "hyp_first_word": "empty",
+          "first_word_match": true
+        },
+        {
+          "file": "015_switch_to_dark_mode.wav",
+          "norm_ref": "switch to dark mode",
+          "norm_hyp": "switch to dark mode",
+          "wer": 0.0,
+          "ref_first_word": "switch",
+          "hyp_first_word": "switch",
+          "first_word_match": true
+        },
+        {
+          "file": "016_what_is_the_current_time.wav",
+          "norm_ref": "what is the current time",
+          "norm_hyp": "is it going down",
+          "wer": 0.8,
+          "ref_first_word": "what",
+          "hyp_first_word": "is",
+          "first_word_match": false
+        },
+        {
+          "file": "017_how_much_disk_space_is_left.wav",
+          "norm_ref": "how much disk space is left",
+          "norm_hyp": "how much space is left",
+          "wer": 0.1667,
+          "ref_first_word": "how",
+          "hyp_first_word": "how",
+          "first_word_match": true
+        },
+        {
+          "file": "018_what_version_of_python_is_installed.wav",
+          "norm_ref": "what version of python is installed",
+          "norm_hyp": "what version of python is installed",
+          "wer": 0.0,
+          "ref_first_word": "what",
+          "hyp_first_word": "what",
+          "first_word_match": true
+        },
+        {
+          "file": "019_where_is_the_config_file_located.wav",
+          "norm_ref": "where is the config file located",
+          "norm_hyp": "where is the config file located",
+          "wer": 0.0,
+          "ref_first_word": "where",
+          "hyp_first_word": "where",
+          "first_word_match": true
+        },
+        {
+          "file": "020_why_is_the_build_failing.wav",
+          "norm_ref": "why is the build failing",
+          "norm_hyp": "why is the build failing",
+          "wer": 0.0,
+          "ref_first_word": "why",
+          "hyp_first_word": "why",
+          "first_word_match": true
+        },
+        {
+          "file": "021_which_process_is_using_the_most_memory.wav",
+          "norm_ref": "which process is using the most memory",
+          "norm_hyp": "which process is using the most memory",
+          "wer": 0.0,
+          "ref_first_word": "which",
+          "hyp_first_word": "which",
+          "first_word_match": true
+        },
+        {
+          "file": "022_when_was_the_last_backup_made.wav",
+          "norm_ref": "when was the last backup made",
+          "norm_hyp": "when was the last backup made",
+          "wer": 0.0,
+          "ref_first_word": "when",
+          "hyp_first_word": "when",
+          "first_word_match": true
+        },
+        {
+          "file": "023_can_you_explain_this_error_message.wav",
+          "norm_ref": "can you explain this error message",
+          "norm_hyp": "can you explain this error message",
+          "wer": 0.0,
+          "ref_first_word": "can",
+          "hyp_first_word": "can",
+          "first_word_match": true
+        },
+        {
+          "file": "024_what_are_the_system_requirements.wav",
+          "norm_ref": "what are the system requirements",
+          "norm_hyp": "what are the system requirements",
+          "wer": 0.0,
+          "ref_first_word": "what",
+          "hyp_first_word": "what",
+          "first_word_match": true
+        },
+        {
+          "file": "025_how_do_i_enable_the_dark_theme.wav",
+          "norm_ref": "how do i enable the dark theme",
+          "norm_hyp": "how do i enable dark theme",
+          "wer": 0.1429,
+          "ref_first_word": "how",
+          "hyp_first_word": "how",
+          "first_word_match": true
+        },
+        {
+          "file": "026_tom_show_me_the_dashboard.wav",
+          "norm_ref": "tom show me the dashboard",
+          "norm_hyp": "down show me the dashboard",
+          "wer": 0.2,
+          "ref_first_word": "tom",
+          "hyp_first_word": "down",
+          "first_word_match": false
+        },
+        {
+          "file": "027_tom_what_is_the_status_of_the_build.wav",
+          "norm_ref": "tom what is the status of the build",
+          "norm_hyp": "yo what is the status of the build",
+          "wer": 0.125,
+          "ref_first_word": "tom",
+          "hyp_first_word": "yo",
+          "first_word_match": false
+        },
+        {
+          "file": "028_tom_open_the_project_settings.wav",
+          "norm_ref": "tom open the project settings",
+          "norm_hyp": "don t open the project settings",
+          "wer": 0.4,
+          "ref_first_word": "tom",
+          "hyp_first_word": "don",
+          "first_word_match": false
+        },
+        {
+          "file": "029_tom_search_for_the_resource_manager.wav",
+          "norm_ref": "tom search for the resource manager",
+          "norm_hyp": "don t search for the resource manager",
+          "wer": 0.3333,
+          "ref_first_word": "tom",
+          "hyp_first_word": "don",
+          "first_word_match": false
+        },
+        {
+          "file": "030_tom_minimize_the_terminal_silently.wav",
+          "norm_ref": "tom minimize the terminal silently",
+          "norm_hyp": "don t minimize the terminal silently",
+          "wer": 0.4,
+          "ref_first_word": "tom",
+          "hyp_first_word": "don",
+          "first_word_match": false
+        },
+        {
+          "file": "031_tom_read_the_last_commit_message.wav",
+          "norm_ref": "tom read the last commit message",
+          "norm_hyp": "don t ring the last commit message",
+          "wer": 0.5,
+          "ref_first_word": "tom",
+          "hyp_first_word": "don",
+          "first_word_match": false
+        },
+        {
+          "file": "032_tom_run_the_integration_tests.wav",
+          "norm_ref": "tom run the integration tests",
+          "norm_hyp": "don t run the integration test",
+          "wer": 0.6,
+          "ref_first_word": "tom",
+          "hyp_first_word": "don",
+          "first_word_match": false
+        },
+        {
+          "file": "033_tom_what_changed_in_the_last_commit.wav",
+          "norm_ref": "tom what changed in the last commit",
+          "norm_hyp": "dom what changed in the last commit",
+          "wer": 0.1429,
+          "ref_first_word": "tom",
+          "hyp_first_word": "dom",
+          "first_word_match": false
+        },
+        {
+          "file": "034_set_an_alarm_for_seven_thirty_am.wav",
+          "norm_ref": "set an alarm for 7 30 am",
+          "norm_hyp": "settings alarm for 7 30 am",
+          "wer": 0.2857,
+          "ref_first_word": "set",
+          "hyp_first_word": "settings",
+          "first_word_match": false
+        },
+        {
+          "file": "035_remind_me_at_three_fifteen_pm.wav",
+          "norm_ref": "remind me at 3 15 pm",
+          "norm_hyp": "remind me at 3 15 pm",
+          "wer": 0.0,
+          "ref_first_word": "remind",
+          "hyp_first_word": "remind",
+          "first_word_match": true
+        },
+        {
+          "file": "036_schedule_a_meeting_for_next_tuesday.wav",
+          "norm_ref": "schedule a meeting for next thursday",
+          "norm_hyp": "schedule a meeting for next thursday",
+          "wer": 0.0,
+          "ref_first_word": "schedule",
+          "hyp_first_word": "schedule",
+          "first_word_match": true
+        },
+        {
+          "file": "037_delete_files_older_than_thirty_days.wav",
+          "norm_ref": "delete files older than 30 days",
+          "norm_hyp": "till it files older than 30 days",
+          "wer": 0.3333,
+          "ref_first_word": "delete",
+          "hyp_first_word": "till",
+          "first_word_match": false
+        },
+        {
+          "file": "038_show_logs_from_the_last_hour.wav",
+          "norm_ref": "show logs from the last hour",
+          "norm_hyp": "show logs for the last hour",
+          "wer": 0.1667,
+          "ref_first_word": "show",
+          "hyp_first_word": "show",
+          "first_word_match": true
+        },
+        {
+          "file": "039_calculate_fifteen_percent_of_two_hundred.wav",
+          "norm_ref": "calculate 15 percent of 200",
+          "norm_hyp": "calculate 15 percent of 200",
+          "wer": 0.0,
+          "ref_first_word": "calculate",
+          "hyp_first_word": "calculate",
+          "first_word_match": true
+        },
+        {
+          "file": "040_what_is_the_date_next_friday.wav",
+          "norm_ref": "what is the date next friday",
+          "norm_hyp": "what is the date next friday",
+          "wer": 0.0,
+          "ref_first_word": "what",
+          "hyp_first_word": "what",
+          "first_word_match": true
+        },
+        {
+          "file": "041_run_the_backup_at_midnight.wav",
+          "norm_ref": "run the backup at midnight",
+          "norm_hyp": "run the backup at midnight",
+          "wer": 0.0,
+          "ref_first_word": "run",
+          "hyp_first_word": "run",
+          "first_word_match": true
+        }
+      ]
+    },
+    "prepend_600ms": {
+      "overall_wer": 0.1241,
+      "first_word_error_rate": 0.2927,
+      "first_word_errors_count": 12,
+      "items": [
+        {
+          "file": "001_open_the_settings_window.wav",
+          "norm_ref": "open the settings window",
+          "norm_hyp": "open the settings window",
+          "wer": 0.0,
+          "ref_first_word": "open",
+          "hyp_first_word": "open",
+          "first_word_match": true
+        },
+        {
+          "file": "002_close_the_current_tab.wav",
+          "norm_ref": "close the current tab",
+          "norm_hyp": "close the current tab",
+          "wer": 0.0,
+          "ref_first_word": "close",
+          "hyp_first_word": "close",
+          "first_word_match": true
+        },
+        {
+          "file": "003_minimize_all_windows.wav",
+          "norm_ref": "minimize all windows",
+          "norm_hyp": "minimize all windows",
+          "wer": 0.0,
+          "ref_first_word": "minimize",
+          "hyp_first_word": "minimize",
+          "first_word_match": true
+        },
+        {
+          "file": "004_take_a_screenshot.wav",
+          "norm_ref": "take a screenshot",
+          "norm_hyp": "take a screenshot",
+          "wer": 0.0,
+          "ref_first_word": "take",
+          "hyp_first_word": "take",
+          "first_word_match": true
+        },
+        {
+          "file": "005_set_a_timer_for_five_minutes.wav",
+          "norm_ref": "set a timer for 5 minutes",
+          "norm_hyp": "set a timer for 5 minutes",
+          "wer": 0.0,
+          "ref_first_word": "set",
+          "hyp_first_word": "set",
+          "first_word_match": true
+        },
+        {
+          "file": "006_turn_up_the_volume.wav",
+          "norm_ref": "turn up the volume",
+          "norm_hyp": "do help the volume",
+          "wer": 0.5,
+          "ref_first_word": "turn",
+          "hyp_first_word": "do",
+          "first_word_match": false
+        },
+        {
+          "file": "007_mute_the_microphone.wav",
+          "norm_ref": "mute the microphone",
+          "norm_hyp": "mute the microphone",
+          "wer": 0.0,
+          "ref_first_word": "mute",
+          "hyp_first_word": "mute",
+          "first_word_match": true
+        },
+        {
+          "file": "008_open_the_downloads_folder.wav",
+          "norm_ref": "open the downloads folder",
+          "norm_hyp": "open the downloads folder",
+          "wer": 0.0,
+          "ref_first_word": "open",
+          "hyp_first_word": "open",
+          "first_word_match": true
+        },
+        {
+          "file": "009_delete_the_temporary_files.wav",
+          "norm_ref": "delete the temporary files",
+          "norm_hyp": "delete the temporary files",
+          "wer": 0.0,
+          "ref_first_word": "delete",
+          "hyp_first_word": "delete",
+          "first_word_match": true
+        },
+        {
+          "file": "010_run_the_test_suite.wav",
+          "norm_ref": "run the test suite",
+          "norm_hyp": "run the test suite",
+          "wer": 0.0,
+          "ref_first_word": "run",
+          "hyp_first_word": "run",
+          "first_word_match": true
+        },
+        {
+          "file": "011_restart_the_application.wav",
+          "norm_ref": "restart the application",
+          "norm_hyp": "restart the application",
+          "wer": 0.0,
+          "ref_first_word": "restart",
+          "hyp_first_word": "restart",
+          "first_word_match": true
+        },
+        {
+          "file": "012_show_me_the_task_manager.wav",
+          "norm_ref": "show me the task manager",
+          "norm_hyp": "show me the task manager",
+          "wer": 0.0,
+          "ref_first_word": "show",
+          "hyp_first_word": "show",
+          "first_word_match": true
+        },
+        {
+          "file": "013_lock_the_screen.wav",
+          "norm_ref": "lock the screen",
+          "norm_hyp": "log the screen",
+          "wer": 0.3333,
+          "ref_first_word": "lock",
+          "hyp_first_word": "log",
+          "first_word_match": false
+        },
+        {
+          "file": "014_empty_the_recycle_bin.wav",
+          "norm_ref": "empty the recycle bin",
+          "norm_hyp": "empty the recycle bin",
+          "wer": 0.0,
+          "ref_first_word": "empty",
+          "hyp_first_word": "empty",
+          "first_word_match": true
+        },
+        {
+          "file": "015_switch_to_dark_mode.wav",
+          "norm_ref": "switch to dark mode",
+          "norm_hyp": "switch to dark mode",
+          "wer": 0.0,
+          "ref_first_word": "switch",
+          "hyp_first_word": "switch",
+          "first_word_match": true
+        },
+        {
+          "file": "016_what_is_the_current_time.wav",
+          "norm_ref": "what is the current time",
+          "norm_hyp": "is it going down",
+          "wer": 0.8,
+          "ref_first_word": "what",
+          "hyp_first_word": "is",
+          "first_word_match": false
+        },
+        {
+          "file": "017_how_much_disk_space_is_left.wav",
+          "norm_ref": "how much disk space is left",
+          "norm_hyp": "how much space is left",
+          "wer": 0.1667,
+          "ref_first_word": "how",
+          "hyp_first_word": "how",
+          "first_word_match": true
+        },
+        {
+          "file": "018_what_version_of_python_is_installed.wav",
+          "norm_ref": "what version of python is installed",
+          "norm_hyp": "what version of python is installed",
+          "wer": 0.0,
+          "ref_first_word": "what",
+          "hyp_first_word": "what",
+          "first_word_match": true
+        },
+        {
+          "file": "019_where_is_the_config_file_located.wav",
+          "norm_ref": "where is the config file located",
+          "norm_hyp": "where is the config file located",
+          "wer": 0.0,
+          "ref_first_word": "where",
+          "hyp_first_word": "where",
+          "first_word_match": true
+        },
+        {
+          "file": "020_why_is_the_build_failing.wav",
+          "norm_ref": "why is the build failing",
+          "norm_hyp": "why is the build failing",
+          "wer": 0.0,
+          "ref_first_word": "why",
+          "hyp_first_word": "why",
+          "first_word_match": true
+        },
+        {
+          "file": "021_which_process_is_using_the_most_memory.wav",
+          "norm_ref": "which process is using the most memory",
+          "norm_hyp": "which process is using the most memory",
+          "wer": 0.0,
+          "ref_first_word": "which",
+          "hyp_first_word": "which",
+          "first_word_match": true
+        },
+        {
+          "file": "022_when_was_the_last_backup_made.wav",
+          "norm_ref": "when was the last backup made",
+          "norm_hyp": "when was the last backup made",
+          "wer": 0.0,
+          "ref_first_word": "when",
+          "hyp_first_word": "when",
+          "first_word_match": true
+        },
+        {
+          "file": "023_can_you_explain_this_error_message.wav",
+          "norm_ref": "can you explain this error message",
+          "norm_hyp": "can you explain this error message",
+          "wer": 0.0,
+          "ref_first_word": "can",
+          "hyp_first_word": "can",
+          "first_word_match": true
+        },
+        {
+          "file": "024_what_are_the_system_requirements.wav",
+          "norm_ref": "what are the system requirements",
+          "norm_hyp": "what are the system requirements",
+          "wer": 0.0,
+          "ref_first_word": "what",
+          "hyp_first_word": "what",
+          "first_word_match": true
+        },
+        {
+          "file": "025_how_do_i_enable_the_dark_theme.wav",
+          "norm_ref": "how do i enable the dark theme",
+          "norm_hyp": "how do i enable dark theme",
+          "wer": 0.1429,
+          "ref_first_word": "how",
+          "hyp_first_word": "how",
+          "first_word_match": true
+        },
+        {
+          "file": "026_tom_show_me_the_dashboard.wav",
+          "norm_ref": "tom show me the dashboard",
+          "norm_hyp": "down show me the dashboard",
+          "wer": 0.2,
+          "ref_first_word": "tom",
+          "hyp_first_word": "down",
+          "first_word_match": false
+        },
+        {
+          "file": "027_tom_what_is_the_status_of_the_build.wav",
+          "norm_ref": "tom what is the status of the build",
+          "norm_hyp": "what is the status of the build",
+          "wer": 0.125,
+          "ref_first_word": "tom",
+          "hyp_first_word": "what",
+          "first_word_match": false
+        },
+        {
+          "file": "028_tom_open_the_project_settings.wav",
+          "norm_ref": "tom open the project settings",
+          "norm_hyp": "don t open the project settings",
+          "wer": 0.4,
+          "ref_first_word": "tom",
+          "hyp_first_word": "don",
+          "first_word_match": false
+        },
+        {
+          "file": "029_tom_search_for_the_resource_manager.wav",
+          "norm_ref": "tom search for the resource manager",
+          "norm_hyp": "don t search for the resource manager",
+          "wer": 0.3333,
+          "ref_first_word": "tom",
+          "hyp_first_word": "don",
+          "first_word_match": false
+        },
+        {
+          "file": "030_tom_minimize_the_terminal_silently.wav",
+          "norm_ref": "tom minimize the terminal silently",
+          "norm_hyp": "dom minimize the terminal silently",
+          "wer": 0.2,
+          "ref_first_word": "tom",
+          "hyp_first_word": "dom",
+          "first_word_match": false
+        },
+        {
+          "file": "031_tom_read_the_last_commit_message.wav",
+          "norm_ref": "tom read the last commit message",
+          "norm_hyp": "don t ring the last commit message",
+          "wer": 0.5,
+          "ref_first_word": "tom",
+          "hyp_first_word": "don",
+          "first_word_match": false
+        },
+        {
+          "file": "032_tom_run_the_integration_tests.wav",
+          "norm_ref": "tom run the integration tests",
+          "norm_hyp": "don t run the integration test",
+          "wer": 0.6,
+          "ref_first_word": "tom",
+          "hyp_first_word": "don",
+          "first_word_match": false
+        },
+        {
+          "file": "033_tom_what_changed_in_the_last_commit.wav",
+          "norm_ref": "tom what changed in the last commit",
+          "norm_hyp": "tom what changed in the last commit",
+          "wer": 0.0,
+          "ref_first_word": "tom",
+          "hyp_first_word": "tom",
+          "first_word_match": true
+        },
+        {
+          "file": "034_set_an_alarm_for_seven_thirty_am.wav",
+          "norm_ref": "set an alarm for 7 30 am",
+          "norm_hyp": "setting alarm for 7 30 am",
+          "wer": 0.2857,
+          "ref_first_word": "set",
+          "hyp_first_word": "setting",
+          "first_word_match": false
+        },
+        {
+          "file": "035_remind_me_at_three_fifteen_pm.wav",
+          "norm_ref": "remind me at 3 15 pm",
+          "norm_hyp": "remind me at 3 15 pm",
+          "wer": 0.0,
+          "ref_first_word": "remind",
+          "hyp_first_word": "remind",
+          "first_word_match": true
+        },
+        {
+          "file": "036_schedule_a_meeting_for_next_tuesday.wav",
+          "norm_ref": "schedule a meeting for next thursday",
+          "norm_hyp": "schedule a meeting for next thursday",
+          "wer": 0.0,
+          "ref_first_word": "schedule",
+          "hyp_first_word": "schedule",
+          "first_word_match": true
+        },
+        {
+          "file": "037_delete_files_older_than_thirty_days.wav",
+          "norm_ref": "delete files older than 30 days",
+          "norm_hyp": "till it files older than 30 days",
+          "wer": 0.3333,
+          "ref_first_word": "delete",
+          "hyp_first_word": "till",
+          "first_word_match": false
+        },
+        {
+          "file": "038_show_logs_from_the_last_hour.wav",
+          "norm_ref": "show logs from the last hour",
+          "norm_hyp": "show logs for the last hour",
+          "wer": 0.1667,
+          "ref_first_word": "show",
+          "hyp_first_word": "show",
+          "first_word_match": true
+        },
+        {
+          "file": "039_calculate_fifteen_percent_of_two_hundred.wav",
+          "norm_ref": "calculate 15 percent of 200",
+          "norm_hyp": "calculate 15 percent of 200",
+          "wer": 0.0,
+          "ref_first_word": "calculate",
+          "hyp_first_word": "calculate",
+          "first_word_match": true
+        },
+        {
+          "file": "040_what_is_the_date_next_friday.wav",
+          "norm_ref": "what is the date next friday",
+          "norm_hyp": "what is the date next friday",
+          "wer": 0.0,
+          "ref_first_word": "what",
+          "hyp_first_word": "what",
+          "first_word_match": true
+        },
+        {
+          "file": "041_run_the_backup_at_midnight.wav",
+          "norm_ref": "run the backup at midnight",
+          "norm_hyp": "run the backup at midnight",
+          "wer": 0.0,
+          "ref_first_word": "run",
+          "hyp_first_word": "run",
+          "first_word_match": true
+        }
+      ]
+    }
+  },
+  "moonshine_tiny": {
+    "original": {
+      "overall_wer": 0.4092,
+      "first_word_error_rate": 0.4878,
+      "first_word_errors_count": 20,
+      "items": [
+        {
+          "file": "001_open_the_settings_window.wav",
+          "norm_ref": "open the settings window",
+          "norm_hyp": "open the settings window",
+          "wer": 0.0,
+          "ref_first_word": "open",
+          "hyp_first_word": "open",
+          "first_word_match": true
+        },
+        {
+          "file": "002_close_the_current_tab.wav",
+          "norm_ref": "close the current tab",
+          "norm_hyp": "close the current tab",
+          "wer": 0.0,
+          "ref_first_word": "close",
+          "hyp_first_word": "close",
+          "first_word_match": true
+        },
+        {
+          "file": "003_minimize_all_windows.wav",
+          "norm_ref": "minimize all windows",
+          "norm_hyp": "minimize all windows",
+          "wer": 0.0,
+          "ref_first_word": "minimize",
+          "hyp_first_word": "minimize",
+          "first_word_match": true
+        },
+        {
+          "file": "004_take_a_screenshot.wav",
+          "norm_ref": "take a screenshot",
+          "norm_hyp": "take a screenshot",
+          "wer": 0.0,
+          "ref_first_word": "take",
+          "hyp_first_word": "take",
+          "first_word_match": true
+        },
+        {
+          "file": "005_set_a_timer_for_five_minutes.wav",
+          "norm_ref": "set a timer for 5 minutes",
+          "norm_hyp": "set a timer for 5 minutes",
+          "wer": 0.0,
+          "ref_first_word": "set",
+          "hyp_first_word": "set",
+          "first_word_match": true
+        },
+        {
+          "file": "006_turn_up_the_volume.wav",
+          "norm_ref": "turn up the volume",
+          "norm_hyp": "you have the volume",
+          "wer": 0.5,
+          "ref_first_word": "turn",
+          "hyp_first_word": "you",
+          "first_word_match": false
+        },
+        {
+          "file": "007_mute_the_microphone.wav",
+          "norm_ref": "mute the microphone",
+          "norm_hyp": "meet the microphone",
+          "wer": 0.3333,
+          "ref_first_word": "mute",
+          "hyp_first_word": "meet",
+          "first_word_match": false
+        },
+        {
+          "file": "008_open_the_downloads_folder.wav",
+          "norm_ref": "open the downloads folder",
+          "norm_hyp": "up on the downward spolder",
+          "wer": 1.0,
+          "ref_first_word": "open",
+          "hyp_first_word": "up",
+          "first_word_match": false
+        },
+        {
+          "file": "009_delete_the_temporary_files.wav",
+          "norm_ref": "delete the temporary files",
+          "norm_hyp": "delete the temporary files",
+          "wer": 0.0,
+          "ref_first_word": "delete",
+          "hyp_first_word": "delete",
+          "first_word_match": true
+        },
+        {
+          "file": "010_run_the_test_suite.wav",
+          "norm_ref": "run the test suite",
+          "norm_hyp": "run the test suit",
+          "wer": 0.25,
+          "ref_first_word": "run",
+          "hyp_first_word": "run",
+          "first_word_match": true
+        },
+        {
+          "file": "011_restart_the_application.wav",
+          "norm_ref": "restart the application",
+          "norm_hyp": "restart the application",
+          "wer": 0.0,
+          "ref_first_word": "restart",
+          "hyp_first_word": "restart",
+          "first_word_match": true
+        },
+        {
+          "file": "012_show_me_the_task_manager.wav",
+          "norm_ref": "show me the task manager",
+          "norm_hyp": "show me the cast manager",
+          "wer": 0.2,
+          "ref_first_word": "show",
+          "hyp_first_word": "show",
+          "first_word_match": true
+        },
+        {
+          "file": "013_lock_the_screen.wav",
+          "norm_ref": "lock the screen",
+          "norm_hyp": "",
+          "wer": 1.0,
+          "ref_first_word": "lock",
+          "hyp_first_word": "",
+          "first_word_match": false
+        },
+        {
+          "file": "014_empty_the_recycle_bin.wav",
+          "norm_ref": "empty the recycle bin",
+          "norm_hyp": "i am tiggerese i could be",
+          "wer": 1.5,
+          "ref_first_word": "empty",
+          "hyp_first_word": "i",
+          "first_word_match": false
+        },
+        {
+          "file": "015_switch_to_dark_mode.wav",
+          "norm_ref": "switch to dark mode",
+          "norm_hyp": "speaks to dot mode",
+          "wer": 0.5,
+          "ref_first_word": "switch",
+          "hyp_first_word": "speaks",
+          "first_word_match": false
+        },
+        {
+          "file": "016_what_is_the_current_time.wav",
+          "norm_ref": "what is the current time",
+          "norm_hyp": "is a current app",
+          "wer": 0.6,
+          "ref_first_word": "what",
+          "hyp_first_word": "is",
+          "first_word_match": false
+        },
+        {
+          "file": "017_how_much_disk_space_is_left.wav",
+          "norm_ref": "how much disk space is left",
+          "norm_hyp": "how much this base is left",
+          "wer": 0.3333,
+          "ref_first_word": "how",
+          "hyp_first_word": "how",
+          "first_word_match": true
+        },
+        {
+          "file": "018_what_version_of_python_is_installed.wav",
+          "norm_ref": "what version of python is installed",
+          "norm_hyp": "what version of python is installed",
+          "wer": 0.0,
+          "ref_first_word": "what",
+          "hyp_first_word": "what",
+          "first_word_match": true
+        },
+        {
+          "file": "019_where_is_the_config_file_located.wav",
+          "norm_ref": "where is the config file located",
+          "norm_hyp": "where is the config file repeated",
+          "wer": 0.1667,
+          "ref_first_word": "where",
+          "hyp_first_word": "where",
+          "first_word_match": true
+        },
+        {
+          "file": "020_why_is_the_build_failing.wav",
+          "norm_ref": "why is the build failing",
+          "norm_hyp": "why is the milk failing",
+          "wer": 0.2,
+          "ref_first_word": "why",
+          "hyp_first_word": "why",
+          "first_word_match": true
+        },
+        {
+          "file": "021_which_process_is_using_the_most_memory.wav",
+          "norm_ref": "which process is using the most memory",
+          "norm_hyp": "which process is using the most memory",
+          "wer": 0.0,
+          "ref_first_word": "which",
+          "hyp_first_word": "which",
+          "first_word_match": true
+        },
+        {
+          "file": "022_when_was_the_last_backup_made.wav",
+          "norm_ref": "when was the last backup made",
+          "norm_hyp": "i m not the last backup made",
+          "wer": 0.5,
+          "ref_first_word": "when",
+          "hyp_first_word": "i",
+          "first_word_match": false
+        },
+        {
+          "file": "023_can_you_explain_this_error_message.wav",
+          "norm_ref": "can you explain this error message",
+          "norm_hyp": "daniel explained this error message",
+          "wer": 0.5,
+          "ref_first_word": "can",
+          "hyp_first_word": "daniel",
+          "first_word_match": false
+        },
+        {
+          "file": "024_what_are_the_system_requirements.wav",
+          "norm_ref": "what are the system requirements",
+          "norm_hyp": "what are the system requirements",
+          "wer": 0.0,
+          "ref_first_word": "what",
+          "hyp_first_word": "what",
+          "first_word_match": true
+        },
+        {
+          "file": "025_how_do_i_enable_the_dark_theme.wav",
+          "norm_ref": "how do i enable the dark theme",
+          "norm_hyp": "how do i enable ducting",
+          "wer": 0.4286,
+          "ref_first_word": "how",
+          "hyp_first_word": "how",
+          "first_word_match": true
+        },
+        {
+          "file": "026_tom_show_me_the_dashboard.wav",
+          "norm_ref": "tom show me the dashboard",
+          "norm_hyp": "don t show me the dashboard",
+          "wer": 0.4,
+          "ref_first_word": "tom",
+          "hyp_first_word": "don",
+          "first_word_match": false
+        },
+        {
+          "file": "027_tom_what_is_the_status_of_the_build.wav",
+          "norm_ref": "tom what is the status of the build",
+          "norm_hyp": "don t what he s status of the build",
+          "wer": 0.5,
+          "ref_first_word": "tom",
+          "hyp_first_word": "don",
+          "first_word_match": false
+        },
+        {
+          "file": "028_tom_open_the_project_settings.wav",
+          "norm_ref": "tom open the project settings",
+          "norm_hyp": "don t open the bridge to settings",
+          "wer": 0.8,
+          "ref_first_word": "tom",
+          "hyp_first_word": "don",
+          "first_word_match": false
+        },
+        {
+          "file": "029_tom_search_for_the_resource_manager.wav",
+          "norm_ref": "tom search for the resource manager",
+          "norm_hyp": "don t search for the resource manager",
+          "wer": 0.3333,
+          "ref_first_word": "tom",
+          "hyp_first_word": "don",
+          "first_word_match": false
+        },
+        {
+          "file": "030_tom_minimize_the_terminal_silently.wav",
+          "norm_ref": "tom minimize the terminal silently",
+          "norm_hyp": "dom many must determine el salim lee",
+          "wer": 1.4,
+          "ref_first_word": "tom",
+          "hyp_first_word": "dom",
+          "first_word_match": false
+        },
+        {
+          "file": "031_tom_read_the_last_commit_message.wav",
+          "norm_ref": "tom read the last commit message",
+          "norm_hyp": "don t read the last comic message",
+          "wer": 0.5,
+          "ref_first_word": "tom",
+          "hyp_first_word": "don",
+          "first_word_match": false
+        },
+        {
+          "file": "032_tom_run_the_integration_tests.wav",
+          "norm_ref": "tom run the integration tests",
+          "norm_hyp": "don t run the integration test",
+          "wer": 0.6,
+          "ref_first_word": "tom",
+          "hyp_first_word": "don",
+          "first_word_match": false
+        },
+        {
+          "file": "033_tom_what_changed_in_the_last_commit.wav",
+          "norm_ref": "tom what changed in the last commit",
+          "norm_hyp": "dom what changed in the last commit",
+          "wer": 0.1429,
+          "ref_first_word": "tom",
+          "hyp_first_word": "dom",
+          "first_word_match": false
+        },
+        {
+          "file": "034_set_an_alarm_for_seven_thirty_am.wav",
+          "norm_ref": "set an alarm for 7 30 am",
+          "norm_hyp": "attune alarm 4730 dm",
+          "wer": 0.8571,
+          "ref_first_word": "set",
+          "hyp_first_word": "attune",
+          "first_word_match": false
+        },
+        {
+          "file": "035_remind_me_at_three_fifteen_pm.wav",
+          "norm_ref": "remind me at 3 15 pm",
+          "norm_hyp": "remind me it s 3 15pm",
+          "wer": 0.6667,
+          "ref_first_word": "remind",
+          "hyp_first_word": "remind",
+          "first_word_match": true
+        },
+        {
+          "file": "036_schedule_a_meeting_for_next_tuesday.wav",
+          "norm_ref": "schedule a meeting for next thursday",
+          "norm_hyp": "schedule a meeting for next thursday",
+          "wer": 0.0,
+          "ref_first_word": "schedule",
+          "hyp_first_word": "schedule",
+          "first_word_match": true
+        },
+        {
+          "file": "037_delete_files_older_than_thirty_days.wav",
+          "norm_ref": "delete files older than 30 days",
+          "norm_hyp": "delete files all the nativity days",
+          "wer": 0.5,
+          "ref_first_word": "delete",
+          "hyp_first_word": "delete",
+          "first_word_match": true
+        },
+        {
+          "file": "038_show_logs_from_the_last_hour.wav",
+          "norm_ref": "show logs from the last hour",
+          "norm_hyp": "she ll log for the last hour",
+          "wer": 0.6667,
+          "ref_first_word": "show",
+          "hyp_first_word": "she",
+          "first_word_match": false
+        },
+        {
+          "file": "039_calculate_fifteen_percent_of_two_hundred.wav",
+          "norm_ref": "calculate 15 percent of 200",
+          "norm_hyp": "cargillate 15 birth in the age of 200",
+          "wer": 1.0,
+          "ref_first_word": "calculate",
+          "hyp_first_word": "cargillate",
+          "first_word_match": false
+        },
+        {
+          "file": "040_what_is_the_date_next_friday.wav",
+          "norm_ref": "what is the date next friday",
+          "norm_hyp": "what is the date next friday",
+          "wer": 0.0,
+          "ref_first_word": "what",
+          "hyp_first_word": "what",
+          "first_word_match": true
+        },
+        {
+          "file": "041_run_the_backup_at_midnight.wav",
+          "norm_ref": "run the backup at midnight",
+          "norm_hyp": "run the backup at meet night",
+          "wer": 0.4,
+          "ref_first_word": "run",
+          "hyp_first_word": "run",
+          "first_word_match": true
+        }
+      ]
+    },
+    "prepend_300ms": {
+      "overall_wer": 0.4542,
+      "first_word_error_rate": 0.561,
+      "first_word_errors_count": 23,
+      "items": [
+        {
+          "file": "001_open_the_settings_window.wav",
+          "norm_ref": "open the settings window",
+          "norm_hyp": "open the settings window",
+          "wer": 0.0,
+          "ref_first_word": "open",
+          "hyp_first_word": "open",
+          "first_word_match": true
+        },
+        {
+          "file": "002_close_the_current_tab.wav",
+          "norm_ref": "close the current tab",
+          "norm_hyp": "close the current tab",
+          "wer": 0.0,
+          "ref_first_word": "close",
+          "hyp_first_word": "close",
+          "first_word_match": true
+        },
+        {
+          "file": "003_minimize_all_windows.wav",
+          "norm_ref": "minimize all windows",
+          "norm_hyp": "minimize all windows",
+          "wer": 0.0,
+          "ref_first_word": "minimize",
+          "hyp_first_word": "minimize",
+          "first_word_match": true
+        },
+        {
+          "file": "004_take_a_screenshot.wav",
+          "norm_ref": "take a screenshot",
+          "norm_hyp": "take a screenshot",
+          "wer": 0.0,
+          "ref_first_word": "take",
+          "hyp_first_word": "take",
+          "first_word_match": true
+        },
+        {
+          "file": "005_set_a_timer_for_five_minutes.wav",
+          "norm_ref": "set a timer for 5 minutes",
+          "norm_hyp": "set a time of 45 minutes",
+          "wer": 0.5,
+          "ref_first_word": "set",
+          "hyp_first_word": "set",
+          "first_word_match": true
+        },
+        {
+          "file": "006_turn_up_the_volume.wav",
+          "norm_ref": "turn up the volume",
+          "norm_hyp": "",
+          "wer": 1.0,
+          "ref_first_word": "turn",
+          "hyp_first_word": "",
+          "first_word_match": false
+        },
+        {
+          "file": "007_mute_the_microphone.wav",
+          "norm_ref": "mute the microphone",
+          "norm_hyp": "",
+          "wer": 1.0,
+          "ref_first_word": "mute",
+          "hyp_first_word": "",
+          "first_word_match": false
+        },
+        {
+          "file": "008_open_the_downloads_folder.wav",
+          "norm_ref": "open the downloads folder",
+          "norm_hyp": "up at the downward spolder",
+          "wer": 1.0,
+          "ref_first_word": "open",
+          "hyp_first_word": "up",
+          "first_word_match": false
+        },
+        {
+          "file": "009_delete_the_temporary_files.wav",
+          "norm_ref": "delete the temporary files",
+          "norm_hyp": "delete the temporary files",
+          "wer": 0.0,
+          "ref_first_word": "delete",
+          "hyp_first_word": "delete",
+          "first_word_match": true
+        },
+        {
+          "file": "010_run_the_test_suite.wav",
+          "norm_ref": "run the test suite",
+          "norm_hyp": "run the test suit",
+          "wer": 0.25,
+          "ref_first_word": "run",
+          "hyp_first_word": "run",
+          "first_word_match": true
+        },
+        {
+          "file": "011_restart_the_application.wav",
+          "norm_ref": "restart the application",
+          "norm_hyp": "restart the application",
+          "wer": 0.0,
+          "ref_first_word": "restart",
+          "hyp_first_word": "restart",
+          "first_word_match": true
+        },
+        {
+          "file": "012_show_me_the_task_manager.wav",
+          "norm_ref": "show me the task manager",
+          "norm_hyp": "show me the cast manager",
+          "wer": 0.2,
+          "ref_first_word": "show",
+          "hyp_first_word": "show",
+          "first_word_match": true
+        },
+        {
+          "file": "013_lock_the_screen.wav",
+          "norm_ref": "lock the screen",
+          "norm_hyp": "",
+          "wer": 1.0,
+          "ref_first_word": "lock",
+          "hyp_first_word": "",
+          "first_word_match": false
+        },
+        {
+          "file": "014_empty_the_recycle_bin.wav",
+          "norm_ref": "empty the recycle bin",
+          "norm_hyp": "mt tigarry s echo bin",
+          "wer": 1.0,
+          "ref_first_word": "empty",
+          "hyp_first_word": "mt",
+          "first_word_match": false
+        },
+        {
+          "file": "015_switch_to_dark_mode.wav",
+          "norm_ref": "switch to dark mode",
+          "norm_hyp": "",
+          "wer": 1.0,
+          "ref_first_word": "switch",
+          "hyp_first_word": "",
+          "first_word_match": false
+        },
+        {
+          "file": "016_what_is_the_current_time.wav",
+          "norm_ref": "what is the current time",
+          "norm_hyp": "",
+          "wer": 1.0,
+          "ref_first_word": "what",
+          "hyp_first_word": "",
+          "first_word_match": false
+        },
+        {
+          "file": "017_how_much_disk_space_is_left.wav",
+          "norm_ref": "how much disk space is left",
+          "norm_hyp": "how much this space is left",
+          "wer": 0.1667,
+          "ref_first_word": "how",
+          "hyp_first_word": "how",
+          "first_word_match": true
+        },
+        {
+          "file": "018_what_version_of_python_is_installed.wav",
+          "norm_ref": "what version of python is installed",
+          "norm_hyp": "plot version of python is installed",
+          "wer": 0.1667,
+          "ref_first_word": "what",
+          "hyp_first_word": "plot",
+          "first_word_match": false
+        },
+        {
+          "file": "019_where_is_the_config_file_located.wav",
+          "norm_ref": "where is the config file located",
+          "norm_hyp": "where is the config file repeated",
+          "wer": 0.1667,
+          "ref_first_word": "where",
+          "hyp_first_word": "where",
+          "first_word_match": true
+        },
+        {
+          "file": "020_why_is_the_build_failing.wav",
+          "norm_ref": "why is the build failing",
+          "norm_hyp": "",
+          "wer": 1.0,
+          "ref_first_word": "why",
+          "hyp_first_word": "",
+          "first_word_match": false
+        },
+        {
+          "file": "021_which_process_is_using_the_most_memory.wav",
+          "norm_ref": "which process is using the most memory",
+          "norm_hyp": "which process is using the most memory",
+          "wer": 0.0,
+          "ref_first_word": "which",
+          "hyp_first_word": "which",
+          "first_word_match": true
+        },
+        {
+          "file": "022_when_was_the_last_backup_made.wav",
+          "norm_ref": "when was the last backup made",
+          "norm_hyp": "why not the last backup made",
+          "wer": 0.3333,
+          "ref_first_word": "when",
+          "hyp_first_word": "why",
+          "first_word_match": false
+        },
+        {
+          "file": "023_can_you_explain_this_error_message.wav",
+          "norm_ref": "can you explain this error message",
+          "norm_hyp": "can you explain this error message",
+          "wer": 0.0,
+          "ref_first_word": "can",
+          "hyp_first_word": "can",
+          "first_word_match": true
+        },
+        {
+          "file": "024_what_are_the_system_requirements.wav",
+          "norm_ref": "what are the system requirements",
+          "norm_hyp": "what are the system requirements",
+          "wer": 0.0,
+          "ref_first_word": "what",
+          "hyp_first_word": "what",
+          "first_word_match": true
+        },
+        {
+          "file": "025_how_do_i_enable_the_dark_theme.wav",
+          "norm_ref": "how do i enable the dark theme",
+          "norm_hyp": "",
+          "wer": 1.0,
+          "ref_first_word": "how",
+          "hyp_first_word": "",
+          "first_word_match": false
+        },
+        {
+          "file": "026_tom_show_me_the_dashboard.wav",
+          "norm_ref": "tom show me the dashboard",
+          "norm_hyp": "don t show me the dashboard",
+          "wer": 0.4,
+          "ref_first_word": "tom",
+          "hyp_first_word": "don",
+          "first_word_match": false
+        },
+        {
+          "file": "027_tom_what_is_the_status_of_the_build.wav",
+          "norm_ref": "tom what is the status of the build",
+          "norm_hyp": "don t what is status of the build",
+          "wer": 0.375,
+          "ref_first_word": "tom",
+          "hyp_first_word": "don",
+          "first_word_match": false
+        },
+        {
+          "file": "028_tom_open_the_project_settings.wav",
+          "norm_ref": "tom open the project settings",
+          "norm_hyp": "don t open the bridge to settings",
+          "wer": 0.8,
+          "ref_first_word": "tom",
+          "hyp_first_word": "don",
+          "first_word_match": false
+        },
+        {
+          "file": "029_tom_search_for_the_resource_manager.wav",
+          "norm_ref": "tom search for the resource manager",
+          "norm_hyp": "don t search for the resource manager",
+          "wer": 0.3333,
+          "ref_first_word": "tom",
+          "hyp_first_word": "don",
+          "first_word_match": false
+        },
+        {
+          "file": "030_tom_minimize_the_terminal_silently.wav",
+          "norm_ref": "tom minimize the terminal silently",
+          "norm_hyp": "dom many months of terminal saline leave",
+          "wer": 1.2,
+          "ref_first_word": "tom",
+          "hyp_first_word": "dom",
+          "first_word_match": false
+        },
+        {
+          "file": "031_tom_read_the_last_commit_message.wav",
+          "norm_ref": "tom read the last commit message",
+          "norm_hyp": "don t read the last comic message",
+          "wer": 0.5,
+          "ref_first_word": "tom",
+          "hyp_first_word": "don",
+          "first_word_match": false
+        },
+        {
+          "file": "032_tom_run_the_integration_tests.wav",
+          "norm_ref": "tom run the integration tests",
+          "norm_hyp": "don t run the integration test",
+          "wer": 0.6,
+          "ref_first_word": "tom",
+          "hyp_first_word": "don",
+          "first_word_match": false
+        },
+        {
+          "file": "033_tom_what_changed_in_the_last_commit.wav",
+          "norm_ref": "tom what changed in the last commit",
+          "norm_hyp": "dom what changed in the last commit",
+          "wer": 0.1429,
+          "ref_first_word": "tom",
+          "hyp_first_word": "dom",
+          "first_word_match": false
+        },
+        {
+          "file": "034_set_an_alarm_for_seven_thirty_am.wav",
+          "norm_ref": "set an alarm for 7 30 am",
+          "norm_hyp": "it s an alarm for 7 30 am",
+          "wer": 0.2857,
+          "ref_first_word": "set",
+          "hyp_first_word": "it",
+          "first_word_match": false
+        },
+        {
+          "file": "035_remind_me_at_three_fifteen_pm.wav",
+          "norm_ref": "remind me at 3 15 pm",
+          "norm_hyp": "remind me it s 3 15pm",
+          "wer": 0.6667,
+          "ref_first_word": "remind",
+          "hyp_first_word": "remind",
+          "first_word_match": true
+        },
+        {
+          "file": "036_schedule_a_meeting_for_next_tuesday.wav",
+          "norm_ref": "schedule a meeting for next thursday",
+          "norm_hyp": "scaredue a meeting for next thursday",
+          "wer": 0.1667,
+          "ref_first_word": "schedule",
+          "hyp_first_word": "scaredue",
+          "first_word_match": false
+        },
+        {
+          "file": "037_delete_files_older_than_thirty_days.wav",
+          "norm_ref": "delete files older than 30 days",
+          "norm_hyp": "delete files all the nemptory days",
+          "wer": 0.5,
+          "ref_first_word": "delete",
+          "hyp_first_word": "delete",
+          "first_word_match": true
+        },
+        {
+          "file": "038_show_logs_from_the_last_hour.wav",
+          "norm_ref": "show logs from the last hour",
+          "norm_hyp": "she ll log for the last hour",
+          "wer": 0.6667,
+          "ref_first_word": "show",
+          "hyp_first_word": "she",
+          "first_word_match": false
+        },
+        {
+          "file": "039_calculate_fifteen_percent_of_two_hundred.wav",
+          "norm_ref": "calculate 15 percent of 200",
+          "norm_hyp": "cargillate 15 birth in age of 200",
+          "wer": 0.8,
+          "ref_first_word": "calculate",
+          "hyp_first_word": "cargillate",
+          "first_word_match": false
+        },
+        {
+          "file": "040_what_is_the_date_next_friday.wav",
+          "norm_ref": "what is the date next friday",
+          "norm_hyp": "what is the date next friday",
+          "wer": 0.0,
+          "ref_first_word": "what",
+          "hyp_first_word": "what",
+          "first_word_match": true
+        },
+        {
+          "file": "041_run_the_backup_at_midnight.wav",
+          "norm_ref": "run the backup at midnight",
+          "norm_hyp": "run the backup at meet night",
+          "wer": 0.4,
+          "ref_first_word": "run",
+          "hyp_first_word": "run",
+          "first_word_match": true
+        }
+      ]
+    },
+    "prepend_600ms": {
+      "overall_wer": 0.4794,
+      "first_word_error_rate": 0.5122,
+      "first_word_errors_count": 21,
+      "items": [
+        {
+          "file": "001_open_the_settings_window.wav",
+          "norm_ref": "open the settings window",
+          "norm_hyp": "open the settings window",
+          "wer": 0.0,
+          "ref_first_word": "open",
+          "hyp_first_word": "open",
+          "first_word_match": true
+        },
+        {
+          "file": "002_close_the_current_tab.wav",
+          "norm_ref": "close the current tab",
+          "norm_hyp": "close the current tab",
+          "wer": 0.0,
+          "ref_first_word": "close",
+          "hyp_first_word": "close",
+          "first_word_match": true
+        },
+        {
+          "file": "003_minimize_all_windows.wav",
+          "norm_ref": "minimize all windows",
+          "norm_hyp": "minimize all windows",
+          "wer": 0.0,
+          "ref_first_word": "minimize",
+          "hyp_first_word": "minimize",
+          "first_word_match": true
+        },
+        {
+          "file": "004_take_a_screenshot.wav",
+          "norm_ref": "take a screenshot",
+          "norm_hyp": "take a screenshot",
+          "wer": 0.0,
+          "ref_first_word": "take",
+          "hyp_first_word": "take",
+          "first_word_match": true
+        },
+        {
+          "file": "005_set_a_timer_for_five_minutes.wav",
+          "norm_ref": "set a timer for 5 minutes",
+          "norm_hyp": "set a timer for 5 minutes",
+          "wer": 0.0,
+          "ref_first_word": "set",
+          "hyp_first_word": "set",
+          "first_word_match": true
+        },
+        {
+          "file": "006_turn_up_the_volume.wav",
+          "norm_ref": "turn up the volume",
+          "norm_hyp": "",
+          "wer": 1.0,
+          "ref_first_word": "turn",
+          "hyp_first_word": "",
+          "first_word_match": false
+        },
+        {
+          "file": "007_mute_the_microphone.wav",
+          "norm_ref": "mute the microphone",
+          "norm_hyp": "",
+          "wer": 1.0,
+          "ref_first_word": "mute",
+          "hyp_first_word": "",
+          "first_word_match": false
+        },
+        {
+          "file": "008_open_the_downloads_folder.wav",
+          "norm_ref": "open the downloads folder",
+          "norm_hyp": "up on the downward spolder",
+          "wer": 1.0,
+          "ref_first_word": "open",
+          "hyp_first_word": "up",
+          "first_word_match": false
+        },
+        {
+          "file": "009_delete_the_temporary_files.wav",
+          "norm_ref": "delete the temporary files",
+          "norm_hyp": "delete the temporary files",
+          "wer": 0.0,
+          "ref_first_word": "delete",
+          "hyp_first_word": "delete",
+          "first_word_match": true
+        },
+        {
+          "file": "010_run_the_test_suite.wav",
+          "norm_ref": "run the test suite",
+          "norm_hyp": "run the test suit",
+          "wer": 0.25,
+          "ref_first_word": "run",
+          "hyp_first_word": "run",
+          "first_word_match": true
+        },
+        {
+          "file": "011_restart_the_application.wav",
+          "norm_ref": "restart the application",
+          "norm_hyp": "restart the application",
+          "wer": 0.0,
+          "ref_first_word": "restart",
+          "hyp_first_word": "restart",
+          "first_word_match": true
+        },
+        {
+          "file": "012_show_me_the_task_manager.wav",
+          "norm_ref": "show me the task manager",
+          "norm_hyp": "show me the cast manager",
+          "wer": 0.2,
+          "ref_first_word": "show",
+          "hyp_first_word": "show",
+          "first_word_match": true
+        },
+        {
+          "file": "013_lock_the_screen.wav",
+          "norm_ref": "lock the screen",
+          "norm_hyp": "",
+          "wer": 1.0,
+          "ref_first_word": "lock",
+          "hyp_first_word": "",
+          "first_word_match": false
+        },
+        {
+          "file": "014_empty_the_recycle_bin.wav",
+          "norm_ref": "empty the recycle bin",
+          "norm_hyp": "i am tiggerese i could be",
+          "wer": 1.5,
+          "ref_first_word": "empty",
+          "hyp_first_word": "i",
+          "first_word_match": false
+        },
+        {
+          "file": "015_switch_to_dark_mode.wav",
+          "norm_ref": "switch to dark mode",
+          "norm_hyp": "",
+          "wer": 1.0,
+          "ref_first_word": "switch",
+          "hyp_first_word": "",
+          "first_word_match": false
+        },
+        {
+          "file": "016_what_is_the_current_time.wav",
+          "norm_ref": "what is the current time",
+          "norm_hyp": "",
+          "wer": 1.0,
+          "ref_first_word": "what",
+          "hyp_first_word": "",
+          "first_word_match": false
+        },
+        {
+          "file": "017_how_much_disk_space_is_left.wav",
+          "norm_ref": "how much disk space is left",
+          "norm_hyp": "how much this base is left",
+          "wer": 0.3333,
+          "ref_first_word": "how",
+          "hyp_first_word": "how",
+          "first_word_match": true
+        },
+        {
+          "file": "018_what_version_of_python_is_installed.wav",
+          "norm_ref": "what version of python is installed",
+          "norm_hyp": "what version of python is installed",
+          "wer": 0.0,
+          "ref_first_word": "what",
+          "hyp_first_word": "what",
+          "first_word_match": true
+        },
+        {
+          "file": "019_where_is_the_config_file_located.wav",
+          "norm_ref": "where is the config file located",
+          "norm_hyp": "where is the config file repeated",
+          "wer": 0.1667,
+          "ref_first_word": "where",
+          "hyp_first_word": "where",
+          "first_word_match": true
+        },
+        {
+          "file": "020_why_is_the_build_failing.wav",
+          "norm_ref": "why is the build failing",
+          "norm_hyp": "",
+          "wer": 1.0,
+          "ref_first_word": "why",
+          "hyp_first_word": "",
+          "first_word_match": false
+        },
+        {
+          "file": "021_which_process_is_using_the_most_memory.wav",
+          "norm_ref": "which process is using the most memory",
+          "norm_hyp": "which process is using the most memory",
+          "wer": 0.0,
+          "ref_first_word": "which",
+          "hyp_first_word": "which",
+          "first_word_match": true
+        },
+        {
+          "file": "022_when_was_the_last_backup_made.wav",
+          "norm_ref": "when was the last backup made",
+          "norm_hyp": "i m not the last backup made",
+          "wer": 0.5,
+          "ref_first_word": "when",
+          "hyp_first_word": "i",
+          "first_word_match": false
+        },
+        {
+          "file": "023_can_you_explain_this_error_message.wav",
+          "norm_ref": "can you explain this error message",
+          "norm_hyp": "can you explain this error message",
+          "wer": 0.0,
+          "ref_first_word": "can",
+          "hyp_first_word": "can",
+          "first_word_match": true
+        },
+        {
+          "file": "024_what_are_the_system_requirements.wav",
+          "norm_ref": "what are the system requirements",
+          "norm_hyp": "what are the system requirements",
+          "wer": 0.0,
+          "ref_first_word": "what",
+          "hyp_first_word": "what",
+          "first_word_match": true
+        },
+        {
+          "file": "025_how_do_i_enable_the_dark_theme.wav",
+          "norm_ref": "how do i enable the dark theme",
+          "norm_hyp": "",
+          "wer": 1.0,
+          "ref_first_word": "how",
+          "hyp_first_word": "",
+          "first_word_match": false
+        },
+        {
+          "file": "026_tom_show_me_the_dashboard.wav",
+          "norm_ref": "tom show me the dashboard",
+          "norm_hyp": "",
+          "wer": 1.0,
+          "ref_first_word": "tom",
+          "hyp_first_word": "",
+          "first_word_match": false
+        },
+        {
+          "file": "027_tom_what_is_the_status_of_the_build.wav",
+          "norm_ref": "tom what is the status of the build",
+          "norm_hyp": "",
+          "wer": 1.0,
+          "ref_first_word": "tom",
+          "hyp_first_word": "",
+          "first_word_match": false
+        },
+        {
+          "file": "028_tom_open_the_project_settings.wav",
+          "norm_ref": "tom open the project settings",
+          "norm_hyp": "don t open the bridge to settings",
+          "wer": 0.8,
+          "ref_first_word": "tom",
+          "hyp_first_word": "don",
+          "first_word_match": false
+        },
+        {
+          "file": "029_tom_search_for_the_resource_manager.wav",
+          "norm_ref": "tom search for the resource manager",
+          "norm_hyp": "don t search for the resource manager",
+          "wer": 0.3333,
+          "ref_first_word": "tom",
+          "hyp_first_word": "don",
+          "first_word_match": false
+        },
+        {
+          "file": "030_tom_minimize_the_terminal_silently.wav",
+          "norm_ref": "tom minimize the terminal silently",
+          "norm_hyp": "dom many master terminal saline lean",
+          "wer": 1.0,
+          "ref_first_word": "tom",
+          "hyp_first_word": "dom",
+          "first_word_match": false
+        },
+        {
+          "file": "031_tom_read_the_last_commit_message.wav",
+          "norm_ref": "tom read the last commit message",
+          "norm_hyp": "don t read the last comment message",
+          "wer": 0.5,
+          "ref_first_word": "tom",
+          "hyp_first_word": "don",
+          "first_word_match": false
+        },
+        {
+          "file": "032_tom_run_the_integration_tests.wav",
+          "norm_ref": "tom run the integration tests",
+          "norm_hyp": "don t run the integration test",
+          "wer": 0.6,
+          "ref_first_word": "tom",
+          "hyp_first_word": "don",
+          "first_word_match": false
+        },
+        {
+          "file": "033_tom_what_changed_in_the_last_commit.wav",
+          "norm_ref": "tom what changed in the last commit",
+          "norm_hyp": "dom what changed in the last commit",
+          "wer": 0.1429,
+          "ref_first_word": "tom",
+          "hyp_first_word": "dom",
+          "first_word_match": false
+        },
+        {
+          "file": "034_set_an_alarm_for_seven_thirty_am.wav",
+          "norm_ref": "set an alarm for 7 30 am",
+          "norm_hyp": "attune along for 7 30 am",
+          "wer": 0.4286,
+          "ref_first_word": "set",
+          "hyp_first_word": "attune",
+          "first_word_match": false
+        },
+        {
+          "file": "035_remind_me_at_three_fifteen_pm.wav",
+          "norm_ref": "remind me at 3 15 pm",
+          "norm_hyp": "remind me it s 3 15 pm",
+          "wer": 0.3333,
+          "ref_first_word": "remind",
+          "hyp_first_word": "remind",
+          "first_word_match": true
+        },
+        {
+          "file": "036_schedule_a_meeting_for_next_tuesday.wav",
+          "norm_ref": "schedule a meeting for next thursday",
+          "norm_hyp": "schedule a meeting for next thursday",
+          "wer": 0.0,
+          "ref_first_word": "schedule",
+          "hyp_first_word": "schedule",
+          "first_word_match": true
+        },
+        {
+          "file": "037_delete_files_older_than_thirty_days.wav",
+          "norm_ref": "delete files older than 30 days",
+          "norm_hyp": "delete files all the nativity days",
+          "wer": 0.5,
+          "ref_first_word": "delete",
+          "hyp_first_word": "delete",
+          "first_word_match": true
+        },
+        {
+          "file": "038_show_logs_from_the_last_hour.wav",
+          "norm_ref": "show logs from the last hour",
+          "norm_hyp": "she ll log for the last hour",
+          "wer": 0.6667,
+          "ref_first_word": "show",
+          "hyp_first_word": "she",
+          "first_word_match": false
+        },
+        {
+          "file": "039_calculate_fifteen_percent_of_two_hundred.wav",
+          "norm_ref": "calculate 15 percent of 200",
+          "norm_hyp": "cargillate 15 birth in the age of 200",
+          "wer": 1.0,
+          "ref_first_word": "calculate",
+          "hyp_first_word": "cargillate",
+          "first_word_match": false
+        },
+        {
+          "file": "040_what_is_the_date_next_friday.wav",
+          "norm_ref": "what is the date next friday",
+          "norm_hyp": "what is the date next friday",
+          "wer": 0.0,
+          "ref_first_word": "what",
+          "hyp_first_word": "what",
+          "first_word_match": true
+        },
+        {
+          "file": "041_run_the_backup_at_midnight.wav",
+          "norm_ref": "run the backup at midnight",
+          "norm_hyp": "run the backup at meet night",
+          "wer": 0.4,
+          "ref_first_word": "run",
+          "hyp_first_word": "run",
+          "first_word_match": true
+        }
+      ]
+    }
+  }
+}

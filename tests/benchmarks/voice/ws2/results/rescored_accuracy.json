@@ -1,0 +1,1334 @@
+{
+  "date": "2026-10-07",
+  "scorer": "tests/benchmarks/voice/ws2/normalizer.py",
+  "summary": {
+    "sherpa-large-fixed": {
+      "overall_wer": 0.554,
+      "by_category": {
+        "commands": 0.5578,
+        "questions": 0.5157,
+        "names": 0.6912,
+        "numbers": 0.4577
+      },
+      "numbers_exact_match": "0/8",
+      "numbers_exact_rate": 0.0,
+      "name_errors_count": 8,
+      "number_errors_count": 8
+    },
+    "faster-whisper-small.en": {
+      "overall_wer": 0.1302,
+      "by_category": {
+        "commands": 0.0722,
+        "questions": 0.111,
+        "names": 0.2948,
+        "numbers": 0.0982
+      },
+      "numbers_exact_match": "5/8",
+      "numbers_exact_rate": 0.625,
+      "name_errors_count": 7,
+      "number_errors_count": 3
+    },
+    "moonshine-tiny-int8": {
+      "overall_wer": 0.4092,
+      "by_category": {
+        "commands": 0.3522,
+        "questions": 0.2729,
+        "names": 0.5845,
+        "numbers": 0.5113
+      },
+      "numbers_exact_match": "2/8",
+      "numbers_exact_rate": 0.25,
+      "name_errors_count": 8,
+      "number_errors_count": 6
+    }
+  },
+  "details": {
+    "sherpa-large-fixed": {
+      "summary": {
+        "overall_wer": 0.554,
+        "by_category": {
+          "commands": 0.5578,
+          "questions": 0.5157,
+          "names": 0.6912,
+          "numbers": 0.4577
+        },
+        "numbers_exact_match": "0/8",
+        "numbers_exact_rate": 0.0,
+        "name_errors_count": 8,
+        "number_errors_count": 8
+      },
+      "items": [
+        {
+          "file": "001_open_the_settings_window.wav",
+          "idx": 0,
+          "category": "commands",
+          "norm_ref": "open the settings window",
+          "norm_hyp": "opened the sittings window",
+          "wer": 0.5
+        },
+        {
+          "file": "002_close_the_current_tab.wav",
+          "idx": 1,
+          "category": "commands",
+          "norm_ref": "close the current tab",
+          "norm_hyp": "close the current dab",
+          "wer": 0.25
+        },
+        {
+          "file": "003_minimize_all_windows.wav",
+          "idx": 2,
+          "category": "commands",
+          "norm_ref": "minimize all windows",
+          "norm_hyp": "minni mice all windows",
+          "wer": 0.6667
+        },
+        {
+          "file": "004_take_a_screenshot.wav",
+          "idx": 3,
+          "category": "commands",
+          "norm_ref": "take a screenshot",
+          "norm_hyp": "speakest green shot",
+          "wer": 1.0
+        },
+        {
+          "file": "005_set_a_timer_for_five_minutes.wav",
+          "idx": 4,
+          "category": "commands",
+          "norm_ref": "set a timer for 5 minutes",
+          "norm_hyp": "sitanima fo 5 min",
+          "wer": 0.8333
+        },
+        {
+          "file": "006_turn_up_the_volume.wav",
+          "idx": 5,
+          "category": "commands",
+          "norm_ref": "turn up the volume",
+          "norm_hyp": "do he up the volume",
+          "wer": 0.5
+        },
+        {
+          "file": "007_mute_the_microphone.wav",
+          "idx": 6,
+          "category": "commands",
+          "norm_ref": "mute the microphone",
+          "norm_hyp": "mute the microphone",
+          "wer": 0.0
+        },
+        {
+          "file": "008_open_the_downloads_folder.wav",
+          "idx": 7,
+          "category": "commands",
+          "norm_ref": "open the downloads folder",
+          "norm_hyp": "opened the downwards folder",
+          "wer": 0.5
+        },
+        {
+          "file": "009_delete_the_temporary_files.wav",
+          "idx": 8,
+          "category": "commands",
+          "norm_ref": "delete the temporary files",
+          "norm_hyp": "they ll lead the temporary files",
+          "wer": 0.75
+        },
+        {
+          "file": "010_run_the_test_suite.wav",
+          "idx": 9,
+          "category": "commands",
+          "norm_ref": "run the test suite",
+          "norm_hyp": "ran the pestuit",
+          "wer": 0.75
+        },
+        {
+          "file": "011_restart_the_application.wav",
+          "idx": 10,
+          "category": "commands",
+          "norm_ref": "restart the application",
+          "norm_hyp": "bristowed the application",
+          "wer": 0.3333
+        },
+        {
+          "file": "012_show_me_the_task_manager.wav",
+          "idx": 11,
+          "category": "commands",
+          "norm_ref": "show me the task manager",
+          "norm_hyp": "show me the dust manager",
+          "wer": 0.2
+        },
+        {
+          "file": "013_lock_the_screen.wav",
+          "idx": 12,
+          "category": "commands",
+          "norm_ref": "lock the screen",
+          "norm_hyp": "logged the screen",
+          "wer": 0.3333
+        },
+        {
+          "file": "014_empty_the_recycle_bin.wav",
+          "idx": 13,
+          "category": "commands",
+          "norm_ref": "empty the recycle bin",
+          "norm_hyp": "emptier as i go in",
+          "wer": 1.25
+        },
+        {
+          "file": "015_switch_to_dark_mode.wav",
+          "idx": 14,
+          "category": "commands",
+          "norm_ref": "switch to dark mode",
+          "norm_hyp": "sweets to dac mode",
+          "wer": 0.5
+        },
+        {
+          "file": "016_what_is_the_current_time.wav",
+          "idx": 15,
+          "category": "questions",
+          "norm_ref": "what is the current time",
+          "norm_hyp": "he s a grinder",
+          "wer": 1.0
+        },
+        {
+          "file": "017_how_much_disk_space_is_left.wav",
+          "idx": 16,
+          "category": "questions",
+          "norm_ref": "how much disk space is left",
+          "norm_hyp": "how much dispace is left",
+          "wer": 0.3333
+        },
+        {
+          "file": "018_what_version_of_python_is_installed.wav",
+          "idx": 17,
+          "category": "questions",
+          "norm_ref": "what version of python is installed",
+          "norm_hyp": "what motion of bytone is installed",
+          "wer": 0.3333
+        },
+        {
+          "file": "019_where_is_the_config_file_located.wav",
+          "idx": 18,
+          "category": "questions",
+          "norm_ref": "where is the config file located",
+          "norm_hyp": "where is the convict viol repeated",
+          "wer": 0.5
+        },
+        {
+          "file": "020_why_is_the_build_failing.wav",
+          "idx": 19,
+          "category": "questions",
+          "norm_ref": "why is the build failing",
+          "norm_hyp": "was the bill failing",
+          "wer": 0.6
+        },
+        {
+          "file": "021_which_process_is_using_the_most_memory.wav",
+          "idx": 20,
+          "category": "questions",
+          "norm_ref": "which process is using the most memory",
+          "norm_hyp": "which brought us this using the most memory",
+          "wer": 0.4286
+        },
+        {
+          "file": "022_when_was_the_last_backup_made.wav",
+          "idx": 21,
+          "category": "questions",
+          "norm_ref": "when was the last backup made",
+          "norm_hyp": "we re not the last backed",
+          "wer": 0.8333
+        },
+        {
+          "file": "023_can_you_explain_this_error_message.wav",
+          "idx": 22,
+          "category": "questions",
+          "norm_ref": "can you explain this error message",
+          "norm_hyp": "can you explain these aramis each",
+          "wer": 0.5
+        },
+        {
+          "file": "024_what_are_the_system_requirements.wav",
+          "idx": 23,
+          "category": "questions",
+          "norm_ref": "what are the system requirements",
+          "norm_hyp": "what of the system requirements",
+          "wer": 0.2
+        },
+        {
+          "file": "025_how_do_i_enable_the_dark_theme.wav",
+          "idx": 24,
+          "category": "questions",
+          "norm_ref": "how do i enable the dark theme",
+          "norm_hyp": "how do i enable d artain",
+          "wer": 0.4286
+        },
+        {
+          "file": "026_tom_show_me_the_dashboard.wav",
+          "idx": 25,
+          "category": "names",
+          "norm_ref": "tom show me the dashboard",
+          "norm_hyp": "don t show me to thatsh boat",
+          "wer": 1.0
+        },
+        {
+          "file": "027_tom_what_is_the_status_of_the_build.wav",
+          "idx": 26,
+          "category": "names",
+          "norm_ref": "tom what is the status of the build",
+          "norm_hyp": "no what is the status of the build",
+          "wer": 0.125
+        },
+        {
+          "file": "028_tom_open_the_project_settings.wav",
+          "idx": 27,
+          "category": "names",
+          "norm_ref": "tom open the project settings",
+          "norm_hyp": "don t open the bridge sittings",
+          "wer": 0.8
+        },
+        {
+          "file": "029_tom_search_for_the_resource_manager.wav",
+          "idx": 28,
+          "category": "names",
+          "norm_ref": "tom search for the resource manager",
+          "norm_hyp": "don t search for the resource manager",
+          "wer": 0.3333
+        },
+        {
+          "file": "030_tom_minimize_the_terminal_silently.wav",
+          "idx": 29,
+          "category": "names",
+          "norm_ref": "tom minimize the terminal silently",
+          "norm_hyp": "tom many month the dominio valentin lean",
+          "wer": 1.0
+        },
+        {
+          "file": "031_tom_read_the_last_commit_message.wav",
+          "idx": 30,
+          "category": "names",
+          "norm_ref": "tom read the last commit message",
+          "norm_hyp": "don t read the last coming message",
+          "wer": 0.5
+        },
+        {
+          "file": "032_tom_run_the_integration_tests.wav",
+          "idx": 31,
+          "category": "names",
+          "norm_ref": "tom run the integration tests",
+          "norm_hyp": "don t running to grecian desk",
+          "wer": 1.2
+        },
+        {
+          "file": "033_tom_what_changed_in_the_last_commit.wav",
+          "idx": 32,
+          "category": "names",
+          "norm_ref": "tom what changed in the last commit",
+          "norm_hyp": "dumb what changed in lalait",
+          "wer": 0.5714
+        },
+        {
+          "file": "034_set_an_alarm_for_seven_thirty_am.wav",
+          "idx": 33,
+          "category": "numbers",
+          "norm_ref": "set an alarm for 7 30 am",
+          "norm_hyp": "the lamb for 7 30 am",
+          "wer": 0.4286
+        },
+        {
+          "file": "035_remind_me_at_three_fifteen_pm.wav",
+          "idx": 34,
+          "category": "numbers",
+          "norm_ref": "remind me at 3 15 pm",
+          "norm_hyp": "remind me of the 15 pm",
+          "wer": 0.3333
+        },
+        {
+          "file": "036_schedule_a_meeting_for_next_tuesday.wav",
+          "idx": 35,
+          "category": "numbers",
+          "norm_ref": "schedule a meeting for next thursday",
+          "norm_hyp": "skidule a meeting for next thursday",
+          "wer": 0.1667
+        },
+        {
+          "file": "037_delete_files_older_than_thirty_days.wav",
+          "idx": 36,
+          "category": "numbers",
+          "norm_ref": "delete files older than 30 days",
+          "norm_hyp": "did he advise older than 30 days",
+          "wer": 0.5
+        },
+        {
+          "file": "038_show_logs_from_the_last_hour.wav",
+          "idx": 37,
+          "category": "numbers",
+          "norm_ref": "show logs from the last hour",
+          "norm_hyp": "she last hour",
+          "wer": 0.6667
+        },
+        {
+          "file": "039_calculate_fifteen_percent_of_two_hundred.wav",
+          "idx": 38,
+          "category": "numbers",
+          "norm_ref": "calculate 15 percent of 200",
+          "norm_hyp": "galid 15 birth in age of 200",
+          "wer": 0.8
+        },
+        {
+          "file": "040_what_is_the_date_next_friday.wav",
+          "idx": 39,
+          "category": "numbers",
+          "norm_ref": "what is the date next friday",
+          "norm_hyp": "what is the deed next friday",
+          "wer": 0.1667
+        },
+        {
+          "file": "041_run_the_backup_at_midnight.wav",
+          "idx": 40,
+          "category": "numbers",
+          "norm_ref": "run the backup at midnight",
+          "norm_hyp": "miranda bag up at midnight",
+          "wer": 0.6
+        }
+      ],
+      "name_errors": [
+        {
+          "file": "026_tom_show_me_the_dashboard.wav",
+          "norm_ref": "tom show me the dashboard",
+          "norm_hyp": "don t show me to thatsh boat",
+          "wer": 1.0
+        },
+        {
+          "file": "027_tom_what_is_the_status_of_the_build.wav",
+          "norm_ref": "tom what is the status of the build",
+          "norm_hyp": "no what is the status of the build",
+          "wer": 0.125
+        },
+        {
+          "file": "028_tom_open_the_project_settings.wav",
+          "norm_ref": "tom open the project settings",
+          "norm_hyp": "don t open the bridge sittings",
+          "wer": 0.8
+        },
+        {
+          "file": "029_tom_search_for_the_resource_manager.wav",
+          "norm_ref": "tom search for the resource manager",
+          "norm_hyp": "don t search for the resource manager",
+          "wer": 0.3333333333333333
+        },
+        {
+          "file": "030_tom_minimize_the_terminal_silently.wav",
+          "norm_ref": "tom minimize the terminal silently",
+          "norm_hyp": "tom many month the dominio valentin lean",
+          "wer": 1.0
+        },
+        {
+          "file": "031_tom_read_the_last_commit_message.wav",
+          "norm_ref": "tom read the last commit message",
+          "norm_hyp": "don t read the last coming message",
+          "wer": 0.5
+        },
+        {
+          "file": "032_tom_run_the_integration_tests.wav",
+          "norm_ref": "tom run the integration tests",
+          "norm_hyp": "don t running to grecian desk",
+          "wer": 1.2
+        },
+        {
+          "file": "033_tom_what_changed_in_the_last_commit.wav",
+          "norm_ref": "tom what changed in the last commit",
+          "norm_hyp": "dumb what changed in lalait",
+          "wer": 0.5714285714285714
+        }
+      ],
+      "number_errors": [
+        {
+          "file": "034_set_an_alarm_for_seven_thirty_am.wav",
+          "norm_ref": "set an alarm for 7 30 am",
+          "norm_hyp": "the lamb for 7 30 am",
+          "wer": 0.42857142857142855
+        },
+        {
+          "file": "035_remind_me_at_three_fifteen_pm.wav",
+          "norm_ref": "remind me at 3 15 pm",
+          "norm_hyp": "remind me of the 15 pm",
+          "wer": 0.3333333333333333
+        },
+        {
+          "file": "036_schedule_a_meeting_for_next_tuesday.wav",
+          "norm_ref": "schedule a meeting for next thursday",
+          "norm_hyp": "skidule a meeting for next thursday",
+          "wer": 0.16666666666666666
+        },
+        {
+          "file": "037_delete_files_older_than_thirty_days.wav",
+          "norm_ref": "delete files older than 30 days",
+          "norm_hyp": "did he advise older than 30 days",
+          "wer": 0.5
+        },
+        {
+          "file": "038_show_logs_from_the_last_hour.wav",
+          "norm_ref": "show logs from the last hour",
+          "norm_hyp": "she last hour",
+          "wer": 0.6666666666666666
+        },
+        {
+          "file": "039_calculate_fifteen_percent_of_two_hundred.wav",
+          "norm_ref": "calculate 15 percent of 200",
+          "norm_hyp": "galid 15 birth in age of 200",
+          "wer": 0.8
+        },
+        {
+          "file": "040_what_is_the_date_next_friday.wav",
+          "norm_ref": "what is the date next friday",
+          "norm_hyp": "what is the deed next friday",
+          "wer": 0.16666666666666666
+        },
+        {
+          "file": "041_run_the_backup_at_midnight.wav",
+          "norm_ref": "run the backup at midnight",
+          "norm_hyp": "miranda bag up at midnight",
+          "wer": 0.6
+        }
+      ]
+    },
+    "faster-whisper-small.en": {
+      "summary": {
+        "overall_wer": 0.1302,
+        "by_category": {
+          "commands": 0.0722,
+          "questions": 0.111,
+          "names": 0.2948,
+          "numbers": 0.0982
+        },
+        "numbers_exact_match": "5/8",
+        "numbers_exact_rate": 0.625,
+        "name_errors_count": 7,
+        "number_errors_count": 3
+      },
+      "items": [
+        {
+          "file": "001_open_the_settings_window.wav",
+          "idx": 0,
+          "category": "commands",
+          "norm_ref": "open the settings window",
+          "norm_hyp": "open the settings window",
+          "wer": 0.0
+        },
+        {
+          "file": "002_close_the_current_tab.wav",
+          "idx": 1,
+          "category": "commands",
+          "norm_ref": "close the current tab",
+          "norm_hyp": "close the current app",
+          "wer": 0.25
+        },
+        {
+          "file": "003_minimize_all_windows.wav",
+          "idx": 2,
+          "category": "commands",
+          "norm_ref": "minimize all windows",
+          "norm_hyp": "minimize all windows",
+          "wer": 0.0
+        },
+        {
+          "file": "004_take_a_screenshot.wav",
+          "idx": 3,
+          "category": "commands",
+          "norm_ref": "take a screenshot",
+          "norm_hyp": "take a screenshot",
+          "wer": 0.0
+        },
+        {
+          "file": "005_set_a_timer_for_five_minutes.wav",
+          "idx": 4,
+          "category": "commands",
+          "norm_ref": "set a timer for 5 minutes",
+          "norm_hyp": "set a timer for 5 minutes",
+          "wer": 0.0
+        },
+        {
+          "file": "006_turn_up_the_volume.wav",
+          "idx": 5,
+          "category": "commands",
+          "norm_ref": "turn up the volume",
+          "norm_hyp": "do help the volume",
+          "wer": 0.5
+        },
+        {
+          "file": "007_mute_the_microphone.wav",
+          "idx": 6,
+          "category": "commands",
+          "norm_ref": "mute the microphone",
+          "norm_hyp": "mute the microphone",
+          "wer": 0.0
+        },
+        {
+          "file": "008_open_the_downloads_folder.wav",
+          "idx": 7,
+          "category": "commands",
+          "norm_ref": "open the downloads folder",
+          "norm_hyp": "open the downloads folder",
+          "wer": 0.0
+        },
+        {
+          "file": "009_delete_the_temporary_files.wav",
+          "idx": 8,
+          "category": "commands",
+          "norm_ref": "delete the temporary files",
+          "norm_hyp": "delete the temporary files",
+          "wer": 0.0
+        },
+        {
+          "file": "010_run_the_test_suite.wav",
+          "idx": 9,
+          "category": "commands",
+          "norm_ref": "run the test suite",
+          "norm_hyp": "run the test suite",
+          "wer": 0.0
+        },
+        {
+          "file": "011_restart_the_application.wav",
+          "idx": 10,
+          "category": "commands",
+          "norm_ref": "restart the application",
+          "norm_hyp": "restart the application",
+          "wer": 0.0
+        },
+        {
+          "file": "012_show_me_the_task_manager.wav",
+          "idx": 11,
+          "category": "commands",
+          "norm_ref": "show me the task manager",
+          "norm_hyp": "show me the task manager",
+          "wer": 0.0
+        },
+        {
+          "file": "013_lock_the_screen.wav",
+          "idx": 12,
+          "category": "commands",
+          "norm_ref": "lock the screen",
+          "norm_hyp": "log the screen",
+          "wer": 0.3333
+        },
+        {
+          "file": "014_empty_the_recycle_bin.wav",
+          "idx": 13,
+          "category": "commands",
+          "norm_ref": "empty the recycle bin",
+          "norm_hyp": "empty the recycle bin",
+          "wer": 0.0
+        },
+        {
+          "file": "015_switch_to_dark_mode.wav",
+          "idx": 14,
+          "category": "commands",
+          "norm_ref": "switch to dark mode",
+          "norm_hyp": "switch to dark mode",
+          "wer": 0.0
+        },
+        {
+          "file": "016_what_is_the_current_time.wav",
+          "idx": 15,
+          "category": "questions",
+          "norm_ref": "what is the current time",
+          "norm_hyp": "is it going down",
+          "wer": 0.8
+        },
+        {
+          "file": "017_how_much_disk_space_is_left.wav",
+          "idx": 16,
+          "category": "questions",
+          "norm_ref": "how much disk space is left",
+          "norm_hyp": "how much space is left",
+          "wer": 0.1667
+        },
+        {
+          "file": "018_what_version_of_python_is_installed.wav",
+          "idx": 17,
+          "category": "questions",
+          "norm_ref": "what version of python is installed",
+          "norm_hyp": "what version of python is installed",
+          "wer": 0.0
+        },
+        {
+          "file": "019_where_is_the_config_file_located.wav",
+          "idx": 18,
+          "category": "questions",
+          "norm_ref": "where is the config file located",
+          "norm_hyp": "where is the config file located",
+          "wer": 0.0
+        },
+        {
+          "file": "020_why_is_the_build_failing.wav",
+          "idx": 19,
+          "category": "questions",
+          "norm_ref": "why is the build failing",
+          "norm_hyp": "why is the build failing",
+          "wer": 0.0
+        },
+        {
+          "file": "021_which_process_is_using_the_most_memory.wav",
+          "idx": 20,
+          "category": "questions",
+          "norm_ref": "which process is using the most memory",
+          "norm_hyp": "which process is using the most memory",
+          "wer": 0.0
+        },
+        {
+          "file": "022_when_was_the_last_backup_made.wav",
+          "idx": 21,
+          "category": "questions",
+          "norm_ref": "when was the last backup made",
+          "norm_hyp": "when was the last backup made",
+          "wer": 0.0
+        },
+        {
+          "file": "023_can_you_explain_this_error_message.wav",
+          "idx": 22,
+          "category": "questions",
+          "norm_ref": "can you explain this error message",
+          "norm_hyp": "can you explain this error message",
+          "wer": 0.0
+        },
+        {
+          "file": "024_what_are_the_system_requirements.wav",
+          "idx": 23,
+          "category": "questions",
+          "norm_ref": "what are the system requirements",
+          "norm_hyp": "what are the system requirements",
+          "wer": 0.0
+        },
+        {
+          "file": "025_how_do_i_enable_the_dark_theme.wav",
+          "idx": 24,
+          "category": "questions",
+          "norm_ref": "how do i enable the dark theme",
+          "norm_hyp": "how do i enable dark theme",
+          "wer": 0.1429
+        },
+        {
+          "file": "026_tom_show_me_the_dashboard.wav",
+          "idx": 25,
+          "category": "names",
+          "norm_ref": "tom show me the dashboard",
+          "norm_hyp": "down show me the dashboard",
+          "wer": 0.2
+        },
+        {
+          "file": "027_tom_what_is_the_status_of_the_build.wav",
+          "idx": 26,
+          "category": "names",
+          "norm_ref": "tom what is the status of the build",
+          "norm_hyp": "yo what is the status of the build",
+          "wer": 0.125
+        },
+        {
+          "file": "028_tom_open_the_project_settings.wav",
+          "idx": 27,
+          "category": "names",
+          "norm_ref": "tom open the project settings",
+          "norm_hyp": "don t open the project settings",
+          "wer": 0.4
+        },
+        {
+          "file": "029_tom_search_for_the_resource_manager.wav",
+          "idx": 28,
+          "category": "names",
+          "norm_ref": "tom search for the resource manager",
+          "norm_hyp": "don t search for the resource manager",
+          "wer": 0.3333
+        },
+        {
+          "file": "030_tom_minimize_the_terminal_silently.wav",
+          "idx": 29,
+          "category": "names",
+          "norm_ref": "tom minimize the terminal silently",
+          "norm_hyp": "dom minimize the terminal silently",
+          "wer": 0.2
+        },
+        {
+          "file": "031_tom_read_the_last_commit_message.wav",
+          "idx": 30,
+          "category": "names",
+          "norm_ref": "tom read the last commit message",
+          "norm_hyp": "don t ring the last commit message",
+          "wer": 0.5
+        },
+        {
+          "file": "032_tom_run_the_integration_tests.wav",
+          "idx": 31,
+          "category": "names",
+          "norm_ref": "tom run the integration tests",
+          "norm_hyp": "don t run the integration test",
+          "wer": 0.6
+        },
+        {
+          "file": "033_tom_what_changed_in_the_last_commit.wav",
+          "idx": 32,
+          "category": "names",
+          "norm_ref": "tom what changed in the last commit",
+          "norm_hyp": "tom what changed in the last commit",
+          "wer": 0.0
+        },
+        {
+          "file": "034_set_an_alarm_for_seven_thirty_am.wav",
+          "idx": 33,
+          "category": "numbers",
+          "norm_ref": "set an alarm for 7 30 am",
+          "norm_hyp": "setting alarm for 7 30 am",
+          "wer": 0.2857
+        },
+        {
+          "file": "035_remind_me_at_three_fifteen_pm.wav",
+          "idx": 34,
+          "category": "numbers",
+          "norm_ref": "remind me at 3 15 pm",
+          "norm_hyp": "remind me at 3 15 pm",
+          "wer": 0.0
+        },
+        {
+          "file": "036_schedule_a_meeting_for_next_tuesday.wav",
+          "idx": 35,
+          "category": "numbers",
+          "norm_ref": "schedule a meeting for next thursday",
+          "norm_hyp": "schedule a meeting for next thursday",
+          "wer": 0.0
+        },
+        {
+          "file": "037_delete_files_older_than_thirty_days.wav",
+          "idx": 36,
+          "category": "numbers",
+          "norm_ref": "delete files older than 30 days",
+          "norm_hyp": "till it files older than 30 days",
+          "wer": 0.3333
+        },
+        {
+          "file": "038_show_logs_from_the_last_hour.wav",
+          "idx": 37,
+          "category": "numbers",
+          "norm_ref": "show logs from the last hour",
+          "norm_hyp": "show logs for the last hour",
+          "wer": 0.1667
+        },
+        {
+          "file": "039_calculate_fifteen_percent_of_two_hundred.wav",
+          "idx": 38,
+          "category": "numbers",
+          "norm_ref": "calculate 15 percent of 200",
+          "norm_hyp": "calculate 15 percent of 200",
+          "wer": 0.0
+        },
+        {
+          "file": "040_what_is_the_date_next_friday.wav",
+          "idx": 39,
+          "category": "numbers",
+          "norm_ref": "what is the date next friday",
+          "norm_hyp": "what is the date next friday",
+          "wer": 0.0
+        },
+        {
+          "file": "041_run_the_backup_at_midnight.wav",
+          "idx": 40,
+          "category": "numbers",
+          "norm_ref": "run the backup at midnight",
+          "norm_hyp": "run the backup at midnight",
+          "wer": 0.0
+        }
+      ],
+      "name_errors": [
+        {
+          "file": "026_tom_show_me_the_dashboard.wav",
+          "norm_ref": "tom show me the dashboard",
+          "norm_hyp": "down show me the dashboard",
+          "wer": 0.2
+        },
+        {
+          "file": "027_tom_what_is_the_status_of_the_build.wav",
+          "norm_ref": "tom what is the status of the build",
+          "norm_hyp": "yo what is the status of the build",
+          "wer": 0.125
+        },
+        {
+          "file": "028_tom_open_the_project_settings.wav",
+          "norm_ref": "tom open the project settings",
+          "norm_hyp": "don t open the project settings",
+          "wer": 0.4
+        },
+        {
+          "file": "029_tom_search_for_the_resource_manager.wav",
+          "norm_ref": "tom search for the resource manager",
+          "norm_hyp": "don t search for the resource manager",
+          "wer": 0.3333333333333333
+        },
+        {
+          "file": "030_tom_minimize_the_terminal_silently.wav",
+          "norm_ref": "tom minimize the terminal silently",
+          "norm_hyp": "dom minimize the terminal silently",
+          "wer": 0.2
+        },
+        {
+          "file": "031_tom_read_the_last_commit_message.wav",
+          "norm_ref": "tom read the last commit message",
+          "norm_hyp": "don t ring the last commit message",
+          "wer": 0.5
+        },
+        {
+          "file": "032_tom_run_the_integration_tests.wav",
+          "norm_ref": "tom run the integration tests",
+          "norm_hyp": "don t run the integration test",
+          "wer": 0.6
+        }
+      ],
+      "number_errors": [
+        {
+          "file": "034_set_an_alarm_for_seven_thirty_am.wav",
+          "norm_ref": "set an alarm for 7 30 am",
+          "norm_hyp": "setting alarm for 7 30 am",
+          "wer": 0.2857142857142857
+        },
+        {
+          "file": "037_delete_files_older_than_thirty_days.wav",
+          "norm_ref": "delete files older than 30 days",
+          "norm_hyp": "till it files older than 30 days",
+          "wer": 0.3333333333333333
+        },
+        {
+          "file": "038_show_logs_from_the_last_hour.wav",
+          "norm_ref": "show logs from the last hour",
+          "norm_hyp": "show logs for the last hour",
+          "wer": 0.16666666666666666
+        }
+      ]
+    },
+    "moonshine-tiny-int8": {
+      "summary": {
+        "overall_wer": 0.4092,
+        "by_category": {
+          "commands": 0.3522,
+          "questions": 0.2729,
+          "names": 0.5845,
+          "numbers": 0.5113
+        },
+        "numbers_exact_match": "2/8",
+        "numbers_exact_rate": 0.25,
+        "name_errors_count": 8,
+        "number_errors_count": 6
+      },
+      "items": [
+        {
+          "file": "001_open_the_settings_window.wav",
+          "idx": 0,
+          "category": "commands",
+          "norm_ref": "open the settings window",
+          "norm_hyp": "open the settings window",
+          "wer": 0.0
+        },
+        {
+          "file": "002_close_the_current_tab.wav",
+          "idx": 1,
+          "category": "commands",
+          "norm_ref": "close the current tab",
+          "norm_hyp": "close the current tab",
+          "wer": 0.0
+        },
+        {
+          "file": "003_minimize_all_windows.wav",
+          "idx": 2,
+          "category": "commands",
+          "norm_ref": "minimize all windows",
+          "norm_hyp": "minimize all windows",
+          "wer": 0.0
+        },
+        {
+          "file": "004_take_a_screenshot.wav",
+          "idx": 3,
+          "category": "commands",
+          "norm_ref": "take a screenshot",
+          "norm_hyp": "take a screenshot",
+          "wer": 0.0
+        },
+        {
+          "file": "005_set_a_timer_for_five_minutes.wav",
+          "idx": 4,
+          "category": "commands",
+          "norm_ref": "set a timer for 5 minutes",
+          "norm_hyp": "set a timer for 5 minutes",
+          "wer": 0.0
+        },
+        {
+          "file": "006_turn_up_the_volume.wav",
+          "idx": 5,
+          "category": "commands",
+          "norm_ref": "turn up the volume",
+          "norm_hyp": "you have the volume",
+          "wer": 0.5
+        },
+        {
+          "file": "007_mute_the_microphone.wav",
+          "idx": 6,
+          "category": "commands",
+          "norm_ref": "mute the microphone",
+          "norm_hyp": "meet the microphone",
+          "wer": 0.3333
+        },
+        {
+          "file": "008_open_the_downloads_folder.wav",
+          "idx": 7,
+          "category": "commands",
+          "norm_ref": "open the downloads folder",
+          "norm_hyp": "up on the downward spolder",
+          "wer": 1.0
+        },
+        {
+          "file": "009_delete_the_temporary_files.wav",
+          "idx": 8,
+          "category": "commands",
+          "norm_ref": "delete the temporary files",
+          "norm_hyp": "delete the temporary files",
+          "wer": 0.0
+        },
+        {
+          "file": "010_run_the_test_suite.wav",
+          "idx": 9,
+          "category": "commands",
+          "norm_ref": "run the test suite",
+          "norm_hyp": "run the test suit",
+          "wer": 0.25
+        },
+        {
+          "file": "011_restart_the_application.wav",
+          "idx": 10,
+          "category": "commands",
+          "norm_ref": "restart the application",
+          "norm_hyp": "restart the application",
+          "wer": 0.0
+        },
+        {
+          "file": "012_show_me_the_task_manager.wav",
+          "idx": 11,
+          "category": "commands",
+          "norm_ref": "show me the task manager",
+          "norm_hyp": "show me the cast manager",
+          "wer": 0.2
+        },
+        {
+          "file": "013_lock_the_screen.wav",
+          "idx": 12,
+          "category": "commands",
+          "norm_ref": "lock the screen",
+          "norm_hyp": "",
+          "wer": 1.0
+        },
+        {
+          "file": "014_empty_the_recycle_bin.wav",
+          "idx": 13,
+          "category": "commands",
+          "norm_ref": "empty the recycle bin",
+          "norm_hyp": "i am tiggerese i could be",
+          "wer": 1.5
+        },
+        {
+          "file": "015_switch_to_dark_mode.wav",
+          "idx": 14,
+          "category": "commands",
+          "norm_ref": "switch to dark mode",
+          "norm_hyp": "speaks to dot mode",
+          "wer": 0.5
+        },
+        {
+          "file": "016_what_is_the_current_time.wav",
+          "idx": 15,
+          "category": "questions",
+          "norm_ref": "what is the current time",
+          "norm_hyp": "is a current app",
+          "wer": 0.6
+        },
+        {
+          "file": "017_how_much_disk_space_is_left.wav",
+          "idx": 16,
+          "category": "questions",
+          "norm_ref": "how much disk space is left",
+          "norm_hyp": "how much this base is left",
+          "wer": 0.3333
+        },
+        {
+          "file": "018_what_version_of_python_is_installed.wav",
+          "idx": 17,
+          "category": "questions",
+          "norm_ref": "what version of python is installed",
+          "norm_hyp": "what version of python is installed",
+          "wer": 0.0
+        },
+        {
+          "file": "019_where_is_the_config_file_located.wav",
+          "idx": 18,
+          "category": "questions",
+          "norm_ref": "where is the config file located",
+          "norm_hyp": "where is the config file repeated",
+          "wer": 0.1667
+        },
+        {
+          "file": "020_why_is_the_build_failing.wav",
+          "idx": 19,
+          "category": "questions",
+          "norm_ref": "why is the build failing",
+          "norm_hyp": "why is the milk failing",
+          "wer": 0.2
+        },
+        {
+          "file": "021_which_process_is_using_the_most_memory.wav",
+          "idx": 20,
+          "category": "questions",
+          "norm_ref": "which process is using the most memory",
+          "norm_hyp": "which process is using the most memory",
+          "wer": 0.0
+        },
+        {
+          "file": "022_when_was_the_last_backup_made.wav",
+          "idx": 21,
+          "category": "questions",
+          "norm_ref": "when was the last backup made",
+          "norm_hyp": "i m not the last backup made",
+          "wer": 0.5
+        },
+        {
+          "file": "023_can_you_explain_this_error_message.wav",
+          "idx": 22,
+          "category": "questions",
+          "norm_ref": "can you explain this error message",
+          "norm_hyp": "daniel explained this error message",
+          "wer": 0.5
+        },
+        {
+          "file": "024_what_are_the_system_requirements.wav",
+          "idx": 23,
+          "category": "questions",
+          "norm_ref": "what are the system requirements",
+          "norm_hyp": "what are the system requirements",
+          "wer": 0.0
+        },
+        {
+          "file": "025_how_do_i_enable_the_dark_theme.wav",
+          "idx": 24,
+          "category": "questions",
+          "norm_ref": "how do i enable the dark theme",
+          "norm_hyp": "how do i enable ducting",
+          "wer": 0.4286
+        },
+        {
+          "file": "026_tom_show_me_the_dashboard.wav",
+          "idx": 25,
+          "category": "names",
+          "norm_ref": "tom show me the dashboard",
+          "norm_hyp": "don t show me the dashboard",
+          "wer": 0.4
+        },
+        {
+          "file": "027_tom_what_is_the_status_of_the_build.wav",
+          "idx": 26,
+          "category": "names",
+          "norm_ref": "tom what is the status of the build",
+          "norm_hyp": "don t what he s status of the build",
+          "wer": 0.5
+        },
+        {
+          "file": "028_tom_open_the_project_settings.wav",
+          "idx": 27,
+          "category": "names",
+          "norm_ref": "tom open the project settings",
+          "norm_hyp": "don t open the bridge to settings",
+          "wer": 0.8
+        },
+        {
+          "file": "029_tom_search_for_the_resource_manager.wav",
+          "idx": 28,
+          "category": "names",
+          "norm_ref": "tom search for the resource manager",
+          "norm_hyp": "don t search for the resource manager",
+          "wer": 0.3333
+        },
+        {
+          "file": "030_tom_minimize_the_terminal_silently.wav",
+          "idx": 29,
+          "category": "names",
+          "norm_ref": "tom minimize the terminal silently",
+          "norm_hyp": "dom many must determine el salim lee",
+          "wer": 1.4
+        },
+        {
+          "file": "031_tom_read_the_last_commit_message.wav",
+          "idx": 30,
+          "category": "names",
+          "norm_ref": "tom read the last commit message",
+          "norm_hyp": "don t read the last comic message",
+          "wer": 0.5
+        },
+        {
+          "file": "032_tom_run_the_integration_tests.wav",
+          "idx": 31,
+          "category": "names",
+          "norm_ref": "tom run the integration tests",
+          "norm_hyp": "don t run the integration test",
+          "wer": 0.6
+        },
+        {
+          "file": "033_tom_what_changed_in_the_last_commit.wav",
+          "idx": 32,
+          "category": "names",
+          "norm_ref": "tom what changed in the last commit",
+          "norm_hyp": "dom what changed in the last commit",
+          "wer": 0.1429
+        },
+        {
+          "file": "034_set_an_alarm_for_seven_thirty_am.wav",
+          "idx": 33,
+          "category": "numbers",
+          "norm_ref": "set an alarm for 7 30 am",
+          "norm_hyp": "attune alarm 4730 dm",
+          "wer": 0.8571
+        },
+        {
+          "file": "035_remind_me_at_three_fifteen_pm.wav",
+          "idx": 34,
+          "category": "numbers",
+          "norm_ref": "remind me at 3 15 pm",
+          "norm_hyp": "remind me it s 3 15pm",
+          "wer": 0.6667
+        },
+        {
+          "file": "036_schedule_a_meeting_for_next_tuesday.wav",
+          "idx": 35,
+          "category": "numbers",
+          "norm_ref": "schedule a meeting for next thursday",
+          "norm_hyp": "schedule a meeting for next thursday",
+          "wer": 0.0
+        },
+        {
+          "file": "037_delete_files_older_than_thirty_days.wav",
+          "idx": 36,
+          "category": "numbers",
+          "norm_ref": "delete files older than 30 days",
+          "norm_hyp": "delete files all the nativity days",
+          "wer": 0.5
+        },
+        {
+          "file": "038_show_logs_from_the_last_hour.wav",
+          "idx": 37,
+          "category": "numbers",
+          "norm_ref": "show logs from the last hour",
+          "norm_hyp": "she ll log for the last hour",
+          "wer": 0.6667
+        },
+        {
+          "file": "039_calculate_fifteen_percent_of_two_hundred.wav",
+          "idx": 38,
+          "category": "numbers",
+          "norm_ref": "calculate 15 percent of 200",
+          "norm_hyp": "cargillate 15 birth in the age of 200",
+          "wer": 1.0
+        },
+        {
+          "file": "040_what_is_the_date_next_friday.wav",
+          "idx": 39,
+          "category": "numbers",
+          "norm_ref": "what is the date next friday",
+          "norm_hyp": "what is the date next friday",
+          "wer": 0.0
+        },
+        {
+          "file": "041_run_the_backup_at_midnight.wav",
+          "idx": 40,
+          "category": "numbers",
+          "norm_ref": "run the backup at midnight",
+          "norm_hyp": "run the backup at meet night",
+          "wer": 0.4
+        }
+      ],
+      "name_errors": [
+        {
+          "file": "026_tom_show_me_the_dashboard.wav",
+          "norm_ref": "tom show me the dashboard",
+          "norm_hyp": "don t show me the dashboard",
+          "wer": 0.4
+        },
+        {
+          "file": "027_tom_what_is_the_status_of_the_build.wav",
+          "norm_ref": "tom what is the status of the build",
+          "norm_hyp": "don t what he s status of the build",
+          "wer": 0.5
+        },
+        {
+          "file": "028_tom_open_the_project_settings.wav",
+          "norm_ref": "tom open the project settings",
+          "norm_hyp": "don t open the bridge to settings",
+          "wer": 0.8
+        },
+        {
+          "file": "029_tom_search_for_the_resource_manager.wav",
+          "norm_ref": "tom search for the resource manager",
+          "norm_hyp": "don t search for the resource manager",
+          "wer": 0.3333333333333333
+        },
+        {
+          "file": "030_tom_minimize_the_terminal_silently.wav",
+          "norm_ref": "tom minimize the terminal silently",
+          "norm_hyp": "dom many must determine el salim lee",
+          "wer": 1.4
+        },
+        {
+          "file": "031_tom_read_the_last_commit_message.wav",
+          "norm_ref": "tom read the last commit message",
+          "norm_hyp": "don t read the last comic message",
+          "wer": 0.5
+        },
+        {
+          "file": "032_tom_run_the_integration_tests.wav",
+          "norm_ref": "tom run the integration tests",
+          "norm_hyp": "don t run the integration test",
+          "wer": 0.6
+        },
+        {
+          "file": "033_tom_what_changed_in_the_last_commit.wav",
+          "norm_ref": "tom what changed in the last commit",
+          "norm_hyp": "dom what changed in the last commit",
+          "wer": 0.14285714285714285
+        }
+      ],
+      "number_errors": [
+        {
+          "file": "034_set_an_alarm_for_seven_thirty_am.wav",
+          "norm_ref": "set an alarm for 7 30 am",
+          "norm_hyp": "attune alarm 4730 dm",
+          "wer": 0.8571428571428571
+        },
+        {
+          "file": "035_remind_me_at_three_fifteen_pm.wav",
+          "norm_ref": "remind me at 3 15 pm",
+          "norm_hyp": "remind me it s 3 15pm",
+          "wer": 0.6666666666666666
+        },
+        {
+          "file": "037_delete_files_older_than_thirty_days.wav",
+          "norm_ref": "delete files older than 30 days",
+          "norm_hyp": "delete files all the nativity days",
+          "wer": 0.5
+        },
+        {
+          "file": "038_show_logs_from_the_last_hour.wav",
+          "norm_ref": "show logs from the last hour",
+          "norm_hyp": "she ll log for the last hour",
+          "wer": 0.6666666666666666
+        },
+        {
+          "file": "039_calculate_fifteen_percent_of_two_hundred.wav",
+          "norm_ref": "calculate 15 percent of 200",
+          "norm_hyp": "cargillate 15 birth in the age of 200",
+          "wer": 1.0
+        },
+        {
+          "file": "041_run_the_backup_at_midnight.wav",
+          "norm_ref": "run the backup at midnight",
+          "norm_hyp": "run the backup at meet night",
+          "wer": 0.4
+        }
+      ]
+    }
+  }
+}

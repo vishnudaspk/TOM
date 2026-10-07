@@ -1,0 +1,10 @@
+{
+  "hangover_H_ms": 600,
+  "n_runs": 150,
+  "mean_ms": 29.27,
+  "p50_ms": 28.98,
+  "p95_ms": 38.1,
+  "stdev_ms": 6.15,
+  "stdev_over_mean_pct": 21.0,
+  "high_variance": false
+}

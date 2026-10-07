@@ -1,0 +1,1243 @@
+{
+  "date": "2026-10-07",
+  "model": "sherpa-onnx-moonshine-tiny-en-int8",
+  "source_repo": "csukuangfj/sherpa-onnx-moonshine-tiny-en-int8",
+  "license": "MIT",
+  "sherpa_onnx_version": "1.13.8",
+  "num_threads": 4,
+  "n_runs": 10,
+  "protocol": "unpaced (whole audio at once), endpoint-to-text, 10 runs per recording, warmup excluded",
+  "accuracy": {
+    "overall_wer_mean": 0.3771,
+    "by_category": {
+      "commands": 0.3522,
+      "questions": 0.2562,
+      "names": 0.4522,
+      "numbers": 0.5
+    },
+    "numbers_exact_match": "2/8"
+  },
+  "latency_by_bucket": {
+    "<2s": {
+      "n_recordings": 1,
+      "n_total_runs": 10,
+      "p50": 22.74,
+      "p95": 28.99,
+      "stdev": 3.17,
+      "mean": 23.61
+    },
+    "2-3s": {
+      "n_recordings": 30,
+      "n_total_runs": 300,
+      "p50": 33.93,
+      "p95": 57.17,
+      "stdev": 11.47,
+      "mean": 36.2
+    },
+    ">3s": {
+      "n_recordings": 10,
+      "n_total_runs": 100,
+      "p50": 50.53,
+      "p95": 69.04,
+      "stdev": 10.12,
+      "mean": 52.8
+    }
+  },
+  "cpu": {
+    "avg_pct": 1332.7,
+    "peak_pct": 2708.3,
+    "num_threads": 4
+  },
+  "peak_ram_mb": 203.0,
+  "per_file_results": [
+    {
+      "file": "001_open_the_settings_window.wav",
+      "idx": 0,
+      "category": "commands",
+      "duration_s": 2.7,
+      "bucket": "2-3s",
+      "reference": "open the settings window",
+      "hypothesis": "Open the settings window.",
+      "ref_normalized": "open the settings window",
+      "hyp_normalized": "open the settings window",
+      "wer": 0.0,
+      "latency_ms": {
+        "p50": 34.71,
+        "p95": 42.01,
+        "stdev": 3.79,
+        "runs": [
+          41.71730000052776,
+          35.266199999568926,
+          42.24369999974442,
+          30.779400000028545,
+          34.14669999983744,
+          31.69900000011694,
+          36.97889999966719,
+          35.89910000027885,
+          33.233900000595895,
+          31.79959999943094
+        ]
+      }
+    },
+    {
+      "file": "002_close_the_current_tab.wav",
+      "idx": 1,
+      "category": "commands",
+      "duration_s": 2.3,
+      "bucket": "2-3s",
+      "reference": "close the current tab",
+      "hypothesis": "Close the current tab.",
+      "ref_normalized": "close the current tab",
+      "hyp_normalized": "close the current tab",
+      "wer": 0.0,
+      "latency_ms": {
+        "p50": 28.09,
+        "p95": 33.83,
+        "stdev": 3.17,
+        "runs": [
+          27.99920000052225,
+          25.58690000023489,
+          25.772199999664736,
+          28.185400000438676,
+          25.913200000104553,
+          37.07589999976335,
+          27.759399999922607,
+          29.86739999960264,
+          29.610100000354578,
+          29.577700000118057
+        ]
+      }
+    },
+    {
+      "file": "003_minimize_all_windows.wav",
+      "idx": 2,
+      "category": "commands",
+      "duration_s": 2.8,
+      "bucket": "2-3s",
+      "reference": "minimize all windows",
+      "hypothesis": "Minimize all windows.",
+      "ref_normalized": "minimize all windows",
+      "hyp_normalized": "minimize all windows",
+      "wer": 0.0,
+      "latency_ms": {
+        "p50": 36.04,
+        "p95": 67.04,
+        "stdev": 15.2,
+        "runs": [
+          33.96119999979419,
+          47.41890000059357,
+          28.625399999327783,
+          27.558000000681204,
+          38.12110000035318,
+          31.045300000187126,
+          49.9733999995442,
+          79.15849999972124,
+          29.9088000001575,
+          52.23469999964436
+        ]
+      }
+    },
+    {
+      "file": "004_take_a_screenshot.wav",
+      "idx": 3,
+      "category": "commands",
+      "duration_s": 2.4,
+      "bucket": "2-3s",
+      "reference": "take a screenshot",
+      "hypothesis": "Take a screenshot",
+      "ref_normalized": "take a screenshot",
+      "hyp_normalized": "take a screenshot",
+      "wer": 0.0,
+      "latency_ms": {
+        "p50": 21.45,
+        "p95": 33.06,
+        "stdev": 5.32,
+        "runs": [
+          18.098399999871617,
+          32.04340000047523,
+          20.951399999830755,
+          33.89760000027309,
+          21.95599999959086,
+          28.99299999990035,
+          20.07359999970504,
+          22.631200000432727,
+          20.424000000275555,
+          19.798100000116392
+        ]
+      }
+    },
+    {
+      "file": "005_set_a_timer_for_five_minutes.wav",
+      "idx": 4,
+      "category": "commands",
+      "duration_s": 2.7,
+      "bucket": "2-3s",
+      "reference": "set a timer for five minutes",
+      "hypothesis": "Set a timer for five minutes.",
+      "ref_normalized": "set a timer for 5 minutes",
+      "hyp_normalized": "set a timer for 5 minutes",
+      "wer": 0.0,
+      "latency_ms": {
+        "p50": 32.26,
+        "p95": 38.69,
+        "stdev": 3.45,
+        "runs": [
+          31.385000000227592,
+          29.997499999808497,
+          38.65029999997205,
+          30.97379999962868,
+          33.141100000648294,
+          38.71340000023338,
+          35.214300000006915,
+          29.715599999690312,
+          33.810900000389665,
+          28.276199999709206
+        ]
+      }
+    },
+    {
+      "file": "006_turn_up_the_volume.wav",
+      "idx": 5,
+      "category": "commands",
+      "duration_s": 2.0,
+      "bucket": "2-3s",
+      "reference": "turn up the volume",
+      "hypothesis": "You have the volume.",
+      "ref_normalized": "turn up the volume",
+      "hyp_normalized": "you have the volume",
+      "wer": 0.5,
+      "latency_ms": {
+        "p50": 23.53,
+        "p95": 39.08,
+        "stdev": 6.69,
+        "runs": [
+          22.042200000214507,
+          23.66100000017468,
+          36.322500000096625,
+          22.632599999269587,
+          41.329599999698985,
+          22.187200000189478,
+          34.18179999971471,
+          22.985600000538398,
+          23.39029999984632,
+          28.224300000147196
+        ]
+      }
+    },
+    {
+      "file": "007_mute_the_microphone.wav",
+      "idx": 6,
+      "category": "commands",
+      "duration_s": 2.0,
+      "bucket": "2-3s",
+      "reference": "mute the microphone",
+      "hypothesis": "Meet the microphone.",
+      "ref_normalized": "mute the microphone",
+      "hyp_normalized": "meet the microphone",
+      "wer": 0.3333,
+      "latency_ms": {
+        "p50": 27.75,
+        "p95": 36.71,
+        "stdev": 4.96,
+        "runs": [
+          29.08839999963675,
+          25.762700000086625,
+          27.27839999988646,
+          24.09520000037446,
+          40.19520000019838,
+          28.222400000231573,
+          32.45520000018587,
+          22.77109999977256,
+          31.884600000012142,
+          23.916600000120525
+        ]
+      }
+    },
+    {
+      "file": "008_open_the_downloads_folder.wav",
+      "idx": 7,
+      "category": "commands",
+      "duration_s": 2.9,
+      "bucket": "2-3s",
+      "reference": "open the downloads folder",
+      "hypothesis": "Up on the downward spolder.",
+      "ref_normalized": "open the downloads folder",
+      "hyp_normalized": "up on the downward spolder",
+      "wer": 1.0,
+      "latency_ms": {
+        "p50": 38.51,
+        "p95": 49.84,
+        "stdev": 6.12,
+        "runs": [
+          40.207800000644056,
+          37.335300000449934,
+          36.052700000254845,
+          51.671799999894574,
+          44.641800000135845,
+          33.39940000023489,
+          32.67559999949299,
+          39.68130000066594,
+          33.66759999971691,
+          47.60560000067926
+        ]
+      }
+    },
+    {
+      "file": "009_delete_the_temporary_files.wav",
+      "idx": 8,
+      "category": "commands",
+      "duration_s": 2.8,
+      "bucket": "2-3s",
+      "reference": "delete the temporary files",
+      "hypothesis": "Delete the temporary files.",
+      "ref_normalized": "delete the temporary files",
+      "hyp_normalized": "delete the temporary files",
+      "wer": 0.0,
+      "latency_ms": {
+        "p50": 31.45,
+        "p95": 49.41,
+        "stdev": 8.94,
+        "runs": [
+          32.293100000060804,
+          40.82809999999881,
+          26.67699999983597,
+          41.59220000019559,
+          55.80110000028071,
+          27.483699999720557,
+          35.1223999996364,
+          27.031000000533822,
+          30.600699999922654,
+          26.18160000019998
+        ]
+      }
+    },
+    {
+      "file": "010_run_the_test_suite.wav",
+      "idx": 9,
+      "category": "commands",
+      "duration_s": 2.6,
+      "bucket": "2-3s",
+      "reference": "run the test suite",
+      "hypothesis": "Run the test suit.",
+      "ref_normalized": "run the test suite",
+      "hyp_normalized": "run the test suit",
+      "wer": 0.25,
+      "latency_ms": {
+        "p50": 26.11,
+        "p95": 32.32,
+        "stdev": 3.24,
+        "runs": [
+          26.050499999655585,
+          30.52930000012566,
+          31.0300000001007,
+          26.198800000202027,
+          33.37050000027375,
+          24.264100000436883,
+          26.177899999311194,
+          23.72560000003432,
+          24.321300000337942,
+          24.148800000148185
+        ]
+      }
+    },
+    {
+      "file": "011_restart_the_application.wav",
+      "idx": 10,
+      "category": "commands",
+      "duration_s": 2.4,
+      "bucket": "2-3s",
+      "reference": "restart the application",
+      "hypothesis": "Restart the application.",
+      "ref_normalized": "restart the application",
+      "hyp_normalized": "restart the application",
+      "wer": 0.0,
+      "latency_ms": {
+        "p50": 25.01,
+        "p95": 38.96,
+        "stdev": 6.17,
+        "runs": [
+          22.389900000234775,
+          24.772399999164918,
+          44.11130000062258,
+          25.240799999664887,
+          29.959299999973155,
+          24.723399999857065,
+          24.7164000002158,
+          32.67269999923883,
+          23.58910000020842,
+          30.475399999886577
+        ]
+      }
+    },
+    {
+      "file": "012_show_me_the_task_manager.wav",
+      "idx": 11,
+      "category": "commands",
+      "duration_s": 2.3,
+      "bucket": "2-3s",
+      "reference": "show me the task manager",
+      "hypothesis": "Show me the cast manager",
+      "ref_normalized": "show me the task manager",
+      "hyp_normalized": "show me the cast manager",
+      "wer": 0.2,
+      "latency_ms": {
+        "p50": 25.48,
+        "p95": 29.52,
+        "stdev": 2.08,
+        "runs": [
+          25.589400000171736,
+          28.144300000349176,
+          26.124500000150874,
+          24.382499999774154,
+          25.942899999790825,
+          22.64070000001084,
+          25.16780000041763,
+          25.369099999807077,
+          24.50479999970412,
+          30.641299999842886
+        ]
+      }
+    },
+    {
+      "file": "013_lock_the_screen.wav",
+      "idx": 12,
+      "category": "commands",
+      "duration_s": 2.3,
+      "bucket": "2-3s",
+      "reference": "lock the screen",
+      "hypothesis": "",
+      "ref_normalized": "lock the screen",
+      "hyp_normalized": "",
+      "wer": 1.0,
+      "latency_ms": {
+        "p50": 15.87,
+        "p95": 22.88,
+        "stdev": 3.61,
+        "runs": [
+          26.653199999600474,
+          17.329700000118464,
+          15.241199999763921,
+          18.259600000419596,
+          15.28000000052998,
+          15.412499999911233,
+          16.394100000070466,
+          16.321199999765668,
+          12.876800000412914,
+          13.848499999767228
+        ]
+      }
+    },
+    {
+      "file": "014_empty_the_recycle_bin.wav",
+      "idx": 13,
+      "category": "commands",
+      "duration_s": 2.2,
+      "bucket": "2-3s",
+      "reference": "empty the recycle bin",
+      "hypothesis": "I am Tiggerese I could be.",
+      "ref_normalized": "empty the recycle bin",
+      "hyp_normalized": "i am tiggerese i could be",
+      "wer": 1.5,
+      "latency_ms": {
+        "p50": 38.61,
+        "p95": 46.58,
+        "stdev": 6.14,
+        "runs": [
+          37.7478999998857,
+          28.946299999915936,
+          39.47989999960555,
+          45.724499999778345,
+          40.00170000017533,
+          47.2793000008096,
+          32.18449999985751,
+          41.32399999980407,
+          32.37540000009176,
+          29.675599999791302
+        ]
+      }
+    },
+    {
+      "file": "015_switch_to_dark_mode.wav",
+      "idx": 14,
+      "category": "commands",
+      "duration_s": 2.2,
+      "bucket": "2-3s",
+      "reference": "switch to dark mode",
+      "hypothesis": "Speaks to Dot mode",
+      "ref_normalized": "switch to dark mode",
+      "hyp_normalized": "speaks to dot mode",
+      "wer": 0.5,
+      "latency_ms": {
+        "p50": 26.36,
+        "p95": 28.95,
+        "stdev": 1.35,
+        "runs": [
+          27.264600000307837,
+          26.292600000488164,
+          25.047400000403286,
+          24.90010000019538,
+          26.429499999721884,
+          26.228400000036345,
+          27.15470000021014,
+          27.932500000133587,
+          29.785000000629225,
+          26.239199999508855
+        ]
+      }
+    },
+    {
+      "file": "016_what_is_the_current_time.wav",
+      "idx": 15,
+      "category": "questions",
+      "duration_s": 1.8,
+      "bucket": "<2s",
+      "reference": "what is the current time",
+      "hypothesis": "Is a current app?",
+      "ref_normalized": "what is the current time",
+      "hyp_normalized": "is a current app",
+      "wer": 0.6,
+      "latency_ms": {
+        "p50": 22.74,
+        "p95": 28.99,
+        "stdev": 3.17,
+        "runs": [
+          23.90209999975923,
+          22.23709999998391,
+          24.732500000027358,
+          22.84830000007787,
+          32.47610000016721,
+          20.554400000037276,
+          21.965899999486282,
+          21.373900000071444,
+          22.63160000075004,
+          23.392600000079256
+        ]
+      }
+    },
+    {
+      "file": "017_how_much_disk_space_is_left.wav",
+      "idx": 16,
+      "category": "questions",
+      "duration_s": 2.5,
+      "bucket": "2-3s",
+      "reference": "how much disk space is left",
+      "hypothesis": "How much this base is left,",
+      "ref_normalized": "how much disk space is left",
+      "hyp_normalized": "how much this base is left",
+      "wer": 0.3333,
+      "latency_ms": {
+        "p50": 34.95,
+        "p95": 40.93,
+        "stdev": 3.56,
+        "runs": [
+          35.475399999995716,
+          30.60509999977512,
+          32.63409999999567,
+          36.29630000068573,
+          38.31919999993261,
+          41.270100000474486,
+          34.17300000000978,
+          30.51009999944654,
+          34.43119999974442,
+          40.504699999473814
+        ]
+      }
+    },
+    {
+      "file": "018_what_version_of_python_is_installed.wav",
+      "idx": 17,
+      "category": "questions",
+      "duration_s": 3.0,
+      "bucket": "2-3s",
+      "reference": "what version of python is installed",
+      "hypothesis": "What version of Python is installed?",
+      "ref_normalized": "what version of python is installed",
+      "hyp_normalized": "what version of python is installed",
+      "wer": 0.0,
+      "latency_ms": {
+        "p50": 38.65,
+        "p95": 54.76,
+        "stdev": 7.7,
+        "runs": [
+          36.604500000066764,
+          54.110200000650366,
+          36.72349999942526,
+          49.162799999976414,
+          55.30040000030567,
+          39.519900000414054,
+          33.82580000015878,
+          34.66349999962404,
+          37.78659999989031,
+          46.184599999833154
+        ]
+      }
+    },
+    {
+      "file": "019_where_is_the_config_file_located.wav",
+      "idx": 18,
+      "category": "questions",
+      "duration_s": 2.6,
+      "bucket": "2-3s",
+      "reference": "where is the config file located",
+      "hypothesis": "Where is the config file repeated?",
+      "ref_normalized": "where is the config file located",
+      "hyp_normalized": "where is the config file repeated",
+      "wer": 0.1667,
+      "latency_ms": {
+        "p50": 34.45,
+        "p95": 48.19,
+        "stdev": 6.72,
+        "runs": [
+          28.947599999810336,
+          50.51199999979872,
+          30.93339999941236,
+          30.2190000002156,
+          37.27759999947011,
+          30.573899999581045,
+          38.692600000103994,
+          35.54580000036367,
+          33.361100000547594,
+          45.34520000015618
+        ]
+      }
+    },
+    {
+      "file": "020_why_is_the_build_failing.wav",
+      "idx": 19,
+      "category": "questions",
+      "duration_s": 2.9,
+      "bucket": "2-3s",
+      "reference": "why is the build failing",
+      "hypothesis": "Why is the milk failing?",
+      "ref_normalized": "why is the build failing",
+      "hyp_normalized": "why is the milk failing",
+      "wer": 0.2,
+      "latency_ms": {
+        "p50": 32.87,
+        "p95": 48.12,
+        "stdev": 7.46,
+        "runs": [
+          32.243499999822234,
+          28.780599999663536,
+          36.08930000063992,
+          33.50589999990916,
+          40.7495999997991,
+          47.09880000064004,
+          28.490400000009686,
+          48.95490000035352,
+          27.94830000038928,
+          28.546400000777794
+        ]
+      }
+    },
+    {
+      "file": "021_which_process_is_using_the_most_memory.wav",
+      "idx": 20,
+      "category": "questions",
+      "duration_s": 2.9,
+      "bucket": "2-3s",
+      "reference": "which process is using the most memory",
+      "hypothesis": "Which process is using the most memory?",
+      "ref_normalized": "which process is using the most memory",
+      "hyp_normalized": "which process is using the most memory",
+      "wer": 0.0,
+      "latency_ms": {
+        "p50": 38.89,
+        "p95": 48.05,
+        "stdev": 5.5,
+        "runs": [
+          30.322399999931804,
+          41.007700000591285,
+          38.40070000023843,
+          36.26799999983632,
+          40.14290000031906,
+          35.97009999975853,
+          46.16359999999986,
+          39.38769999967917,
+          32.599000000118394,
+          49.595799999224255
+        ]
+      }
+    },
+    {
+      "file": "022_when_was_the_last_backup_made.wav",
+      "idx": 21,
+      "category": "questions",
+      "duration_s": 3.0,
+      "bucket": "2-3s",
+      "reference": "when was the last backup made",
+      "hypothesis": "I'm not the last backup made.",
+      "ref_normalized": "when was the last backup made",
+      "hyp_normalized": "i'm not the last backup made",
+      "wer": 0.3333,
+      "latency_ms": {
+        "p50": 50.09,
+        "p95": 58.27,
+        "stdev": 7.52,
+        "runs": [
+          40.94680000071094,
+          52.98040000070614,
+          49.840300000141724,
+          53.01239999971585,
+          46.19089999960124,
+          36.87730000001466,
+          37.48730000006617,
+          50.768000000061875,
+          62.57820000064385,
+          50.347100000180944
+        ]
+      }
+    },
+    {
+      "file": "023_can_you_explain_this_error_message.wav",
+      "idx": 22,
+      "category": "questions",
+      "duration_s": 3.2,
+      "bucket": ">3s",
+      "reference": "can you explain this error message",
+      "hypothesis": "Daniel explained this error message.",
+      "ref_normalized": "can you explain this error message",
+      "hyp_normalized": "daniel explained this error message",
+      "wer": 0.5,
+      "latency_ms": {
+        "p50": 39.17,
+        "p95": 51.61,
+        "stdev": 6.61,
+        "runs": [
+          40.23659999984375,
+          46.20559999966645,
+          41.220800000701274,
+          53.64149999968504,
+          49.13039999973989,
+          38.09949999958917,
+          36.78519999994023,
+          37.96220000003814,
+          33.20300000086718,
+          31.633399999918765
+        ]
+      }
+    },
+    {
+      "file": "024_what_are_the_system_requirements.wav",
+      "idx": 23,
+      "category": "questions",
+      "duration_s": 2.4,
+      "bucket": "2-3s",
+      "reference": "what are the system requirements",
+      "hypothesis": "What are the system requirements?",
+      "ref_normalized": "what are the system requirements",
+      "hyp_normalized": "what are the system requirements",
+      "wer": 0.0,
+      "latency_ms": {
+        "p50": 30.64,
+        "p95": 40.72,
+        "stdev": 5.24,
+        "runs": [
+          25.534200000038254,
+          33.74359999997978,
+          28.635900000153924,
+          30.664599999909115,
+          29.791300000397314,
+          40.97439999986818,
+          40.41200000028766,
+          34.53720000015892,
+          30.606999999690743,
+          24.761700000453857
+        ]
+      }
+    },
+    {
+      "file": "025_how_do_i_enable_the_dark_theme.wav",
+      "idx": 24,
+      "category": "questions",
+      "duration_s": 2.8,
+      "bucket": "2-3s",
+      "reference": "how do i enable the dark theme",
+      "hypothesis": "How do I enable ducting?",
+      "ref_normalized": "how do i enable the dark theme",
+      "hyp_normalized": "how do i enable ducting",
+      "wer": 0.4286,
+      "latency_ms": {
+        "p50": 42.05,
+        "p95": 55.01,
+        "stdev": 7.48,
+        "runs": [
+          34.65239999968617,
+          45.00460000053863,
+          42.08759999983158,
+          59.73770000036893,
+          34.2198999996981,
+          42.0101000008799,
+          49.230299999180716,
+          39.74980000020878,
+          44.717799999489216,
+          34.30930000013177
+        ]
+      }
+    },
+    {
+      "file": "026_tom_show_me_the_dashboard.wav",
+      "idx": 25,
+      "category": "names",
+      "duration_s": 2.3,
+      "bucket": "2-3s",
+      "reference": "tom show me the dashboard",
+      "hypothesis": "Don't show me the dashboard.",
+      "ref_normalized": "tom show me the dashboard",
+      "hyp_normalized": "don't show me the dashboard",
+      "wer": 0.2,
+      "latency_ms": {
+        "p50": 31.8,
+        "p95": 39.36,
+        "stdev": 3.89,
+        "runs": [
+          42.787300000782125,
+          29.263400000672846,
+          30.772000000069966,
+          34.17059999992489,
+          31.522299999778625,
+          29.16330000061862,
+          32.075199999781034,
+          35.16050000052928,
+          29.871599999751197,
+          34.69239999958518
+        ]
+      }
+    },
+    {
+      "file": "027_tom_what_is_the_status_of_the_build.wav",
+      "idx": 26,
+      "category": "names",
+      "duration_s": 2.9,
+      "bucket": "2-3s",
+      "reference": "tom what is the status of the build",
+      "hypothesis": "Don't. What he's status of the build?",
+      "ref_normalized": "tom what is the status of the build",
+      "hyp_normalized": "don't what he's status of the build",
+      "wer": 0.375,
+      "latency_ms": {
+        "p50": 50.04,
+        "p95": 60.21,
+        "stdev": 6.32,
+        "runs": [
+          42.245099999490776,
+          46.802500000012515,
+          42.7004000002853,
+          50.54230000041571,
+          62.731199999689125,
+          49.5320999998512,
+          56.20669999916572,
+          57.1313000000373,
+          48.325300000215066,
+          56.0338999994201
+        ]
+      }
+    },
+    {
+      "file": "028_tom_open_the_project_settings.wav",
+      "idx": 27,
+      "category": "names",
+      "duration_s": 3.7,
+      "bucket": ">3s",
+      "reference": "tom open the project settings",
+      "hypothesis": "Don't open the bridge to settings.",
+      "ref_normalized": "tom open the project settings",
+      "hyp_normalized": "don't open the bridge to settings",
+      "wer": 0.6,
+      "latency_ms": {
+        "p50": 56.14,
+        "p95": 68.28,
+        "stdev": 8.96,
+        "runs": [
+          62.1011000002909,
+          44.55809999944904,
+          69.91179999931774,
+          61.536100000012084,
+          66.29380000049423,
+          62.954699999863806,
+          47.73589999967953,
+          45.89869999927032,
+          50.74659999991127,
+          48.417699999845354
+        ]
+      }
+    },
+    {
+      "file": "029_tom_search_for_the_resource_manager.wav",
+      "idx": 28,
+      "category": "names",
+      "duration_s": 3.3,
+      "bucket": ">3s",
+      "reference": "tom search for the resource manager",
+      "hypothesis": "Don't search for the resource manager.",
+      "ref_normalized": "tom search for the resource manager",
+      "hyp_normalized": "don't search for the resource manager",
+      "wer": 0.1667,
+      "latency_ms": {
+        "p50": 49.95,
+        "p95": 60.55,
+        "stdev": 5.23,
+        "runs": [
+          47.85929999979999,
+          47.10810000051424,
+          49.85450000003766,
+          56.082099999912316,
+          50.05220000020927,
+          53.84249999951862,
+          45.33869999977469,
+          64.2096000001402,
+          48.2955999996193,
+          51.85910000000149
+        ]
+      }
+    },
+    {
+      "file": "030_tom_minimize_the_terminal_silently.wav",
+      "idx": 29,
+      "category": "names",
+      "duration_s": 3.3,
+      "bucket": ">3s",
+      "reference": "tom minimize the terminal silently",
+      "hypothesis": "Dom, many must determine El Salim Lee.",
+      "ref_normalized": "tom minimize the terminal silently",
+      "hyp_normalized": "dom many must determine el salim lee",
+      "wer": 1.4,
+      "latency_ms": {
+        "p50": 47.23,
+        "p95": 64.43,
+        "stdev": 7.56,
+        "runs": [
+          47.18570000022737,
+          61.06160000035743,
+          46.73520000051212,
+          46.098300000267045,
+          47.26450000089244,
+          58.4143000005497,
+          67.19499999962864,
+          43.69659999974829,
+          52.54140000033658,
+          45.56030000003375
+        ]
+      }
+    },
+    {
+      "file": "031_tom_read_the_last_commit_message.wav",
+      "idx": 30,
+      "category": "names",
+      "duration_s": 3.2,
+      "bucket": ">3s",
+      "reference": "tom read the last commit message",
+      "hypothesis": "Don't read the last comic message.",
+      "ref_normalized": "tom read the last commit message",
+      "hyp_normalized": "don't read the last comic message",
+      "wer": 0.3333,
+      "latency_ms": {
+        "p50": 61.48,
+        "p95": 87.53,
+        "stdev": 13.77,
+        "runs": [
+          97.53960000034567,
+          67.36030000047322,
+          49.23959999996441,
+          59.647799999765994,
+          49.55630000040401,
+          50.86860000028537,
+          75.29539999995905,
+          60.991399999693385,
+          65.29750000026979,
+          61.95949999982986
+        ]
+      }
+    },
+    {
+      "file": "032_tom_run_the_integration_tests.wav",
+      "idx": 31,
+      "category": "names",
+      "duration_s": 3.2,
+      "bucket": ">3s",
+      "reference": "tom run the integration tests",
+      "hypothesis": "Don't run the integration test.",
+      "ref_normalized": "tom run the integration tests",
+      "hyp_normalized": "don't run the integration test",
+      "wer": 0.4,
+      "latency_ms": {
+        "p50": 49.81,
+        "p95": 61.47,
+        "stdev": 5.47,
+        "runs": [
+          58.4249000003183,
+          49.89800000021205,
+          63.70570000035514,
+          58.73169999995298,
+          48.23020000003453,
+          45.99690000031842,
+          48.873700000513054,
+          54.10920000031183,
+          49.712799999724666,
+          49.46449999988545
+        ]
+      }
+    },
+    {
+      "file": "033_tom_what_changed_in_the_last_commit.wav",
+      "idx": 32,
+      "category": "names",
+      "duration_s": 3.3,
+      "bucket": ">3s",
+      "reference": "tom what changed in the last commit",
+      "hypothesis": "Dom, what changed in the last commit?",
+      "ref_normalized": "tom what changed in the last commit",
+      "hyp_normalized": "dom what changed in the last commit",
+      "wer": 0.1429,
+      "latency_ms": {
+        "p50": 51.49,
+        "p95": 67.93,
+        "stdev": 8.5,
+        "runs": [
+          44.45870000017749,
+          47.06309999983205,
+          50.89070000030915,
+          42.66329999973095,
+          52.089199999500124,
+          72.01530000020284,
+          53.436900000633614,
+          55.785600000490376,
+          47.07490000055259,
+          62.9281000001356
+        ]
+      }
+    },
+    {
+      "file": "034_set_an_alarm_for_seven_thirty_am.wav",
+      "idx": 33,
+      "category": "numbers",
+      "duration_s": 3.3,
+      "bucket": ">3s",
+      "reference": "set an alarm for seven thirty am",
+      "hypothesis": "Attune alarm 4730 dm",
+      "ref_normalized": "set an alarm for 7:30 am",
+      "hyp_normalized": "attune alarm 4730 dm",
+      "wer": 0.8333,
+      "latency_ms": {
+        "p50": 50.89,
+        "p95": 63.43,
+        "stdev": 7.43,
+        "runs": [
+          68.9901000005193,
+          51.37009999998554,
+          56.338899999900605,
+          56.64160000014817,
+          42.19610000018292,
+          46.7837000005602,
+          50.411199999871315,
+          54.287400000248454,
+          43.833700000504905,
+          47.02329999963695
+        ]
+      }
+    },
+    {
+      "file": "035_remind_me_at_three_fifteen_pm.wav",
+      "idx": 34,
+      "category": "numbers",
+      "duration_s": 2.9,
+      "bucket": "2-3s",
+      "reference": "remind me at three fifteen pm",
+      "hypothesis": "Remind me it's 3:15pm",
+      "ref_normalized": "remind me at 3:15 pm",
+      "hyp_normalized": "remind me it's 3 15pm",
+      "wer": 0.6,
+      "latency_ms": {
+        "p50": 46.97,
+        "p95": 57.66,
+        "stdev": 5.67,
+        "runs": [
+          41.28359999958775,
+          47.7829000001293,
+          54.028399999879184,
+          42.542799999864656,
+          45.93040000054316,
+          51.23890000049869,
+          46.16290000012668,
+          42.76430000027176,
+          60.62229999952251,
+          50.35110000062559
+        ]
+      }
+    },
+    {
+      "file": "036_schedule_a_meeting_for_next_tuesday.wav",
+      "idx": 35,
+      "category": "numbers",
+      "duration_s": 3.3,
+      "bucket": ">3s",
+      "reference": "schedule a meeting for next thursday",
+      "hypothesis": "Schedule a meeting for next Thursday.",
+      "ref_normalized": "schedule a meeting for next thursday",
+      "hyp_normalized": "schedule a meeting for next thursday",
+      "wer": 0.0,
+      "latency_ms": {
+        "p50": 48.7,
+        "p95": 73.58,
+        "stdev": 11.86,
+        "runs": [
+          46.17020000023331,
+          46.239000000241504,
+          44.156899999507004,
+          42.714799999885145,
+          61.680799999521696,
+          56.367799999861745,
+          83.30850000038481,
+          61.29060000057507,
+          51.15269999987504,
+          45.27579999921727
+        ]
+      }
+    },
+    {
+      "file": "037_delete_files_older_than_thirty_days.wav",
+      "idx": 36,
+      "category": "numbers",
+      "duration_s": 3.0,
+      "bucket": "2-3s",
+      "reference": "delete files older than thirty days",
+      "hypothesis": "Delete files all the nativity days.",
+      "ref_normalized": "delete files older than 30 days",
+      "hyp_normalized": "delete files all the nativity days",
+      "wer": 0.5,
+      "latency_ms": {
+        "p50": 44.66,
+        "p95": 58.22,
+        "stdev": 7.25,
+        "runs": [
+          47.44549999941228,
+          38.945000000239816,
+          41.54629999993631,
+          59.793500000523636,
+          41.868200000863,
+          48.00570000043081,
+          38.82849999990867,
+          47.63510000066162,
+          36.85159999986354,
+          56.30539999947359
+        ]
+      }
+    },
+    {
+      "file": "038_show_logs_from_the_last_hour.wav",
+      "idx": 37,
+      "category": "numbers",
+      "duration_s": 3.7,
+      "bucket": ">3s",
+      "reference": "show logs from the last hour",
+      "hypothesis": "She'll log for the last hour.",
+      "ref_normalized": "show logs from the last hour",
+      "hyp_normalized": "she'll log for the last hour",
+      "wer": 0.5,
+      "latency_ms": {
+        "p50": 51.22,
+        "p95": 63.61,
+        "stdev": 6.92,
+        "runs": [
+          46.87610000019049,
+          46.308899999530695,
+          59.522800000195275,
+          42.59399999955349,
+          50.641900000300666,
+          50.927799999954004,
+          64.26200000078097,
+          62.80570000035368,
+          56.34559999998601,
+          51.51380000006611
+        ]
+      }
+    },
+    {
+      "file": "039_calculate_fifteen_percent_of_two_hundred.wav",
+      "idx": 38,
+      "category": "numbers",
+      "duration_s": 2.9,
+      "bucket": "2-3s",
+      "reference": "calculate fifteen percent of two hundred",
+      "hypothesis": "Cargillate 15 birth in the age of 200.",
+      "ref_normalized": "calculate 15 percent of 2 100",
+      "hyp_normalized": "cargillate 15 birth in the age of 200",
+      "wer": 1.1667,
+      "latency_ms": {
+        "p50": 62.57,
+        "p95": 75.25,
+        "stdev": 6.87,
+        "runs": [
+          60.72089999997843,
+          57.164199999533594,
+          57.08660000072996,
+          57.264500000201224,
+          59.682499999325955,
+          70.9724999996979,
+          64.42210000022897,
+          65.35600000006525,
+          78.75400000011723,
+          69.9283000003561
+        ]
+      }
+    },
+    {
+      "file": "040_what_is_the_date_next_friday.wav",
+      "idx": 39,
+      "category": "numbers",
+      "duration_s": 2.7,
+      "bucket": "2-3s",
+      "reference": "what is the date next friday",
+      "hypothesis": "What is the date next Friday?",
+      "ref_normalized": "what is the date next friday",
+      "hyp_normalized": "what is the date next friday",
+      "wer": 0.0,
+      "latency_ms": {
+        "p50": 45.9,
+        "p95": 55.64,
+        "stdev": 5.72,
+        "runs": [
+          59.47790000027453,
+          44.96310000013182,
+          48.8999999997759,
+          44.94849999991857,
+          50.94759999974485,
+          49.67830000077811,
+          40.423399999781395,
+          37.816400000338035,
+          46.836200000143435,
+          43.92030000053637
+        ]
+      }
+    },
+    {
+      "file": "041_run_the_backup_at_midnight.wav",
+      "idx": 40,
+      "category": "numbers",
+      "duration_s": 2.0,
+      "bucket": "2-3s",
+      "reference": "run the backup at midnight",
+      "hypothesis": "Run the backup at meet night.",
+      "ref_normalized": "run the backup at midnight",
+      "hyp_normalized": "run the backup at meet night",
+      "wer": 0.4,
+      "latency_ms": {
+        "p50": 29.15,
+        "p95": 40.79,
+        "stdev": 5.78,
+        "runs": [
+          31.054799999765237,
+          26.732799999990675,
+          28.657999999268213,
+          29.651999999259715,
+          25.55080000001908,
+          46.29250000016327,
+          26.806500000020606,
+          33.698700000059034,
+          34.060300000419375,
+          27.7938000008362
+        ]
+      }
+    }
+  ]
+}
