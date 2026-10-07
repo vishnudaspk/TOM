@@ -571,7 +571,8 @@ class TestRealProviderConfigurationAndSafety:
         config = STTConfig()
         assert config.device == "cpu"
         assert config.compute_type == "int8"
-        assert config.model_name == "Systran/faster-whisper-large-v3-turbo"
+        assert config.model_name == "C:/Users/vishnuu/Projects/TOM/models/faster-whisper-small.en"
+        assert config.beam_size == 1
 
         # Provider instantiates without loading models (lazy loading)
         provider = FasterWhisperSTTProvider(config=config)

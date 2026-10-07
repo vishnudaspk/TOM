@@ -1,17 +1,17 @@
 """TOM models subsystem.
 
 Exposes the decoupled language model provider abstraction (LLMProvider),
-OpenAI-compatible HTTP provider (HttpModelProvider / LMStudioProvider),
-deterministic test double (MockModelProvider), benchmark suite, and typed schemas.
+OpenAI-compatible HTTP provider (HttpModelProvider), deterministic test double
+(MockModelProvider), benchmark suite, and typed schemas.
 
 Architecture (Decision 033):
     Agent
       ↓
     LLMProvider  ← abstract boundary
       ↓
-    HttpModelProvider / LMStudioProvider
+    HttpModelProvider
       ↓
-    http://127.0.0.1:1234/v1  (LM Studio / Bionic / any OpenAI-compatible endpoint)
+    llama.cpp OpenAI-compatible endpoint (http://127.0.0.1:65400/v1)
 """
 
 from tom.models.base import (
@@ -29,7 +29,7 @@ from tom.models.benchmark import (
     IterationResult,
     ModelBenchmarkSuite,
 )
-from tom.models.providers.http import HttpModelProvider, LMStudioProvider
+from tom.models.providers.http import HttpModelProvider
 from tom.models.providers.mock import MockModelProvider
 from tom.schemas.models import (
     FinishReason,
@@ -46,7 +46,6 @@ __all__ = [
     "ModelProvider",
     # Concrete providers
     "HttpModelProvider",
-    "LMStudioProvider",
     "MockModelProvider",
     # Benchmark suite
     "BenchmarkMetric",

@@ -1,15 +1,17 @@
-# Handoff — continue at Phase 9.5 (do not start until asked)
+# Handoff — Phase 9 closeout complete
 
-Invariants, hardware, and architecture: **`STATE.md`**. Phase ledger and ADRs 041–055: **`PROGRESS.md`**. Plan: **`docs/development/PHASE9_IMPLEMENTATIONPLAN.md`**.
+Final architecture: TOM uses llama.cpp at `http://127.0.0.1:65400/v1` through the generic OpenAI-compatible `HttpModelProvider`. Bionic/LM Studio is not an active runtime dependency.
+
+Invariants, hardware, and architecture: **`STATE.md`**. Phase ledger and ADRs 041–055: **`PROGRESS.md`**. The temporary Phase 9 implementation plan was removed after migration.
 
 ## Resume
 
-- **Done:** Phase 9 Iterations **9.0** (VAD/endpointing), **9.1** (streaming STT), **9.2** (LLM stream + sentence chunking), **9.3** (streaming TTS + incremental playback), **9.4** (turn manager + response policy). **9.B WS0** (measurement integrity), **WS1** (cheap faster-whisper tuning), **WS2** (streaming STT validation), **WS3** (Pipecat component spike) **COMPLETE**.
-- **WS2 VALIDATION (Checkpoint A):** sherpa-large meets finalization target (p50=15.3ms, p95=31.8ms) but fails accuracy (64.8% WER). sherpa-20M EXCLUDED (domain mismatch). Offline HYBRID-FINAL candidates: Moonshine-tiny, Parakeet TDT.
-- **WS3 SPIKE (Checkpoint B):** Smart Turn evaluated — **100% false-complete on hesitation prefix (DANGEROUS)**. VAD hangover baseline more reliable. Pipeline overhead 1.0µs. Interruption mechanism works with `interruptible=False`. No backchannel/filler features. **Decision**: Use Smart Turn & Silero VAD as libraries; defer Pipecat pipeline. STT plan: Hybrid — Moonshine-tiny offline for final, streaming STT TBD for partials.
-- **Next:** Phase 9.5 (InteractionCore + TurnExecutor) when instructed. **Do not** implement 9.5/9.6 until asked.
+- **Done:** Phase 9 Iterations **9.0** (VAD/endpointing), **9.1** (streaming STT), **9.2** (LLM stream + sentence chunking), **9.3** (streaming TTS + incremental playback), **9.4** (turn manager + response policy), and the applicable 9.B checkpoint work.
+- **Runtime:** Generic HTTP provider with llama.cpp as the production endpoint; no backend-specific alias remains.
+- **Current validation:** Targeted Phase 9 verification: **833 passed**, including **317 voice tests**. Full repository rerun was not performed.
+- **Next:** No Phase 10 work. Phase 9.5/9.6 are explicitly deferred and require user approval.
 
-## Pipeline assembled so far (9.0 → 9.4 + 9.B WS0-WS1)
+## Pipeline assembled so far (9.0 → 9.4)
 
 ```
 audio → MicrophoneLoop(9.0) → SpeechStart/Frame/End → StreamingSTTProvider(9.1)

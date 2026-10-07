@@ -973,7 +973,7 @@ await ipc.close()
 | `WindowsMediaOCRProvider` | `tom.vision.ocr` | Requires `[vision]` extras (`winocr`) |
 | `CVElementDetector` | `tom.vision.cv` | Requires `[vision]` extras (`opencv-python`) |
 | `MockVLMProvider` | `tom.vision.vlm` | `MockVLMProvider()` |
-| `LocalVLMProvider` | `tom.vision.vlm` | `LocalVLMProvider(base_url="http://localhost:1234/v1")` |
+| `LocalVLMProvider` | `tom.vision.vlm` | `LocalVLMProvider(base_url="http://localhost:65400/v1")` |
 | `VisionManager` | `tom.vision.manager` | `VisionManager(capture_service, ocr_provider, cv_detector, vlm_provider)` |
 
 ---

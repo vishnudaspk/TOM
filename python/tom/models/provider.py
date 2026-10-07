@@ -3,7 +3,7 @@
 Exposes the abstract ModelProvider (LLMProvider) contract and exception hierarchy.
 Adheres to:
 - PHASE4_IMPLEMENTATIONPLAN.md §5 (Iteration 3)
-- Decision 033: Decoupled Model Provider Protocol & LM Studio (Bionic) Compatibility
+- Decision 033: Decoupled Model Provider Protocol & Local Runtime Compatibility
 """
 
 from tom.models.base import (

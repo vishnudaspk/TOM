@@ -171,15 +171,17 @@ class MockModelProvider(LLMProvider):
             raise entry
 
         response = self._build_response(entry, request)
-        words = response.content.split() if response.content else [""]
+        if response.content:
+            words = response.content.split()
+            for i, word in enumerate(words):
+                text = word + (" " if i < len(words) - 1 else "")
+                if self._latency_seconds > 0:
+                    await asyncio.sleep(self._latency_seconds / max(len(words), 1))
+                yield StreamChunk(content=text)
 
-        for i, word in enumerate(words):
-            text = word + (" " if i < len(words) - 1 else "")
-            if self._latency_seconds > 0:
-                await asyncio.sleep(self._latency_seconds / max(len(words), 1))
-            yield StreamChunk(content=text)
+        for tool_call in response.tool_calls:
+            yield StreamChunk(tool_call_delta=tool_call)
 
-        # Final sentinel chunk
         yield StreamChunk(
             content="",
             finish_reason=response.finish_reason,

@@ -87,7 +87,7 @@ def _assert_local_endpoint(url: str) -> None:
     if not hostname or hostname not in _LOCAL_HOSTS:
         raise CloudVLMRejectedError(
             f"Cloud/remote VLM endpoint {url!r} is strictly forbidden in Phase 7. "
-            f"TOM only supports local runtimes (e.g. LM Studio on 127.0.0.1)."
+            f"TOM only supports local runtimes on the host (e.g. llama.cpp on 127.0.0.1)."
         )
 
 
@@ -350,13 +350,13 @@ class MockVLMProvider(VLMProvider):
 class LocalVLMProvider(VLMProvider):
     """OpenAI-compatible multimodal HTTP provider for local VLM runtimes.
 
-    Compatible with LM Studio, Bionic, Ollama, and local vLLM instances.
+    Compatible with llama.cpp, Ollama, and local vLLM instances.
     Enforces local-only execution and dynamic coordinate re-scaling.
     """
 
     def __init__(
         self,
-        base_url: str = "http://127.0.0.1:1234/v1",
+        base_url: str = "http://127.0.0.1:65400/v1",
         model: str = "local-vlm",
         timeout: float = 30.0,
         client: httpx.AsyncClient | None = None,

@@ -9,8 +9,8 @@ Adheres to:
   - Dedicated GPU VRAM footprint and net residency
 - Target hardware profile: RTX 4060 Laptop GPU (8 GB VRAM, 16 GB RAM)
 - Safe, offline deterministic scaffolding by default (using MockModelProvider).
-- Live evaluation against local OpenAI-compatible endpoints (e.g., LM Studio at
-  http://127.0.0.1:1234/v1) is strictly opt-in via TOM_BENCHMARK_LIVE=1.
+- Live evaluation against llama.cpp at http://127.0.0.1:65400/v1 is strictly
+  opt-in via TOM_BENCHMARK_LIVE=1.
 
 Run offline verification:
     pytest tests/benchmarks/models/bench_llm.py -v
@@ -86,11 +86,11 @@ async def run_offline_benchmark(iterations: int = 5) -> BenchmarkResult:
 
 
 async def run_live_benchmark(
-    base_url: str = "http://127.0.0.1:1234/v1",
+    base_url: str = "http://127.0.0.1:65400/v1",
     model_id: str = "default",
     iterations: int = 3,
 ) -> BenchmarkResult:
-    """Run live benchmark against local endpoint (LM Studio / Bionic)."""
+    """Run live benchmark against the local llama.cpp endpoint."""
     provider = HttpModelProvider(base_url=base_url)
     telemetry = SystemTelemetryProvider()
     suite = ModelBenchmarkSuite(provider=provider, telemetry=telemetry)
@@ -188,7 +188,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--base-url",
-        default="http://127.0.0.1:1234/v1",
+        default="http://127.0.0.1:65400/v1",
         help="Inference endpoint base URL",
     )
     parser.add_argument(

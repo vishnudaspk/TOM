@@ -2,7 +2,7 @@
 
 Adheres to:
 - PHASE4_IMPLEMENTATIONPLAN.md §5 (Iteration 3)
-- Decision 033: Decoupled Model Provider Protocol & LM Studio (Bionic) Compatibility
+- Decision 033: Decoupled Model Provider Protocol & Local Runtime Compatibility
 - skills/coding/validation: Strict bounds, timezone-aware datetimes, Pydantic v2 validation.
 
 These schemas represent TOM's abstraction boundary — they are NOT OpenAI-specific.

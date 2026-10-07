@@ -2,14 +2,13 @@
 
 Adheres to:
 - PHASE4_IMPLEMENTATIONPLAN.md §5 (Iteration 3)
-- Decision 033: Decoupled Model Provider Protocol & LM Studio (Bionic) Compatibility
-- skills/lm-studio: Endpoint at http://127.0.0.1:1234/v1, standard OpenAI-compatible API
+- Decision 033: Decoupled Model Provider Protocol & local runtime compatibility
 - skills/coding/structured-logging: Secret redaction on Authorization headers
 
 This provider communicates with any OpenAI-compatible /v1/chat/completions endpoint.
-Tested against LM Studio (qwen3-8b) at http://127.0.0.1:1234/v1.
+TOM's production runtime is llama.cpp on http://127.0.0.1:65400/v1.
 
-Wire format observed from LM Studio (qwen3-8b):
+Wire format consumed from llama.cpp:
     Non-streaming response shape:
         {
             "id": "chatcmpl-...",
@@ -172,8 +171,8 @@ class HttpModelProvider(LLMProvider):
     """OpenAI-compatible HTTP model provider.
 
     Communicates with any OpenAI-compatible /v1/chat/completions endpoint.
-    Designed for local LM Studio / Bionic at http://127.0.0.1:1234/v1 but
-    fully configurable for cloud or other local runtimes.
+    The default endpoint is llama.cpp at http://127.0.0.1:65400/v1, but the
+    base URL is fully configurable for other local runtimes.
 
     The base_url and model must be set at construction time; neither is baked
     into the architecture (Decision 033).
@@ -191,7 +190,7 @@ class HttpModelProvider(LLMProvider):
 
     def __init__(
         self,
-        base_url: str = "http://127.0.0.1:1234/v1",
+        base_url: str = "http://127.0.0.1:65400/v1",
         *,
         api_key: str | None = None,
         connect_timeout: float = _DEFAULT_CONNECT_TIMEOUT,
@@ -493,38 +492,3 @@ class HttpModelProvider(LLMProvider):
         except Exception as exc:
             logger.info("http_provider_health_check_failed", error=str(exc))
             return False
-
-
-# Convenience alias: LMStudioProvider IS HttpModelProvider with default LM Studio URL.
-# The alias makes intent clear in code that specifically targets LM Studio.
-# Any code that should remain provider-agnostic should use HttpModelProvider.
-class LMStudioProvider(HttpModelProvider):
-    """HttpModelProvider pre-configured for local LM Studio.
-
-    Default base_url: http://127.0.0.1:1234/v1
-
-    LM Studio exposes a standard OpenAI-compatible /v1/chat/completions endpoint.
-    Model identifier must be provided explicitly — never hardcoded.
-
-    Example:
-        provider = LMStudioProvider()
-        request = ModelRequest(model="qwen3-8b", messages=[...])
-        response = await provider.generate(request)
-    """
-
-    def __init__(
-        self,
-        base_url: str = "http://127.0.0.1:1234/v1",
-        *,
-        api_key: str | None = None,
-        connect_timeout: float = _DEFAULT_CONNECT_TIMEOUT,
-        read_timeout: float = _DEFAULT_READ_TIMEOUT,
-        stream_timeout: float = _DEFAULT_STREAM_TIMEOUT,
-    ) -> None:
-        super().__init__(
-            base_url=base_url,
-            api_key=api_key,
-            connect_timeout=connect_timeout,
-            read_timeout=read_timeout,
-            stream_timeout=stream_timeout,
-        )

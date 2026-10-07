@@ -13,7 +13,7 @@
 | 6 | Voice (audio IPC, STT, TTS, barge-in) | CLOSED | 931 (848 Py + 83 Rust) | 2026-09-30 |
 | 7 | Vision + OS input | CLOSED | 1087 (1004 Py + 83 Rust) | 2026-10-01 |
 | 8 | Proactive agent + long-horizon tasks | CLOSED | **1301** (1218 Py + 83 Rust), 8 skipped | 2026-10-02 |
-| 9 | Interaction core & voice experience | **IN PROGRESS** (9.0–9.4 done) | 9.3+9.4: 51 new unit tests; targeted 833 passed; voice suite 317 green; full repo not re-run | — |
+| 9 | Interaction core & voice experience | **CLOSED FOR 9.0–9.4** | 9.0–9.4 verified; targeted 833 passed; voice suite 317 green; full repo not re-run | 2026-10-07 |
 
 ## Current baseline
 
@@ -54,7 +54,7 @@
 | **054** | `ResourceManager`: 8 GB VRAM / 16 GB RAM, **500 MB** headroom, `_heavy_lock` LLM vs VLM. |
 | **055** | Proactive: enable → user-active preempt → quiet hours **22:00–08:00** (`urgent_health` bypass) → max **1 task / 30 min** → trigger due. Mutating tools still ASK_USER. |
 
-## Phase 8 hardware (qwen3-8b, RTX 4060, `http://127.0.0.1:1234/v1`)
+## Phase 8 hardware (qwen3-8b, RTX 4060, `http://127.0.0.1:65400/v1`)
 
 | Metric | SLA | Measured | Status |
 |---|---|---|---|
@@ -75,7 +75,7 @@
 
 **9.4 Conversation turn manager & deterministic response policy — COMPLETE.** `python/tom/schemas/turn.py`: `ResponseAction`, `TurnStatus`, `EntityKind`, `EntityReferent`, `BackgroundTaskSnapshot`, `TurnRecord`, `TurnContext` (bounded history + `to_model_context()`), `ResponseDecision`. `python/tom/voice/turn_manager.py`: `ConversationTurnManager` — turn lifecycle (`start_turn` / `record_assistant_reply` / `interrupt_turn` / `reset`), bounded history window, structured entity referents (`last_file`, `last_directory`, `last_query`, `last_screen`, `last_tool`) created from deterministic tool→slot rules and preserved across turns, and Phase 8 `TaskManager` background snapshots (bounded, failure-resilient). Referent **detection** is reported as a fact (`has_anaphoric_reference`, `is_follow_up`); **resolution** is left to the model via structured context — deliberately no NLP/coreference engine. `python/tom/voice/response_policy.py`: `ResponsePolicy` — fixed-precedence rules `empty → silence → progress → ambiguity → destructive-without-target → latency-bearing → direct`, returning `SPEAK_DIRECT` / `FAST_ACK_THEN_WORK` (+ deterministic ack phrase) / `SILENT_ACT` / `CLARIFY` / `REPORT_PROGRESS`. Latency heuristics use **operation type + tool metadata + recorded historical timings** (`record_tool_timing`, bounded 16-sample window), never assumed per-tool durations. Pure, lock-free, no network/LLM. Tests: `tests/unit/voice/test_turn_manager.py` (29) and `tests/unit/voice/test_response_policy.py` (32), including a determinism loop, a JSON-serialisation check, and a < 5 ms evaluation budget assertion.
 
-**9.5+ not started** (`InteractionCore` + `TurnExecutor` → 9.6 hardware session + acceptance).
+**9.5+ intentionally deferred** (`InteractionCore` + `TurnExecutor` → 9.6 hardware session + acceptance). No Phase 10 work has started.
 
 **9.B WS0 Measurement Integrity — COMPLETE (2026-10-06).** Fixed first-partial measurement: was 2 ms artifact from lazy generator (generator creation time, not first text yield). True first partial via streaming STT adapter is ~1500 ms from feed start (faster-whisper pads each 100 ms rolling window to 30 s). Fixed `FasterWhisperStreamingAdapter` to mark first partial only when non-empty text is yielded; fixed `TurnExecutor._transcribe` to mark `STT_PARTIAL1` only on first non-empty partial text. Hardware test `test_real_stt_first_partial_meets_sla` documents the deviation (~1500 ms vs 350 ms target). Raw results: `tests/benchmarks/voice/results/stt_tuning_results.json`. **PRELIMINARY** — measured from feed start, not speech onset.
 

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import AsyncGenerator, AsyncIterator
 
 from pydantic import BaseModel
 
@@ -19,7 +20,7 @@ from tom.agents.base import Agent, AgentState
 from tom.core.context import CancellationToken
 from tom.core.router import IntentRouter
 from tom.models.base import LLMProvider
-from tom.models.schemas import ModelRequest, ModelResponse
+from tom.models.schemas import ModelRequest, ModelResponse, StreamChunk, ToolCallRequest
 from tom.schemas.agent import Message, Role
 from tom.schemas.router import RoutingDecision
 from tom.telemetry.logging import get_logger
@@ -98,6 +99,39 @@ class AgentOrchestrator:
             cancellation_token,
             max_steps,
         )
+
+    async def stream(
+        self,
+        prompt: str,
+        token: CancellationToken | None = None,
+    ) -> AsyncGenerator[str, None]:
+        """Yield incremental model text deltas for a user prompt.
+
+        Preserves the same routing, tool execution, and agent-state path as
+        ``run()``. When a tool call interrupts generation, already-buffered
+        text is yielded first, then tools run through ``Agent.execute_tool``.
+        """
+        if self._check_cancelled(token):
+            return
+
+        route: RoutingDecision = await self._router.classify(prompt)
+        self._agent.history.append(Message(role=Role.USER, content=prompt))
+
+        if route.target_tool is not None:
+            text = await self._execute_direct_tool(route.target_tool)
+            if text:
+                yield text
+            return
+
+        if self._agent.model_provider is None:
+            if self._agent.state != AgentState.TERMINATED:
+                self._agent.transition_to(AgentState.THINKING)
+                self._agent.transition_to(AgentState.ERROR)
+            yield "I'm not sure how to help with that"
+            return
+
+        async for delta in self._stream_agent_loop(prompt, token, _DEFAULT_MAX_STEPS):
+            yield delta
 
     async def _execute_direct_tool(self, tool_name: str) -> str:
         """Execute a single tool and return its result text."""
@@ -219,6 +253,109 @@ class AgentOrchestrator:
         )
 
         return await provider.generate(req)
+
+    async def _stream_agent_loop(
+        self,
+        prompt: str,
+        token: CancellationToken | None,
+        max_steps: int,
+    ) -> AsyncGenerator[str, None]:
+        """Stream tokens; pause for tools; resume generation."""
+        for step in range(max_steps):
+            if self._check_cancelled(token):
+                return
+
+            if (
+                self._agent.state != AgentState.TERMINATED
+                and self._agent.state != AgentState.THINKING
+            ):
+                self._agent.transition_to(
+                    AgentState.THINKING,
+                    metadata={"step": step + 1},
+                )
+
+            collected: list[str] = []
+            tool_calls: list[ToolCallRequest] = []
+            try:
+                async for chunk in self._think_stream():
+                    if self._check_cancelled(token):
+                        if collected:
+                            self._agent.history.append(
+                                Message(role=Role.ASSISTANT, content="".join(collected))
+                            )
+                        return
+                    if chunk.content:
+                        collected.append(chunk.content)
+                        yield chunk.content
+                    if chunk.tool_call_delta is not None:
+                        tool_calls.append(chunk.tool_call_delta)
+            except asyncio.CancelledError:
+                if self._agent.state != AgentState.TERMINATED:
+                    self._agent.transition_to(
+                        AgentState.TERMINATED,
+                        metadata={"reason": "cancelled"},
+                    )
+                raise
+            except Exception as exc:
+                logger.error(
+                    "orchestrator_model_error",
+                    step=step + 1,
+                    error=str(exc),
+                )
+                if self._agent.state == AgentState.THINKING:
+                    self._agent.transition_to(AgentState.ERROR)
+                yield f"Model error: {exc}"
+                return
+
+            self._agent.history.append(Message(role=Role.ASSISTANT, content="".join(collected)))
+
+            if tool_calls:
+                for tool_call in tool_calls:
+                    if self._check_cancelled(token):
+                        if self._agent.state != AgentState.TERMINATED:
+                            self._agent.transition_to(
+                                AgentState.TERMINATED,
+                                metadata={"reason": "cancelled"},
+                            )
+                        return
+                    try:
+                        await self._agent.execute_tool(
+                            tool_name=tool_call.name,
+                            params=tool_call.arguments,
+                            return_to_state=AgentState.THINKING,
+                            tool_call_id=tool_call.id,
+                        )
+                    except asyncio.CancelledError:
+                        if self._agent.state != AgentState.TERMINATED:
+                            self._agent.transition_to(
+                                AgentState.TERMINATED,
+                                metadata={"reason": "cancelled"},
+                            )
+                        raise
+                continue
+
+            if self._agent.state == AgentState.THINKING:
+                self._agent.transition_to(AgentState.IDLE)
+            return
+
+        if self._agent.state != AgentState.TERMINATED:
+            self._agent.transition_to(
+                AgentState.ERROR,
+                metadata={"reason": "max_steps_exceeded"},
+            )
+
+    def _think_stream(self) -> AsyncIterator[StreamChunk]:
+        """Call the model provider's streaming completion."""
+        provider: LLMProvider = self._agent.model_provider
+        messages = self._agent.history.get_messages()
+        req = ModelRequest(
+            model="router",
+            messages=messages,
+            max_tokens=1024,
+            temperature=self._agent.config.temperature,
+            stream=True,
+        )
+        return provider.stream(req)
 
     def _check_cancelled(
         self,

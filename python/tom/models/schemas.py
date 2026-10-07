@@ -4,7 +4,7 @@ Exposes strongly typed Pydantic models for model requests, responses, streaming 
 usage statistics, and tool calls.
 Adheres to:
 - PHASE4_IMPLEMENTATIONPLAN.md §5 (Iteration 3)
-- Decision 033: Decoupled Model Provider Protocol & LM Studio (Bionic) Compatibility
+- Decision 033: Decoupled Model Provider Protocol & Local Runtime Compatibility
 """
 
 from tom.schemas.models import (

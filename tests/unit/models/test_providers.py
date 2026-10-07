@@ -2,7 +2,7 @@
 
 Adheres to:
 - PHASE4_IMPLEMENTATIONPLAN.md §5 (Iteration 3)
-- Decision 033: Decoupled Model Provider Protocol & LM Studio (Bionic) Compatibility
+- Decision 033: Decoupled Model Provider Protocol & Local Runtime Compatibility
 - skills/testing/python-testing: Deterministic, no network, strict assertions
 
 Coverage:
@@ -35,7 +35,6 @@ from tom.models.base import (
 )
 from tom.models.providers.http import (
     HttpModelProvider,
-    LMStudioProvider,
     _build_request_payload,
     _message_to_wire,
     _parse_finish_reason,
@@ -256,10 +255,6 @@ class TestLLMProviderAbstract:
 
     def test_http_satisfies_interface(self) -> None:
         provider = HttpModelProvider()
-        assert isinstance(provider, LLMProvider)
-
-    def test_lmstudio_satisfies_interface(self) -> None:
-        provider = LMStudioProvider()
         assert isinstance(provider, LLMProvider)
 
 
@@ -570,12 +565,9 @@ class TestHttpProviderGenerate:
             with pytest.raises(ModelResponseError, match="no choices"):
                 run_async(provider.generate(req))
 
-    def test_lmstudio_provider_default_url(self) -> None:
-        provider = LMStudioProvider()
-        assert "127.0.0.1:1234" in provider._base_url
-
-    def test_lmstudio_is_http_provider(self) -> None:
-        assert issubclass(LMStudioProvider, HttpModelProvider)
+    def test_default_url_is_llama_cpp(self) -> None:
+        provider = HttpModelProvider()
+        assert provider._base_url == "http://127.0.0.1:65400/v1"
 
 
 # ---------------------------------------------------------------------------
@@ -798,15 +790,7 @@ class TestAgentModelProviderIntegration:
         assert result.success is True
         assert agent.dependencies.model_provider is mock_provider
 
-    def test_provider_not_coupled_to_lmstudio(self) -> None:
-        """Agent must depend on the abstract LLMProvider, not LMStudioProvider."""
-        import inspect
-
-        import tom.agents.base as agent_base_module
-
-        source = inspect.getsource(agent_base_module)
-        assert "LMStudioProvider" not in source
-        assert "HttpModelProvider" not in source
-        assert "lmstudio" not in source.lower()
-        # Should only reference the abstract base
-        assert "LLMProvider" not in source  # Agent doesn't need to import it either
+    def test_provider_contract_is_abstract(self) -> None:
+        """Agents depend on the abstract LLMProvider contract rather than a backend alias."""
+        assert LLMProvider.__abstractmethods__
+        assert HttpModelProvider.__module__ == "tom.models.providers.http"

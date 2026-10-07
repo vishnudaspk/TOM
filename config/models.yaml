@@ -16,10 +16,11 @@ reasoning:
 
 stt:
   provider: "local"
-  model_name: "Systran/faster-whisper-large-v3-turbo"
+  model_name: "C:/Users/vishnuu/Projects/TOM/models/faster-whisper-small.en"
   quantization: "int8"
   vram_required_mb: 0
   context_length: 448
+  beam_size: 1
 
 tts:
   provider: "local"

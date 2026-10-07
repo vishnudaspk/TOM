@@ -161,12 +161,12 @@ class STTConfig:
 
     def __init__(
         self,
-        model_name: str = "Systran/faster-whisper-large-v3-turbo",
+        model_name: str = "C:/Users/vishnuu/Projects/TOM/models/faster-whisper-small.en",
         device: str = "cpu",
         compute_type: str = "int8",
         cpu_threads: int = 4,
         language: str | None = None,
-        beam_size: int = 5,
+        beam_size: int = 1,  # Optimized: beam_size=1 is ~10-15% faster than 5
         vad_filter: bool = False,
     ) -> None:
         self.model_name = model_name
@@ -238,8 +238,10 @@ class FasterWhisperSTTProvider(STTProvider):
 
         import numpy as np  # noqa: PLC0415
 
+        from tom.voice.audio_utils import pcm16_bytes_to_samples
+
         if isinstance(request.samples, bytes):
-            audio = np.frombuffer(request.samples, dtype=np.float32)
+            audio = np.array(pcm16_bytes_to_samples(request.samples), dtype=np.float32)
         else:
             audio = np.array(request.samples, dtype=np.float32)
 

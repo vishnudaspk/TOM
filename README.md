@@ -6,24 +6,28 @@
 
 ## Current Status
 
-| Milestone   | Subsystem / Focus                                                                   | Status       |   Tests |
-| ----------- | ----------------------------------------------------------------------------------- | ------------ | ------: |
-| **Phase 0** | Project Bootstrap, Configuration & Structured Logging                               | **COMPLETE** |       9 |
-| **Phase 1** | Rust Engine (`tom-engine`) — Lifecycle, Telemetry & IPC Server                      | **COMPLETE** |      79 |
-| **Phase 2** | Python Core & IPC Client — `NamedPipeIpcClient`, `EngineClient`, `LifecycleManager` | **COMPLETE** |     168 |
-| **Phase 3** | Deterministic Tools & Permission Engine                                             | **COMPLETE** |     406 |
-| **Phase 4** | Agent Framework & Local Model Routing                                               | **COMPLETE** |     621 |
-| **Phase 5** | Memory Architecture (SQLite Store, Qdrant Index, CPU Embeddings, Policies)         | **COMPLETE** |     621 |
-| **Phase 6** | Voice Pipeline (Audio IPC, STT, TTS, Barge-in, Interaction Layer, Voice Tools)      | **COMPLETE** | **931** |
+| Milestone | Subsystem / Focus | Status | Tests |
+|---|---|---|---|
+| **Phase 0** | Project Bootstrap, Configuration & Structured Logging | **COMPLETE** | 9 |
+| **Phase 1** | Rust Engine (`tom-engine`) — Lifecycle, Telemetry & IPC Server | **COMPLETE** | 79 |
+| **Phase 2** | Python Core & IPC Client — `NamedPipeIpcClient`, `EngineClient`, `LifecycleManager` | **COMPLETE** | 168 |
+| **Phase 3** | Deterministic Tools & Permission Engine | **COMPLETE** | 406 |
+| **Phase 4** | Agent Framework & Local Model Routing | **COMPLETE** | 621 |
+| **Phase 5** | Memory Architecture (SQLite Store, Qdrant Index, CPU Embeddings, Policies) | **COMPLETE** | 621 |
+| **Phase 6** | Voice Pipeline (Audio IPC, STT, TTS, Barge-in, Interaction Layer, Voice Tools) | **COMPLETE** | 931 |
+| **Phase 7** | Vision & Multimodal Capabilities | **COMPLETE** | 1087 |
+| **Phase 8** | Proactive Agent & Long-Horizon Tasks | **COMPLETE** | 1301, 8 skipped |
+| **Phase 9** | Interaction Core (9.0–9.4) | **COMPLETE** | 833 targeted; 317 voice |
 
-- Verified repository test baseline: **848 Python tests (756 unit + 92 integration) + 83 Rust tests = 931 tests passing**.
-- All quality gates clean: Ruff checks (0 violations), Ruff format (0 diffs), Cargo fmt (0 diffs), Cargo clippy (0 warnings).
+The final Phase 9 closeout consolidates TOM on llama.cpp at `http://127.0.0.1:65400/v1` through the generic OpenAI-compatible `HttpModelProvider`. Bionic/LM Studio is not an active architecture dependency, and no Phase 10 work begins without explicit approval.
+
+The last full-repository benchmark was the Phase 8 exit on 2026-10-02: **1301 passed** (1218 Python + 83 Rust), **8 skipped**. The Phase 9 targeted run was not a full-repository rerun.
 
 ### Current Development State
 
-**Phase 6 — Voice Pipeline: CLOSED & COMPLETE**
+**Phase 9 Interaction Core: CLOSED FOR 9.0–9.4**
 
-All 5 iterations of Phase 6 are implemented, validated, and formally closed:
+The completed iterations are:
 - Audio control IPC over Windows Named Pipe (`\\.\pipe\tom-engine`) via Rust `AudioManager`.
 - `STTProvider` abstraction with lazy CPU/int8 `FasterWhisperSTTProvider` and deterministic mock.
 - `TTSProvider` abstraction with lazy CPU `KokoroTTSProvider` and deterministic mock.
@@ -31,8 +35,9 @@ All 5 iterations of Phase 6 are implemented, validated, and formally closed:
 - Formal `VoicePipelineManager` state machine (`IDLE`, `LISTENING`, `PROCESSING`, `SPEAKING`, `INTERRUPTED`, `ERROR`) with sub-millisecond barge-in interruption and epoch invalidation.
 - `VoiceInteractionManager` session coordination maintaining bounded ephemeral `ConversationHistory` in RAM.
 - Deterministic agent voice tools (`voice.announce`, `voice.status`) routed through `ToolExecutor` $\to$ `PermissionEngine`.
+- Phase 9 Interaction Core: VAD/endpointing, streaming STT/TTS, model streaming, sentence chunking, turn management, and deterministic response policy are implemented and verified for 9.0–9.4.
 
-Phase 7 (Vision & Multimodal Capabilities / Extended OS Automation) is next in the master roadmap.
+No Phase 10 work begins without explicit approval. Phase 9.5/9.6 remain deferred.
 
 ---
 

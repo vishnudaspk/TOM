@@ -2,9 +2,9 @@
 
 Adheres to:
 - PHASE4_IMPLEMENTATIONPLAN.md §5 (Iteration 3)
-- Decision 033: Decoupled Model Provider Protocol & LM Studio (Bionic) Compatibility
+- Decision 033: Decoupled Model Provider Protocol & Local Runtime Compatibility
 
-The Agent depends on this abstract protocol — never on LMStudioProvider directly.
+The Agent depends on this abstract protocol, not on a backend-specific provider.
 Concrete providers implement generate() and stream() and optionally check_health().
 """
 

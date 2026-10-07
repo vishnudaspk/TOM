@@ -135,9 +135,9 @@ class TestLocalVLMProviderSecurity:
 
     def test_local_endpoints_allowed(self) -> None:
         for url in [
-            "http://localhost:1234/v1",
-            "http://127.0.0.1:1234/v1",
-            "http://[::1]:1234/v1",
+            "http://localhost:65400/v1",
+            "http://127.0.0.1:65400/v1",
+            "http://[::1]:65400/v1",
             "http://127.0.0.1:11434/v1",
         ]:
             provider = LocalVLMProvider(base_url=url)
@@ -249,7 +249,7 @@ class TestLocalVLMProviderExecution:
         mock_client = _make_mock_client("Found the submit button at [100, 100, 300, 200].")
 
         provider = LocalVLMProvider(
-            base_url="http://127.0.0.1:1234/v1",
+            base_url="http://127.0.0.1:65400/v1",
             client=mock_client,
             max_image_dim=1280,
         )

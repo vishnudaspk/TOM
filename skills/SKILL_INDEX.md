@@ -97,7 +97,6 @@ All agents working in this repository MUST follow these rules:
 | **Agent Dev: Task Lifecycle** | `agent-development/task-lifecycle/` | Implementing orchestrator, task manager, planner | Phase 2+ | — |
 | **Coding: Validation** | `coding/validation/` | Writing input validation at subsystem boundaries | All phases | — |
 | **Coding: Structured Logging** | `coding/structured-logging/` | Adding logging to a new subsystem | All phases | security/secrets |
-| **Model: LM Studio** | `lm-studio/` | Benchmarking candidate models, measuring TTFT, throughput, VRAM, and experimenting with local runtimes | Phase 2+ | system-design/resource-management |
 | **Git: Workflow** | `git/workflow/` | Commits, PRs, .gitignore, pre-commit checks | All phases | — |
 | **Documentation: Project State** | `documentation/project-state/` | Updating STATE.md, HANDOFF.md after work | All phases | — |
 | **Documentation: Phase Closeout** | `documentation/phase-closeout/` | Formally closing/archiving a completed phase, updating STATE/PROGRESS/HANDOFF, deleting completed PHASE[N]_IMPLEMENTATIONPLAN.md, verifying deletion, purging stale references | All phases | documentation/project-state |
@@ -106,8 +105,8 @@ All agents working in this repository MUST follow these rules:
 
 ## Quick Reference by Task Type
 
-### "I'm experimenting with local models or benchmarking"
-→ `lm-studio` + `system-design/resource-management`
+### "I'm benchmarking local models"
+→ `system-design/resource-management` + `testing/python-testing`
 
 ### "I'm building a Rust subsystem"
 → `rust/async-tokio` + `rust/error-handling` + `rust/testing`

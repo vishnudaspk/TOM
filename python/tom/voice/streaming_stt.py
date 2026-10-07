@@ -111,6 +111,7 @@ class FasterWhisperStreamingAdapter(StreamingSTTProvider):
         buf = bytearray()
         since_last = 0
         last_emitted = ""
+        first_partial_emitted = False
 
         async for chunk in audio_stream:
             if token is not None and token.is_cancelled():
@@ -129,6 +130,10 @@ class FasterWhisperStreamingAdapter(StreamingSTTProvider):
             partial = await self._window_partial(buf, last_emitted)
             if partial is not None:
                 last_emitted = partial.text
+                if not first_partial_emitted and partial.text.strip():
+                    first_partial_emitted = True
+                    # Mark first partial when first non-empty text is actually yielded
+                    # This is done by the caller via the latency tracer callback
                 yield partial
 
         if token is not None and token.is_cancelled():

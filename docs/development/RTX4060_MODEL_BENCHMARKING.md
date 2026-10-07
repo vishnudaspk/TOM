@@ -7,7 +7,7 @@ This document establishes the empirical benchmarking protocol, hardware constrai
 * **Host System**: Intel Core i9-13900H, 16 GB physical RAM
 * **Dedicated GPU**: NVIDIA GeForce RTX 4060 Laptop GPU (8,192 MB VRAM)
 * **Operating System**: Windows 11 (Desktop Window Manager / DWM GPU consumer)
-* **Target Runtime**: Local-first OpenAI-compatible endpoints (LM Studio / Bionic / llama.cpp)
+* **Target Runtime**: llama.cpp OpenAI-compatible endpoint
 
 Phase 8 Iteration 3 implements the **measurement infrastructure and safety governor** without speculative model downloads.
 
@@ -126,12 +126,12 @@ When local models are benchmarked via live endpoints (`TOM_BENCHMARK_LIVE=1`), t
 
 ## 7. How to Execute Live Benchmarking
 
-To benchmark a live model endpoint running in LM Studio or llama.cpp:
+To benchmark a live llama.cpp model endpoint:
 
 ```powershell
-# 1. Start your local model runtime (e.g. LM Studio on port 1234)
+# 1. Start the llama.cpp server on port 65400
 # 2. Run the benchmark tool
-python tests/benchmarks/models/bench_llm.py --live --base-url http://127.0.0.1:1234/v1 --model qwen2.5-7b-instruct --iterations 5
+python tests/benchmarks/models/bench_llm.py --live --base-url http://127.0.0.1:65400/v1 --model qwen3-1.7b --iterations 5
 ```
 
 The tool outputs a structured report with exact mean, min, max, p50, and p95 timings, JSON schema validity rate, and NVML VRAM residency.

@@ -4,7 +4,7 @@ Adheres to:
 - PHASE4_IMPLEMENTATIONPLAN.md ?5 (Iterations 2 & 3)
 - PHASE5_IMPLEMENTATIONPLAN.md (Iteration 3)
 - Decision 032: Centralized Tool Invocation Safety (Strict ToolExecutor Routing)
-- Decision 033: Decoupled Model Provider Protocol & LM Studio (Bionic) Compatibility
+- Decision 033: Decoupled Model Provider Protocol & Local Runtime Compatibility
 - Decision 037: MemoryManager as Single Entry Point & SQLite Source of Truth
 - skills/python/tool-system, skills/security/permission-model
 """

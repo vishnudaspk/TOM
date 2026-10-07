@@ -44,6 +44,12 @@ class ModelSpec(BaseModel):
         le=2.0,
         description="Sampling temperature",
     )
+    beam_size: int = Field(
+        default=5,
+        ge=1,
+        le=10,
+        description="Beam size for beam search decoding (STT models)",
+    )
 
 
 class ModelsConfig(BaseModel):
@@ -71,7 +77,7 @@ class ModelsConfig(BaseModel):
     )
     stt: ModelSpec = Field(
         default_factory=lambda: ModelSpec(
-            model_name="Systran/faster-whisper-large-v3-turbo",
+            model_name="C:/Users/vishnuu/Projects/TOM/models/faster-whisper-small.en",
             quantization="int8",
             vram_required_mb=0,  # Default to CPU placement initially per plan.md
             context_length=448,

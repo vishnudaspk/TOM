@@ -39,7 +39,7 @@ def normalize_text(text: str) -> str:
         return ""
     text = text.lower().strip()
     # Normalize percent sign
-    text = re.sub(r'(\d+)\s*%', r'\1 percent', text)
+    text = re.sub(r'%', ' percent ', text)
     # Normalize time colons: 7:30 -> 7 30
     text = re.sub(r'(\d+):(\d+)', r'\1 \2', text)
     # Normalize a m / p m variants
@@ -138,6 +138,7 @@ UNIT_TESTS: List[Tuple[str, str, str]] = [
     ("set an alarm for seven thirty am", "set an alarm for 7 30 am", "full alarm command"),
     ("remind me at three fifteen pm", "remind me at 3 15 pm", "full reminder command"),
     ("delete files older than thirty days", "delete files older than 30 days", "full delete command"),
+    ("calculate 15% of 200", "calculate 15 percent of 200", "utterance 039 percent hyp"),
 ]
 
 def run_tests() -> bool:

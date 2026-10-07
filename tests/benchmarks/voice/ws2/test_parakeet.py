@@ -1,51 +1,52 @@
-#!/usr/bin/env python3
-"""
-Test loading and decoding with Parakeet TDT 0.6B int8 in sherpa-onnx.
-"""
-import time
-import wave
-import numpy as np
+import onnxruntime as ort
 import sherpa_onnx
-from pathlib import Path
+import os
+import traceback
 
-model_dir = Path("tests/benchmarks/voice/ws2/models_offline/parakeet-tdt-0.6b-v2-int8")
-encoder = str(model_dir / "encoder.int8.onnx")
-decoder = str(model_dir / "decoder.int8.onnx")
-joiner = str(model_dir / "joiner.int8.onnx")
-tokens = str(model_dir / "tokens.txt")
+model_dir = "tests/benchmarks/voice/ws2/models_offline/parakeet-tdt-0.6b-v2-int8"
+encoder = os.path.join(model_dir, "encoder.int8.onnx")
+decoder = os.path.join(model_dir, "decoder.int8.onnx")
+joiner = os.path.join(model_dir, "joiner.int8.onnx")
+tokens = os.path.join(model_dir, "tokens.txt")
 
-print(f"Testing Parakeet TDT 0.6B int8 from {model_dir}:")
-print(f"  Encoder exists: {Path(encoder).exists()} ({Path(encoder).stat().st_size / (1024*1024):.1f} MB)")
-print(f"  Decoder exists: {Path(decoder).exists()} ({Path(decoder).stat().st_size / (1024*1024):.1f} MB)")
-print(f"  Joiner exists:  {Path(joiner).exists()} ({Path(joiner).stat().st_size / (1024*1024):.1f} MB)")
-print(f"  Tokens exists:  {Path(tokens).exists()} ({Path(tokens).stat().st_size} bytes)")
+print("Checking ONNX model metadata via onnxruntime...")
+for path in [encoder, decoder, joiner]:
+    try:
+        sess = ort.InferenceSession(path, providers=['CPUExecutionProvider'])
+        meta = sess.get_modelmeta().custom_metadata_map
+        print(f"{os.path.basename(path)} metadata keys:", list(meta.keys()))
+        for k, v in meta.items():
+            print(f"  {k} = {v[:80] if len(v) > 80 else v}")
+    except Exception as e:
+        print(f"Error inspecting {path}: {e}")
 
+print("\n--- ATTEMPT 1: from_transducer with default params ---")
 try:
-    print("\nAttempting OfflineRecognizer.from_transducer...")
-    recognizer = sherpa_onnx.OfflineRecognizer.from_transducer(
+    r = sherpa_onnx.OfflineRecognizer.from_transducer(
         encoder=encoder,
         decoder=decoder,
         joiner=joiner,
         tokens=tokens,
-        num_threads=4,
-        decoding_method="greedy_search",
-        model_type="transducer",
+        num_threads=1,
     )
-    print("Recognizer created successfully!")
-    
-    # Try decode
-    wav_path = "tests/benchmarks/voice/ws2/recordings/001_open_the_settings_window.wav"
-    with wave.open(wav_path, "rb") as wf:
-        audio = np.frombuffer(wf.readframes(wf.getnframes()), dtype=np.int16).astype(np.float32) / 32768.0
-
-    t0 = time.perf_counter()
-    s = recognizer.create_stream()
-    s.accept_waveform(16000, audio)
-    recognizer.decode_stream(s)
-    elapsed = time.perf_counter() - t0
-    print(f"Decoded: '{s.result.text}' in {elapsed*1000:.1f}ms")
-
+    print("SUCCESS with default!")
 except Exception as e:
-    import traceback
-    print("\nFAILED TO LOAD OR DECODE:")
+    print("FAILED Attempt 1:")
     traceback.print_exc()
+
+print("\n--- ATTEMPT 2: testing model_type options ---")
+for mt in ["nemo_transducer", "tdt", "zipformer", "conformer"]:
+    try:
+        print(f"Trying model_type='{mt}'...")
+        r = sherpa_onnx.OfflineRecognizer.from_transducer(
+            encoder=encoder,
+            decoder=decoder,
+            joiner=joiner,
+            tokens=tokens,
+            num_threads=1,
+            model_type=mt,
+        )
+        print(f"SUCCESS with model_type='{mt}'!")
+        break
+    except Exception as e:
+        print(f"FAILED with model_type='{mt}': {e}")
