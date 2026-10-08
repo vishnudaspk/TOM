@@ -606,11 +606,14 @@ class TestRegistryIsolation:
         assert "system.cpu_info" in names
 
     def test_total_tool_count(self) -> None:
-        """setup_default_tools registers 28 built-in tools (7 system + 6 file + 5 memory + 2 voice + 4 vision + 4 input)."""
+        """Phase 10 Iterations 1-2 add web.search and web.fetch to the 28-tool baseline."""
         reg = ToolRegistry()
         sys_defs, file_defs, memory_defs, voice_defs = setup_default_tools(registry=reg)
         assert len(sys_defs) == 7, f"Expected 7 system tools, got {len(sys_defs)}"
         assert len(file_defs) == 6, f"Expected 6 file tools, got {len(file_defs)}"
         assert len(memory_defs) == 5, f"Expected 5 memory tools, got {len(memory_defs)}"
         assert len(voice_defs) == 2, f"Expected 2 voice tools, got {len(voice_defs)}"
-        assert len(reg.list_tools()) == 28
+        # 28 baseline + 2 web tools = 30 (vision and input tools also registered but not unpacked)
+        assert len(reg.list_tools()) == 30
+        assert reg.get_optional("web.search") is not None
+        assert reg.get_optional("web.fetch") is not None

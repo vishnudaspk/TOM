@@ -122,6 +122,37 @@ class ToolsConfig(BaseModel):
 
     default_timeout_seconds: float = Field(default=15.0, gt=0.0, le=300.0)
     max_search_results: int = Field(default=10, gt=0, le=100)
+    web_search_endpoint: str = Field(
+        default="http://127.0.0.1:8080/search",
+        min_length=1,
+        description="Local or self-hosted SearXNG-compatible search endpoint",
+    )
+    web_search_timeout_seconds: float = Field(default=10.0, gt=0.0, le=30.0)
+    web_search_max_response_bytes: int = Field(
+        default=1_000_000,
+        gt=0,
+        le=1_048_576,
+        description="Maximum provider response body size",
+    )
+    web_fetch_timeout_seconds: float = Field(default=10.0, gt=0.0, le=30.0)
+    web_fetch_max_response_bytes: int = Field(
+        default=1_048_576,
+        gt=0,
+        le=10_485_760,
+        description="Maximum fetch response body size (default 1 MiB, max 10 MiB)",
+    )
+    web_fetch_max_redirects: int = Field(
+        default=10,
+        ge=0,
+        le=20,
+        description="Maximum number of redirects to follow for web.fetch",
+    )
+    web_fetch_connect_timeout_seconds: float = Field(
+        default=3.0,
+        gt=0.0,
+        le=10.0,
+        description="Connection timeout for web.fetch in seconds",
+    )
     max_file_read_bytes: int = Field(default=5_000_000, gt=0, le=50_000_000)
     allowed_directories: list[str] = Field(
         default_factory=lambda: ["."],

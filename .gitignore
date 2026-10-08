@@ -127,3 +127,6 @@ scratch/
 tmp/
 temp/
 *.log
+# Benchmark virtual environments
+.venv-ws2-bench/
+.venv-ws3-bench/

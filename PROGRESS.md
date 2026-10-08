@@ -14,6 +14,8 @@
 | 7 | Vision + OS input | CLOSED | 1087 (1004 Py + 83 Rust) | 2026-10-01 |
 | 8 | Proactive agent + long-horizon tasks | CLOSED | **1301** (1218 Py + 83 Rust), 8 skipped | 2026-10-02 |
 | 9 | Interaction core & voice experience | **CLOSED FOR 9.0–9.4** | 9.0–9.4 verified; targeted 833 passed; voice suite 317 green; full repo not re-run | 2026-10-07 |
+| 10.1 | Web search (`web.search`) | COMPLETE | 191 unit + 32 integration tests; 30 tools registered | 2026-10-08 |
+| 10.2 | Web fetch (`web.fetch`) | COMPLETE | SSRF-safe, redirect validation, content sanitization | 2026-10-08 |
 
 ## Current baseline
 
@@ -105,3 +107,11 @@
 - **F6 Latency cleanup**: Recomputed with real H=600 ms (`f6_h600_latency.json`): sherpa-large p50=28.98 ms, p95=38.10 ms (stdev/mean = 21.0% -> HIGH-VARIANCE = False). Flagged earlier H=300 ms row (33.5%) and Moonshine-tiny (31.7%) as HIGH-VARIANCE.
 - **Files added**: `tests/benchmarks/voice/ws2/normalizer.py`, `rescore_all.py`, `f3_clipped_diagnostic.py`, `eval_candidates_f4.py`, `test_parakeet.py`, `test_moonshine_base.py`, `f5_cpu_rebuild.py`, `measure_h600.py`, `audit_versions.py`.
 - **Status**: Fix Round complete; stopping for user review before Task 4.
+
+## Phase 10
+
+**10.1 Web Search — COMPLETE (2026-10-08).** Added `web.search` tool for querying a local/self-hosted SearXNG-compatible endpoint. Returns bounded structured metadata (title, URL, summary, source). SAFE permission. Configurable endpoint, timeout, and response size limits. Tests: `tests/unit/tools/test_web_search.py` (8), `tests/unit/tools/test_web_fetch.py` (27), integration `tests/integration/tools/test_tool_pipeline.py` (32). No cloud search dependency.
+
+**10.2 Web Fetch — COMPLETE (2026-10-08).** Added `web.fetch` tool for retrieving and extracting content from public HTTP/HTTPS URLs. SSRF protection: validates public host, rejects loopback/private/link-local/multicast/reserved addresses. Manual redirect handling with DNS rebinding protection (validates each redirect destination). Response size limit (default 1 MiB, max 10 MiB), timeout (3s connect, 10s total), max redirects (10). Content extraction via BeautifulSoup (HTML) with script/style removal; plain text passthrough. Returns untrusted extracted text only (marked `untrusted: true`). SAFE permission. Tests: `tests/unit/tools/test_web_fetch.py` (27) covering SSRF, redirects, size limits, content types, timeouts, extraction.
+
+**10.3–10.6 pending** — Personal notes, calendar, reminders, and vision analysis.

@@ -57,10 +57,19 @@ from tom.tools.voice import (
     create_voice_tools,
     register_voice_tools,
 )
+from tom.tools.web import (
+    FetchRequest,
+    FetchResponse,
+    SearchRequest,
+    SearchResponse,
+    create_web_tools,
+)
 
 __all__ = [
     "DeleteFileInput",
     "DeleteFileOutput",
+    "FetchRequest",
+    "FetchResponse",
     "FileInfo",
     "GetFileInfoInput",
     "ListDirectoryInput",
@@ -81,6 +90,8 @@ __all__ = [
     "ReadFileOutput",
     "SearchFilesInput",
     "SearchFilesOutput",
+    "SearchRequest",
+    "SearchResponse",
     "ToolAlreadyExistsError",
     "ToolDefinition",
     "ToolError",
@@ -94,6 +105,7 @@ __all__ = [
     "create_file_tools",
     "create_memory_tools",
     "create_system_tools",
+    "create_web_tools",
     "default_registry",
     "register_file_tools",
     "register_memory_tools",

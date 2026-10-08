@@ -1,4 +1,4 @@
-# Handoff — Phase 9 closeout complete
+# Handoff — Phase 9 closeout complete; Phase 10 Iterations 1–2 complete
 
 Final architecture: TOM uses llama.cpp at `http://127.0.0.1:65400/v1` through the generic OpenAI-compatible `HttpModelProvider`. Bionic/LM Studio is not an active runtime dependency.
 
@@ -7,9 +7,10 @@ Invariants, hardware, and architecture: **`STATE.md`**. Phase ledger and ADRs 04
 ## Resume
 
 - **Done:** Phase 9 Iterations **9.0** (VAD/endpointing), **9.1** (streaming STT), **9.2** (LLM stream + sentence chunking), **9.3** (streaming TTS + incremental playback), **9.4** (turn manager + response policy), and the applicable 9.B checkpoint work.
+- **Done:** Phase 10 **Iteration 1** (`web.search`) and **Iteration 2** (`web.fetch`).
 - **Runtime:** Generic HTTP provider with llama.cpp as the production endpoint; no backend-specific alias remains.
-- **Current validation:** Targeted Phase 9 verification: **833 passed**, including **317 voice tests**. Full repository rerun was not performed.
-- **Next:** No Phase 10 work. Phase 9.5/9.6 are explicitly deferred and require user approval.
+- **Current validation:** Targeted Phase 9 verification: **833 passed**, including **317 voice tests**. Phase 10 tools: **191 unit + 32 integration tests passed**. **30 tools registered** (28 baseline + 2 web). Full repository rerun was not performed.
+- **Next:** Phase 10 Iteration 3 (`personal.note`, `personal.calendar`) ready to begin. Phase 9.5/9.6 are explicitly deferred and require user approval.
 
 ## Pipeline assembled so far (9.0 → 9.4)
 
@@ -33,6 +34,34 @@ Each stage is verified **independently**. 9.5 is the first iteration to bind the
 | Tests | `tests/unit/voice/test_microphone_loop.py` (17), `test_streaming_stt.py`, `tests/unit/agents/test_orchestrator_streaming.py`, `test_sentence_streamer.py`, `test_streaming_tts.py` (18), `test_turn_manager.py` (29), `test_response_policy.py` (32) |
 | WS0/WS1 Benchmarks | `tests/benchmarks/voice/benchmark_stt_tuning.py`, `tests/benchmarks/voice/results/stt_tuning_results.json` |
 | WS0 Hardware Test | `tests/integration/voice/test_hardware_latencies.py::test_real_stt_first_partial_meets_sla` |
+
+## Phase 10 Tools (Iterations 1–2)
+
+| Tool | Path | Description |
+|---|---|---|
+| `web.search` | `python/tom/tools/web.py` | Local SearXNG search; bounded results; SAFE |
+| `web.fetch` | `python/tom/tools/web.py` | SSRF-safe fetch; redirect validation; HTML extraction; SAFE |
+
+| Tests | Path |
+|---|---|
+| Unit web search | `tests/unit/tools/test_web_search.py` (8) |
+| Unit web fetch | `tests/unit/tools/test_web_fetch.py` (27) |
+| Integration tools | `tests/integration/tools/test_tool_pipeline.py` (32) |
+
+### 10.1 `web.search` contract
+- Input: `SearchRequest(query: str, max_results: int=10)` — query 1-256 chars, results 1-100
+- Output: `SearchResponse(query, count, results[SearchResult], provider)` — results have title, url, summary, source
+- Provider: `SearXNGSearchProvider` — configurable endpoint, timeout, max response bytes (1 MiB)
+- Permission: SAFE (read-only metadata)
+
+### 10.2 `web.fetch` contract
+- Input: `FetchRequest(url, max_response_bytes=1MiB, timeout=10s, max_redirects=10, allowed_content_types=[text/html, text/plain, ...])`
+- Output: `FetchResponse(url, final_url, status_code, content_type, content_length, extracted_text, title, redirect_count, untrusted=true)`
+- Provider: `BuiltinFetchProvider` — httpx-based with manual redirect handling
+- SSRF protection: Public host validation (rejects loopback, private, link-local, multicast, reserved); DNS rebinding protection on redirects; scheme validation (HTTP/HTTPS only)
+- Content extraction: BeautifulSoup for HTML (removes script/style/iframe/embed/object); plain text passthrough; 1 MiB output limit
+- Security: Fetched content marked `untrusted: true`; cannot influence permission decisions
+- Permission: SAFE (read-only, no execution)
 
 ## 9.3 contract for 9.5
 

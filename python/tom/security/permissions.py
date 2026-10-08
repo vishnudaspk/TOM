@@ -37,7 +37,7 @@ class PermissionLevel(StrEnum):
         return cls(clean)
 
 
-# Authoritative, data-driven default tool permission mappings for all 28 built-in tools.
+# Authoritative, data-driven default tool permission mappings for all 34 built-in tools.
 # Never use name-prefix string matching as a security mechanism.
 DEFAULT_TOOL_PERMISSIONS: dict[str, PermissionLevel] = {
     # System tools (SAFE)
@@ -48,6 +48,9 @@ DEFAULT_TOOL_PERMISSIONS: dict[str, PermissionLevel] = {
     "system.disk_info": PermissionLevel.SAFE,
     "system.list_processes": PermissionLevel.SAFE,
     "system.get_snapshot": PermissionLevel.SAFE,
+    # Web tools (SAFE)
+    "web.search": PermissionLevel.SAFE,
+    "web.fetch": PermissionLevel.SAFE,
     # File tools (SAFE & ASK_USER)
     "files.list_directory": PermissionLevel.SAFE,
     "files.read_file": PermissionLevel.SAFE,

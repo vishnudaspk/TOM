@@ -2,12 +2,12 @@
 
 This module provides the canonical tool registration entry point for the TOM
 Python pipeline. It wires all deterministic tool sets (system, file, memory,
-voice, vision, and input) into the shared ``default_registry`` so that ``ToolExecutor``
+voice, vision, input, and web) into the shared ``default_registry`` so that ``ToolExecutor``
 can discover and execute them without requiring additional setup by callers.
 
-Architecture note (Decision 030, Decision 037, Decision 045, Phase 7 Iteration 4):
+Architecture note (Decision 030, Decision 037, Decision 045, Phase 7 Iteration 4, Phase 10 Iterations 1-2):
     Wires deterministic tool sets into registry. Call ``setup_default_tools()``
-    once after lifecycle start or test setup to make all 28 tools available.
+    once after lifecycle start or test setup to make all 34 tools available.
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ from tom.tools.registry import ToolDefinition, ToolRegistry, default_registry
 from tom.tools.system import register_system_tools
 from tom.tools.vision import register_vision_tools
 from tom.tools.voice import register_voice_tools
+from tom.tools.web import create_web_tools
 
 if TYPE_CHECKING:
     from tom.core.engine import EngineClient
@@ -66,13 +67,14 @@ def setup_default_tools(
 ) -> tuple[list[ToolDefinition], ...]:
     """Register all built-in deterministic tools into a ToolRegistry.
 
-    Registers 28 built-in tools across 6 categories:
+    Registers 34 built-in tools across 7 categories:
     - 7 system inspection tools (SAFE)
     - 6 file manipulation tools (SAFE & ASK_USER)
     - 5 memory storage tools (SAFE & ASK_USER)
     - 2 voice interaction tools (SAFE)
     - 4 vision perception tools (SAFE)
     - 4 OS input automation tools (SAFE & ASK_USER)
+    - 2 web access tools (SAFE) — Phase 10 Iterations 1-2
 
     Args:
         registry: Target ``ToolRegistry``. Defaults to ``default_registry`` when ``None``.
@@ -127,6 +129,12 @@ def setup_default_tools(
         registry=target_registry,
         client=engine_client,
         dry_run=dry_run_input,
+        replace=replace,
+    )
+
+    create_web_tools(
+        registry=target_registry,
+        config=config,
         replace=replace,
     )
 

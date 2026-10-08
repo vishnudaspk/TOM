@@ -1,6 +1,6 @@
 # TOM — Current State
 
-Last updated: 2026-10-07
+Last updated: 2026-10-08
 
 ## Now
 
@@ -8,23 +8,25 @@ Last updated: 2026-10-07
 |---|---|
 | **Phases 0–8** | CLOSED & COMPLETE |
 | **Phase 9 core** | **9.0–9.4 COMPLETE & VERIFIED**; 9.5/9.6 remain unstarted |
+| **Phase 10** | **Iteration 1 (web.search) COMPLETE**; **Iteration 2 (web.fetch) COMPLETE** |
 | **Model runtime** | llama.cpp at `http://127.0.0.1:65400/v1`; generic OpenAI-compatible HTTP provider is the active abstraction |
 | **Backend migration** | Bionic/LM Studio is removed from active architecture; no active backend-specific alias remains |
 | **Plan** | Temporary implementation plan removed after status migration |
-| **Next** | No Phase 10 work begins. Phase 9.5/9.6 require explicit user approval. |
+| **Next** | Phase 10 Iteration 3 (personal.note, personal.calendar) ready to begin. Phase 9.5/9.6 require explicit user approval. |
 | **Full-repo baseline** | 2026-10-02 Phase 8 exit: **1301 passed** (1218 Python + 83 Rust), **8 skipped**. Ruff/Cargo fmt/clippy clean. **Not rerun** since then. |
 | **9.0–9.4 incremental** | Targeted verification **833 passed** across voice, agents, core, and IPC tests. Voice alone: **317**. Full repo **not** re-run. |
+| **Phase 10 verification** | **191 unit tool tests passed**; **32 integration tool tests passed**; 30 tools registered (28 baseline + 2 web). |
 
-## Architecture (locked Phases 0–8; 9.0–9.4 additive)
+## Architecture (locked Phases 0–8; 9.0–9.4 additive; 10.1–10.2 additive)
 
 Python brain ↔ Rust `tom-engine` over Named Pipe `\\.\pipe\tom-engine`.
 
 | Layer | Owns |
 |---|---|
-| **Python** | Router; `Agent` / `AgentOrchestrator` (6-state; **9.2** `stream()`); 28 tools via `ToolExecutor` + `PermissionEngine`; `MemoryManager`; Phase 6 voice (`STTProvider`, `TTSProvider`, `VoicePipelineManager`, `VoiceInteractionManager`); Phase 7 vision; Phase 8 `TaskManager` / `TaskPlanner` / `TaskExecutor` / `ResourceManager` / `ProactiveScheduler`; **9.0** `MicrophoneLoop` + `VADDetector`; **9.1** `StreamingSTTProvider`; **9.2** `SentenceStreamer`; **9.3** `StreamingTTSProvider` + `IncrementalTTSStreamer`; **9.4** `ConversationTurnManager` + `ResponsePolicy` |
+| **Python** | Router; `Agent` / `AgentOrchestrator` (6-state; **9.2** `stream()`); **30 tools** via `ToolExecutor` + `PermissionEngine`; `MemoryManager`; Phase 6 voice (`STTProvider`, `TTSProvider`, `VoicePipelineManager`, `VoiceInteractionManager`); Phase 7 vision; Phase 8 `TaskManager` / `TaskPlanner` / `TaskExecutor` / `ResourceManager` / `ProactiveScheduler`; **9.0** `MicrophoneLoop` + `VADDetector`; **9.1** `StreamingSTTProvider`; **9.2** `SentenceStreamer`; **9.3** `StreamingTTSProvider` + `IncrementalTTSStreamer`; **9.4** `ConversationTurnManager` + `ResponsePolicy`; **10.1** `web.search` (local SearXNG); **10.2** `web.fetch` (SSRF-safe, sanitized extraction) |
 | **Rust** | IPC server; telemetry; `AudioManager` (capture/playback, ring buffer); `InputManager` (`SendInput`, clamp, cancel hotkey) |
 
-Tools (28): system 7, file 6, memory 5, voice 2 (`voice.announce`, `voice.status` SAFE), vision 4 (`SAFE`), OS input 4 (`get_cursor_pos` SAFE; `click` / `type_text` / `hotkey` ASK_USER).
+Tools (30): system 7, file 6, memory 5, voice 2 (`voice.announce`, `voice.status` SAFE), vision 4 (`SAFE`), OS input 4 (`get_cursor_pos` SAFE; `click` / `type_text` / `hotkey` ASK_USER), web 2 (`web.search`, `web.fetch` SAFE).
 
 ## Invariants (do not violate)
 
