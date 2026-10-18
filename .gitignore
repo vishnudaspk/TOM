@@ -130,3 +130,7 @@ temp/
 # Benchmark virtual environments
 .venv-ws2-bench/
 .venv-ws3-bench/
+.venv*/
+tests/benchmarks/voice/ws2/models_offline/
+tests/benchmarks/voice/**/recordings/
+tests/benchmarks/voice/_scratch/

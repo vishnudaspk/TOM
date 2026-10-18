@@ -1,4 +1,4 @@
-# Handoff — Phase 9 closeout complete; Phase 10 Iterations 1–2 complete
+# Handoff — Phase 9 closeout complete; Phase 10 CLOSED (Iterations 1–7 complete)
 
 Final architecture: TOM uses llama.cpp at `http://127.0.0.1:65400/v1` through the generic OpenAI-compatible `HttpModelProvider`. Bionic/LM Studio is not an active runtime dependency.
 
@@ -6,11 +6,11 @@ Invariants, hardware, and architecture: **`STATE.md`**. Phase ledger and ADRs 04
 
 ## Resume
 
-- **Done:** Phase 9 Iterations **9.0** (VAD/endpointing), **9.1** (streaming STT), **9.2** (LLM stream + sentence chunking), **9.3** (streaming TTS + incremental playback), **9.4** (turn manager + response policy), and the applicable 9.B checkpoint work.
-- **Done:** Phase 10 **Iteration 1** (`web.search`) and **Iteration 2** (`web.fetch`).
+- **Done:** Phase 9 Iterations **9.0–9.4** (VAD/endpointing, streaming STT, LLM stream/sentences, streaming TTS/playback, turn manager/response policy) and applicable 9.B checkpoint work.
+- **Done:** Phase 10 **Iteration 1** (`web.search`), **Iteration 2** (`web.fetch`), **Iterations 3+4** (`personal.note`, `personal.calendar`, `personal.reminder`), **Iteration 5** (`vision.analyze`), **Iteration 6** (Tool Integration: 34 tools canonical registration, JSON schema export, data-driven permissions, YAML defaults alignment), and **Iteration 7** (Security and Verification: SSRF defense-in-depth, redirect revalidation, scheme validation, prompt-injection policy isolation, personal deletion atomicity, vision ephemeral contract, 34-tool exit gate).
 - **Runtime:** Generic HTTP provider with llama.cpp as the production endpoint; no backend-specific alias remains.
-- **Current validation:** Targeted Phase 9 verification: **833 passed**, including **317 voice tests**. Phase 10 tools: **191 unit + 32 integration tests passed**. **30 tools registered** (28 baseline + 2 web). Full repository rerun was not performed.
-- **Next:** Phase 10 Iteration 3 (`personal.note`, `personal.calendar`) ready to begin. Phase 9.5/9.6 are explicitly deferred and require user approval.
+- **Current validation:** Targeted Phase 9 verification: **833 passed** (including **317 voice tests**). Phase 10 affected-module suite: **246 passed** (45 Iteration 7 security tests including 9 DNS pinning/fallback/Host-header/redirect tests + existing web/personal/vision/security/integration tests). All 34 tools registered with zero duplicates. Full repository rerun was not performed.
+- **Phase 10 STATUS: CLOSED** — all exit gates satisfied. Phase 9.5/9.6 are explicitly deferred and require user approval.
 
 ## Pipeline assembled so far (9.0 → 9.4)
 
@@ -35,18 +35,26 @@ Each stage is verified **independently**. 9.5 is the first iteration to bind the
 | WS0/WS1 Benchmarks | `tests/benchmarks/voice/benchmark_stt_tuning.py`, `tests/benchmarks/voice/results/stt_tuning_results.json` |
 | WS0 Hardware Test | `tests/integration/voice/test_hardware_latencies.py::test_real_stt_first_partial_meets_sla` |
 
-## Phase 10 Tools (Iterations 1–2)
+## Phase 10 Tools (Iterations 1–5)
 
 | Tool | Path | Description |
 |---|---|---|
 | `web.search` | `python/tom/tools/web.py` | Local SearXNG search; bounded results; SAFE |
 | `web.fetch` | `python/tom/tools/web.py` | SSRF-safe fetch; redirect validation; HTML extraction; SAFE |
+| `personal.note` | `python/tom/tools/personal.py` | Note CRUD; SQLite-backed; retrieve SAFE / mutations ASK_USER |
+| `personal.calendar` | `python/tom/tools/personal.py` | Calendar event CRUD; UTC timestamps; retrieve SAFE / mutations ASK_USER |
+| `personal.reminder` | `python/tom/tools/personal.py` | Reminder CRUD + recurrence + ProactiveScheduler lifecycle; retrieve SAFE / mutations ASK_USER |
+| `vision.analyze` | `python/tom/tools/vision.py` | Ephemeral screen/crop analysis via VisionManager (OCR, CV, VLM); SAFE |
 
 | Tests | Path |
 |---|---|
 | Unit web search | `tests/unit/tools/test_web_search.py` (8) |
 | Unit web fetch | `tests/unit/tools/test_web_fetch.py` (27) |
-| Integration tools | `tests/integration/tools/test_tool_pipeline.py` (32) |
+| Integration tools | `tests/integration/tools/test_tool_pipeline.py` (223) |
+| Personal store | `tests/unit/personal/test_personal_store.py` (39) |
+| Personal reminder service | `tests/unit/personal/test_reminder_service.py` (17 async) |
+| Personal permissions | `tests/unit/personal/test_personal_permissions.py` (15) |
+| Vision tools | `tests/unit/tools/test_vision_tools.py` (26) |
 
 ### 10.1 `web.search` contract
 - Input: `SearchRequest(query: str, max_results: int=10)` — query 1-256 chars, results 1-100
@@ -58,7 +66,7 @@ Each stage is verified **independently**. 9.5 is the first iteration to bind the
 - Input: `FetchRequest(url, max_response_bytes=1MiB, timeout=10s, max_redirects=10, allowed_content_types=[text/html, text/plain, ...])`
 - Output: `FetchResponse(url, final_url, status_code, content_type, content_length, extracted_text, title, redirect_count, untrusted=true)`
 - Provider: `BuiltinFetchProvider` — httpx-based with manual redirect handling
-- SSRF protection: Public host validation (rejects loopback, private, link-local, multicast, reserved); DNS rebinding protection on redirects; scheme validation (HTTP/HTTPS only)
+- SSRF protection: Public host validation (rejects loopback, private, link-local, multicast, reserved, IPv4-mapped IPv6); host revalidation on every redirect hop (including same-host redirects); scheme validation (HTTP/HTTPS only); single-resolution IP-pinning URL rewrite with multi-address fallback on connect-level errors only (never HTTP-status errors, never unvalidated addresses); original `Host` header with port omitted for default ports (443/80), bracketed for IPv6; `sni_hostname` request extension (`httpcore/_async/connection.py:107, 151` [EVIDENCE: verified, httpcore 1.0.9]) on every hop; `trust_env=False` (prevents proxy DNS interception). `final_url` always shows original hostname, not pinned IP. Remaining limitation: depends on httpcore honoring `sni_hostname` (verified); system proxies ignored via `trust_env=False`.
 - Content extraction: BeautifulSoup for HTML (removes script/style/iframe/embed/object); plain text passthrough; 1 MiB output limit
 - Security: Fetched content marked `untrusted: true`; cannot influence permission decisions
 - Permission: SAFE (read-only, no execution)
@@ -131,13 +139,43 @@ AsyncGenerator[str]  (SentenceStreamer)
 .venv-ws2-bench\Scripts\python.exe tests\benchmarks\voice\ws2\measure_h600.py
 ```
 
+## Phase 10.3+4 Personal Tools contracts
+
+### 10.3 `personal.note` contract
+- Input: `PersonalNoteInput(action: create|retrieve|update|delete, note_id?, title?, content?, tags?, query?, limit=20)`
+- Output: `PersonalNoteOutput(operation, note?, notes[], count, deleted)`
+- Provider: `PersonalStore` — `personal_notes` SQLite table; stable `note_*` IDs; UTC timestamps
+- Permission: retrieve=SAFE; create/update/delete=ASK_USER (escalated by `PERSONAL_ACTION_ESCALATION`)
+
+### 10.3 `personal.calendar` contract
+- Input: `PersonalCalendarInput(action: create|retrieve|update|delete, event_id?, title?, description?, start_utc?, end_utc?, window_start_utc?, window_end_utc?, limit=20)`
+- Output: `PersonalCalendarOutput(operation, event?, events[], count, deleted)`
+- Provider: `PersonalStore` — `personal_calendar_events` table; `evt_*` IDs; explicit UTC; end must be > start
+- Permission: retrieve=SAFE; create/update/delete=ASK_USER
+
+### 10.4 `personal.reminder` contract
+- Input: `PersonalReminderInput(action: create|retrieve|update|cancel|delete, reminder_id?, message?, fire_utc?, recurrence?, max_fires?, limit=20)`
+- Output: `PersonalReminderOutput(operation, reminder?, reminders[], count, deleted)`
+- Provider: `PersonalStore` + `ReminderService` — `personal_reminders` table; `rem_*` IDs; recurrence: one_shot|daily|weekly|monthly; bounded max_fires
+- Permission: retrieve=SAFE; create/update/cancel/delete=ASK_USER
+- Scheduler: `ReminderService.tick()` drives due reminders through existing `ProactiveScheduler.dispatch_proactive_task()` (quiet hours, preemption, rate limit, duplicate suppression via optimistic `fires` guard)
+- No arbitrary plan execution: `plan=None` on all reminder-dispatched tasks
+
+## Phase 10.5 `vision.analyze` contract
+- Input: `VisionAnalyzeInput(query: str, monitor?: int, region?: [left, top, right, bottom], capability?: ocr_only|element_location|fast_vlm|primary_vlm|deep_vlm, max_tokens: int=512)`
+- Output: `VisionAnalyzeOutput(text: str, capability_used: str, bounding_boxes: list[BoundingBox], elements_count: int, execution_time_ms: float)`
+- Provider: `VisionManager.analyze` — capability-driven routing (OCR -> CV -> VLM); checks VRAM headroom before VLM; zero disk persistence (ephemeral in-memory PIL/CapturedFrame processing only)
+- Privacy: Foreground window evaluated against `PrivacyShield`; blocked on sensitive content
+- Permission: SAFE (read-only perception analysis)
+
 ## What NOT to do
-- Do NOT edit files under `python/tom/`, `config/`, `rust/`, or touch IPC protocol.
+- Do NOT edit files under `python/tom/`, `config/`, `rust/`, or touch IPC protocol without explicit scope.
 - Do NOT modify production `.venv` (use throwaway `.venv-ws2-bench` or `.venv-ws3-bench`).
 - Do NOT start WS4–WS7 or revise `docs/design/turn_taking_controller.md` before user sign-off.
 - Do NOT use GPU STT (CPU-first invariant).
 - Do NOT trust unconsumed generator timings or unpaced streaming audio feeds.
 
-## Next Step (awaiting user review)
-- User review of Checkpoint 1 Fix Round report.
-- Upon approval, proceed immediately to **Task 4** (turn-taking re-test with all 15 clips, split points, H=600 ms, Smart Turn v3 official comparison, and Plan B rule-based completeness).
+## Next Step
+- **Phase 10 CLOSED.** All 34 tools registered, all exit gates satisfied. Remaining deferred work:
+  - Phase 9.5/9.6 (voice pipeline integration and latency calibration) — requires explicit user approval.
+  - Any subsequent phases should follow the same iteration-approval workflow.
