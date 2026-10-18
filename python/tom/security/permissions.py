@@ -54,16 +54,27 @@ DEFAULT_TOOL_PERMISSIONS: dict[str, PermissionLevel] = {
     # File tools (SAFE & ASK_USER)
     "files.list_directory": PermissionLevel.SAFE,
     "files.read_file": PermissionLevel.SAFE,
-    "files.get_metadata": PermissionLevel.SAFE,
+    "files.search_files": PermissionLevel.SAFE,
+    "files.file_info": PermissionLevel.SAFE,
     "files.write_file": PermissionLevel.ASK_USER,
-    "files.copy_file": PermissionLevel.ASK_USER,
     "files.delete_file": PermissionLevel.ASK_USER,
+    # File tool aliases
+    "files.get_metadata": PermissionLevel.SAFE,
+    "files.copy_file": PermissionLevel.ASK_USER,
     # Memory tools (SAFE & ASK_USER)
     "memory.remember": PermissionLevel.SAFE,
     "memory.recall": PermissionLevel.SAFE,
     "memory.forget": PermissionLevel.ASK_USER,
+    "memory.recent": PermissionLevel.SAFE,
+    "memory.preferences": PermissionLevel.SAFE,
+    # Memory tool aliases
     "memory.search": PermissionLevel.SAFE,
     "memory.status": PermissionLevel.SAFE,
+    # Personal productivity tools (SAFE reads; mutations escalate to ASK_USER
+    # in PermissionEngine.evaluate via PERSONAL_ACTION_ESCALATION below)
+    "personal.note": PermissionLevel.SAFE,
+    "personal.calendar": PermissionLevel.SAFE,
+    "personal.reminder": PermissionLevel.SAFE,
     # Voice tools (SAFE)
     "voice.announce": PermissionLevel.SAFE,
     "voice.status": PermissionLevel.SAFE,
@@ -72,11 +83,23 @@ DEFAULT_TOOL_PERMISSIONS: dict[str, PermissionLevel] = {
     "vision.ocr": PermissionLevel.SAFE,
     "vision.find_element": PermissionLevel.SAFE,
     "vision.ask": PermissionLevel.SAFE,
+    "vision.analyze": PermissionLevel.SAFE,
     # OS Input tools (SAFE & ASK_USER)
     "os.input.get_cursor_pos": PermissionLevel.SAFE,
     "os.input.click": PermissionLevel.ASK_USER,
     "os.input.type_text": PermissionLevel.ASK_USER,
     "os.input.hotkey": PermissionLevel.ASK_USER,
+}
+
+
+# Data-driven, exact-name action escalation for personal productivity tools.
+# Only the explicitly listed read actions remain SAFE; every mutation and any
+# missing/unknown action escalates to ASK_USER (fail-safe default). This is an
+# exact-name mapping — never string-prefix inferred.
+PERSONAL_ACTION_ESCALATION: dict[str, frozenset[str]] = {
+    "personal.note": frozenset({"retrieve"}),
+    "personal.calendar": frozenset({"retrieve"}),
+    "personal.reminder": frozenset({"retrieve"}),
 }
 
 
@@ -306,6 +329,20 @@ class PermissionEngine:
                 if isinstance(importance, str):
                     importance = importance.upper()
                 if importance in ("IMPORTANT", "CRITICAL"):
+                    effective_level = PermissionLevel.ASK_USER
+
+            # Personal productivity tools: explicit read actions stay at the
+            # base level; every mutation and any missing/unknown action
+            # escalates to ASK_USER (fail-safe, exact-name mapping).
+            if tool_name in PERSONAL_ACTION_ESCALATION:
+                read_actions = PERSONAL_ACTION_ESCALATION[tool_name]
+                if isinstance(params, dict):
+                    action = params.get("action")
+                elif params is not None:
+                    action = getattr(params, "action", None)
+                else:
+                    action = None
+                if not isinstance(action, str) or action not in read_actions:
                     effective_level = PermissionLevel.ASK_USER
 
         # 4. Evaluate effective permission level

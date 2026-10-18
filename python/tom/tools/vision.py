@@ -5,9 +5,10 @@ Provides typed, deterministic vision inspection tools integrating with VisionMan
 - vision.ocr (SAFE): Extracts on-screen text; returns sanitized text, bounding boxes, and confidence.
 - vision.find_element (SAFE): Locates UI element by text or description; returns center coordinates (x, y).
 - vision.ask (SAFE): Asks local VLM a question about screen or cropped region; returns text answer.
+- vision.analyze (SAFE): Analyzes screen or cropped region via VisionManager capability routing.
 
 Adheres to:
-- Phase 7 Vision Specification (Iteration 4)
+- Phase 7 Vision Specification (Iteration 4) & Phase 10 Vision Tool (Iteration 5)
 - Decision 032: Centralized Tool Invocation Safety (Strict ToolExecutor Routing)
 - Zero disk persistence: all frames processed ephemerally in RAM.
 - All vision tools are classified as SAFE.
@@ -16,11 +17,16 @@ Adheres to:
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from tom.schemas.vision import BoundingBox, ScreenDimensions
+from tom.schemas.vision import (
+    BoundingBox,
+    ScreenDimensions,
+    VisionAnalysisRequest,
+    VisionCapability,
+)
 from tom.security.permissions import PermissionLevel
 from tom.tools.registry import ToolDefinition, ToolRegistry, default_registry
 
@@ -154,6 +160,68 @@ class VisionAskOutput(BaseModel):
 
     answer: str = Field(description="Perception answer or visual reasoning output")
     capability_used: str = Field(default="FAST_VLM", description="Perception tier utilized")
+
+
+class VisionAnalyzeInput(BaseModel):
+    """Input parameters for vision.analyze tool."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    query: str = Field(
+        ...,
+        min_length=1,
+        max_length=2048,
+        description="Natural language query, instruction, or prompt for visual analysis",
+    )
+    monitor: int | None = Field(
+        default=None,
+        ge=0,
+        description="Monitor index to inspect (None/0 for primary)",
+    )
+    region: list[int] | None = Field(
+        default=None,
+        description="Optional crop region [left, top, right, bottom] in virtual desktop pixels",
+    )
+    capability: (
+        Literal["ocr_only", "element_location", "fast_vlm", "primary_vlm", "deep_vlm"] | None
+    ) = Field(
+        default=None,
+        description="Optional explicit capability tier ('ocr_only', 'element_location', 'fast_vlm', 'primary_vlm', 'deep_vlm')",
+    )
+    max_tokens: int = Field(
+        default=512,
+        ge=1,
+        le=4096,
+        description="Maximum tokens for VLM response",
+    )
+
+    @field_validator("region")
+    @classmethod
+    def validate_region(cls, v: list[int] | None) -> list[int] | None:
+        if v is not None:
+            if len(v) != 4:
+                raise ValueError(
+                    "region must contain exactly 4 integers [left, top, right, bottom]"
+                )
+            if v[0] >= v[2] or v[1] >= v[3]:
+                raise ValueError("region must have left < right and top < bottom")
+        return v
+
+
+class VisionAnalyzeOutput(BaseModel):
+    """Output result for vision.analyze tool."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    text: str = Field(description="Textual outcome from visual analysis")
+    capability_used: str = Field(description="Capability tier that processed this query")
+    bounding_boxes: list[BoundingBox] = Field(
+        default_factory=list, description="Target bounding boxes if any"
+    )
+    elements_count: int = Field(default=0, description="Count of detected UI elements if any")
+    execution_time_ms: float = Field(
+        default=0.0, ge=0.0, description="Analysis execution time in milliseconds"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -291,6 +359,33 @@ def create_vision_tools(
             capability_used="FAST_VLM",
         )
 
+    async def analyze(params: VisionAnalyzeInput) -> VisionAnalyzeOutput:
+        """Analyze screen or cropped region via VisionManager capability routing."""
+        mgr = _get_manager()
+        frame = None
+        if hasattr(mgr, "capture_service"):
+            if params.region:
+                r = _to_screen_dimensions(params.region)
+                frame = mgr.capture_service.capture_region(r)
+            else:
+                frame = mgr.capture_service.capture_screen(monitor_index=params.monitor)
+
+        cap = VisionCapability(params.capability) if params.capability else None
+        req = VisionAnalysisRequest(
+            query=params.query,
+            image=frame,
+            capability=cap,
+            max_tokens=params.max_tokens,
+        )
+        res = await mgr.analyze(req)
+        return VisionAnalyzeOutput(
+            text=res.text,
+            capability_used=str(res.capability_used),
+            bounding_boxes=res.bounding_boxes,
+            elements_count=len(res.elements) if hasattr(res, "elements") and res.elements else 0,
+            execution_time_ms=res.execution_time_ms,
+        )
+
     return [
         ToolDefinition(
             name="vision.capture",
@@ -327,6 +422,15 @@ def create_vision_tools(
             output_schema=VisionAskOutput,
             permission_level=PermissionLevel.SAFE,
             handler=ask,
+        ),
+        ToolDefinition(
+            name="vision.analyze",
+            description="Analyze screen or cropped region via VisionManager capability routing (OCR, element location, or VLM reasoning).",
+            category="vision",
+            input_schema=VisionAnalyzeInput,
+            output_schema=VisionAnalyzeOutput,
+            permission_level=PermissionLevel.SAFE,
+            handler=analyze,
         ),
     ]
 

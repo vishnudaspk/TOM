@@ -10,11 +10,14 @@ and must be sanitized, bounded, and isolated from tool authorization.
 
 from __future__ import annotations
 
+import asyncio
 import ipaddress
 import json
 import socket
+import ssl
+import time
 from typing import Any
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin, urlparse, urlunparse
 
 import httpx
 from bs4 import BeautifulSoup
@@ -23,6 +26,43 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from tom.schemas.config import ToolsConfig
 from tom.security.permissions import PermissionLevel
 from tom.tools.registry import ToolDefinition, ToolRegistry, default_registry
+
+MAX_FALLBACK_ADDRESSES_PER_HOP: int = 3
+
+
+def _extract_tls_error(exc: BaseException) -> ssl.SSLError | None:
+    """Inspect the exception chain for any ssl.SSLError or ssl.CertificateError.
+
+    In httpx (0.28.1, `httpx/_transports/default.py:86-93`) and httpcore (1.0.9,
+    `httpcore/_backends/anyio.py:61-66`), TLS/SSL errors are caught and re-raised as
+    `httpcore.ConnectError` (storing the original SSLError in `args` and `__context__`),
+    which is then re-raised by httpx as `httpx.ConnectError(message) from exc`.
+    """
+    seen: set[int] = set()
+    stack: list[BaseException] = [exc]
+    while stack:
+        cur = stack.pop()
+        if cur is None or id(cur) in seen:
+            continue
+        seen.add(id(cur))
+        if isinstance(cur, (ssl.SSLError, ssl.CertificateError)):
+            return cur
+        if hasattr(cur, "__cause__") and cur.__cause__:
+            stack.append(cur.__cause__)
+        if hasattr(cur, "__context__") and cur.__context__:
+            stack.append(cur.__context__)
+        if hasattr(cur, "args"):
+            for arg in cur.args:
+                if isinstance(arg, BaseException):
+                    stack.append(arg)
+    return None
+
+
+def _format_tls_error_reason(tls_err: ssl.SSLError) -> str:
+    """Extract a human-readable reason string from a TLS/SSL error."""
+    return (
+        getattr(tls_err, "verify_message", None) or getattr(tls_err, "reason", None) or str(tls_err)
+    )
 
 
 class SearchRequest(BaseModel):
@@ -87,6 +127,20 @@ class SearchResponse(BaseModel):
 # =============================================================================
 
 
+def _is_public_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """Check if an IP address is strictly public, unpacking IPv4-mapped IPv6."""
+    if ip.version == 6 and ip.ipv4_mapped:
+        ip = ip.ipv4_mapped
+    return (
+        not ip.is_loopback
+        and not ip.is_private
+        and not ip.is_link_local
+        and not ip.is_multicast
+        and not ip.is_reserved
+        and not ip.is_unspecified
+    )
+
+
 class FetchRequest(BaseModel):
     """Validated input for the deterministic `web.fetch` tool."""
 
@@ -148,43 +202,65 @@ class FetchRequest(BaseModel):
 
         return normalized
 
-    @staticmethod
-    def _is_public_host(host: str) -> bool:
-        """Check if host resolves to a public IP address."""
-        try:
-            # Handle IPv6 addresses in brackets
-            if host.startswith("[") and host.endswith("]"):
-                host = host[1:-1]
+    @classmethod
+    def _resolve_and_validate_public_ips(
+        cls, host: str
+    ) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+        """Resolve a host once and assert that ALL returned addresses are public.
 
-            # Try to parse as IP address directly
-            ip = ipaddress.ip_address(host)
-            return (
-                not ip.is_loopback
-                and not ip.is_private
-                and not ip.is_link_local
-                and not ip.is_multicast
-                and not ip.is_reserved
-                and not ip.is_unspecified
-            )
+        Returns every validated public IP address for multi-address fallback.
+        Raises SSRFError if the host is invalid or ANY address is non-public.
+        """
+        host_clean = host.strip()
+        if not host_clean:
+            raise SSRFError("Host cannot be empty")
+
+        # Strip brackets from IPv6 literal if present
+        if host_clean.startswith("[") and host_clean.endswith("]"):
+            host_clean = host_clean[1:-1]
+
+        # 1. Check if host is already an IP address literal
+        try:
+            ip = ipaddress.ip_address(host_clean)
+            if not _is_public_ip(ip):
+                raise SSRFError(f"Host '{host}' is not a public address")
+            return [ip]
         except ValueError:
-            # Host is a domain name, resolve it
+            pass
+
+        # 2. Host is a domain name: resolve it once via getaddrinfo
+        try:
+            infos = socket.getaddrinfo(host_clean, None)
+        except (socket.gaierror, ValueError) as exc:
+            raise SSRFError(f"Failed to resolve host '{host}': {exc}") from exc
+
+        if not infos:
+            raise SSRFError(f"Host '{host}' did not resolve to any address")
+
+        resolved_ips: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
+        for info in infos:
+            ip_str = info[4][0]
             try:
-                infos = socket.getaddrinfo(host, None)
-                for info in infos:
-                    ip_str = info[4][0]
-                    ip = ipaddress.ip_address(ip_str)
-                    if (
-                        ip.is_loopback
-                        or ip.is_private
-                        or ip.is_link_local
-                        or ip.is_multicast
-                        or ip.is_reserved
-                        or ip.is_unspecified
-                    ):
-                        return False
-                return True
-            except (socket.gaierror, ValueError):
-                return False
+                ip = ipaddress.ip_address(ip_str)
+            except ValueError as exc:
+                raise SSRFError(
+                    f"Invalid IP address '{ip_str}' resolved for host '{host}'"
+                ) from exc
+
+            if not _is_public_ip(ip):
+                raise SSRFError(f"Host '{host}' resolved to non-public address '{ip_str}'")
+            resolved_ips.append(ip)
+
+        return resolved_ips
+
+    @classmethod
+    def _is_public_host(cls, host: str) -> bool:
+        """Check if host resolves strictly to public IP addresses."""
+        try:
+            cls._resolve_and_validate_public_ips(host)
+            return True
+        except SSRFError:
+            return False
 
 
 class FetchResponse(BaseModel):
@@ -201,7 +277,9 @@ class FetchResponse(BaseModel):
     title: str = Field(default="", max_length=500)
     redirect_count: int = Field(default=0, ge=0)
     provider: str = Field(default="builtin", max_length=255)
-    untrusted: bool = Field(default=True, description="Content is untrusted and must not influence permissions")
+    untrusted: bool = Field(
+        default=True, description="Content is untrusted and must not influence permissions"
+    )
 
 
 class FetchProviderError(RuntimeError):
@@ -236,14 +314,12 @@ class BuiltinFetchProvider(FetchProvider):
         self._default_max_redirects = default_max_redirects
 
     async def fetch(self, request: FetchRequest) -> FetchResponse:
-        # Validate URL again at fetch time (defense in depth)
-        if not FetchRequest._is_public_host(urlparse(request.url).hostname or ""):
-            raise SSRFError(f"Host '{urlparse(request.url).hostname}' is not a public address")
-
         # Create client with timeout if not provided
         if self._client is not None:
             client = self._client
         else:
+            # trust_env=False ensures environment HTTP/HTTPS proxies are not used;
+            # a proxy would perform its own DNS resolution and bypass local IP pinning.
             client = httpx.AsyncClient(
                 timeout=httpx.Timeout(
                     connect=3.0,
@@ -253,58 +329,152 @@ class BuiltinFetchProvider(FetchProvider):
                 ),
                 follow_redirects=False,  # We handle redirects manually
                 max_redirects=0,
+                trust_env=False,
             )
 
+        deadline = time.monotonic() + request.timeout_seconds
         try:
-            return await self._fetch_with_redirects(client, request)
+            async with asyncio.timeout(request.timeout_seconds):
+                return await self._fetch_with_redirects(client, request, deadline=deadline)
+        except TimeoutError as exc:
+            raise FetchProviderError(f"Fetch timed out after {request.timeout_seconds}s") from exc
         finally:
             if self._client is None:
                 await client.aclose()
 
-    async def _fetch_with_redirects(self, client: httpx.AsyncClient, request: FetchRequest) -> FetchResponse:
+    async def _fetch_with_redirects(
+        self,
+        client: httpx.AsyncClient,
+        request: FetchRequest,
+        deadline: float | None = None,
+    ) -> FetchResponse:
         current_url = request.url
         redirect_count = 0
-        original_host = urlparse(request.url).hostname or ""
 
         while redirect_count <= request.max_redirects:
+            if deadline is not None and time.monotonic() >= deadline:
+                raise FetchProviderError(f"Fetch timed out after {request.timeout_seconds}s")
+
             # Validate each redirect destination
             parsed = urlparse(current_url)
             if parsed.scheme not in {"http", "https"}:
                 raise SSRFError(f"Redirect to non-HTTP(S) scheme: {parsed.scheme}")
 
-            # Check DNS rebinding - validate host matches original or is public
             current_host = parsed.hostname or ""
-            if current_host != original_host:
-                if not FetchRequest._is_public_host(current_host):
-                    raise SSRFError(f"Redirect host '{current_host}' is not a public address")
+            if not current_host:
+                raise SSRFError("URL must have a valid host")
 
-            # Make request with size limit
-            try:
-                response = await client.get(
-                    current_url,
-                    timeout=httpx.Timeout(
+            # Resolve the hostname ONCE with getaddrinfo, requiring ALL returned addresses
+            # to be public. Returns the validated list, capped at MAX_FALLBACK_ADDRESSES_PER_HOP.
+            all_target_ips = FetchRequest._resolve_and_validate_public_ips(current_host)
+            target_ips = all_target_ips[:MAX_FALLBACK_ADDRESSES_PER_HOP]
+
+            # Build Host header: bracket IPv6, include port only when non-default.
+            is_ipv6_host = target_ips[0].version == 6 and (
+                current_host == str(target_ips[0]) or current_host == f"[{target_ips[0]}]"
+            )
+            host_name = f"[{target_ips[0]}]" if is_ipv6_host else current_host
+            default_port = 443 if parsed.scheme == "https" else 80
+            has_non_default_port = parsed.port is not None and parsed.port != default_port
+            host_header = f"{host_name}:{parsed.port}" if has_non_default_port else host_name
+            req_headers = {"Host": host_header}
+            req_extensions: dict[str, Any] = {}
+            if parsed.scheme == "https":
+                # sni_hostname tells httpcore to use this as the TLS server_hostname
+                # instead of the IP literal it sees in the URL
+                # (httpcore/_async/connection.py:107, 151 — httpcore 1.0.9)
+                req_extensions["sni_hostname"] = host_name
+
+            # Try each validated IP in order; retry on plain connection-level errors only.
+            # Never retry on TLS/cert errors or HTTP-status errors; never use an unvalidated address.
+            last_connect_exc: Exception | None = None
+            response = None
+            for target_ip in target_ips:
+                if deadline is not None:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        raise FetchProviderError(
+                            f"Fetch timed out after {request.timeout_seconds}s"
+                        )
+                    step_timeout = httpx.Timeout(
+                        connect=min(3.0, remaining),
+                        read=remaining,
+                        write=min(3.0, remaining),
+                        pool=min(3.0, remaining),
+                    )
+                else:
+                    step_timeout = httpx.Timeout(
                         connect=3.0,
                         read=request.timeout_seconds,
                         write=3.0,
                         pool=3.0,
-                    ),
+                    )
+
+                ip_literal = f"[{target_ip}]" if target_ip.version == 6 else str(target_ip)
+                netloc_with_ip = f"{ip_literal}:{parsed.port}" if parsed.port else ip_literal
+                target_url = urlunparse(
+                    (
+                        parsed.scheme,
+                        netloc_with_ip,
+                        parsed.path or "/",
+                        parsed.params,
+                        parsed.query,
+                        parsed.fragment,
+                    )
                 )
-            except httpx.TimeoutException as exc:
-                raise FetchProviderError(f"Fetch timed out after {request.timeout_seconds}s") from exc
-            except httpx.HTTPError as exc:
-                raise FetchProviderError(f"Fetch failed: {exc}") from exc
+                try:
+                    response = await client.get(
+                        target_url,
+                        headers=req_headers,
+                        extensions=req_extensions if req_extensions else None,
+                        timeout=step_timeout,
+                    )
+                    last_connect_exc = None
+                    break  # Successful connection — stop trying
+                except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
+                    tls_err = _extract_tls_error(exc)
+                    if tls_err is not None:
+                        reason = _format_tls_error_reason(tls_err)
+                        raise FetchProviderError(
+                            f"TLS certificate verification failed for '{current_host}': {reason}"
+                        ) from exc
+                    # Connection-level failure only — try the next validated address
+                    last_connect_exc = exc
+                    continue
+                except httpx.TimeoutException as exc:
+                    # Read/write timeout — not a connect error, propagate immediately
+                    raise FetchProviderError(
+                        f"Fetch timed out after {request.timeout_seconds}s"
+                    ) from exc
+                except httpx.HTTPError as exc:
+                    tls_err = _extract_tls_error(exc)
+                    if tls_err is not None:
+                        reason = _format_tls_error_reason(tls_err)
+                        raise FetchProviderError(
+                            f"TLS certificate verification failed for '{current_host}': {reason}"
+                        ) from exc
+                    raise FetchProviderError(f"Fetch failed: {exc}") from exc
+
+            if response is None:
+                raise FetchProviderError(
+                    f"All addresses for '{current_host}' failed to connect: {last_connect_exc}"
+                ) from last_connect_exc
 
             # Check response size
             content_length = response.headers.get("content-length")
             if content_length and int(content_length) > request.max_response_bytes:
-                raise FetchProviderError(f"Response size {content_length} exceeds limit {request.max_response_bytes}")
+                raise FetchProviderError(
+                    f"Response size {content_length} exceeds limit {request.max_response_bytes}"
+                )
 
             # Read body with size limit
             body = b""
             async for chunk in response.aiter_bytes():
                 body += chunk
                 if len(body) > request.max_response_bytes:
-                    raise FetchProviderError(f"Response body exceeds {request.max_response_bytes} bytes")
+                    raise FetchProviderError(
+                        f"Response body exceeds {request.max_response_bytes} bytes"
+                    )
 
             # Check content type
             content_type = response.headers.get("content-type", "").split(";")[0].strip().lower()
@@ -315,18 +485,24 @@ class BuiltinFetchProvider(FetchProvider):
             if 300 <= response.status_code < 400 and "location" in response.headers:
                 redirect_count += 1
                 if redirect_count > request.max_redirects:
-                    raise FetchProviderError(f"Exceeded maximum redirects ({request.max_redirects})")
+                    raise FetchProviderError(
+                        f"Exceeded maximum redirects ({request.max_redirects})"
+                    )
 
                 location = response.headers["location"]
+                # urljoin uses current_url (with original hostname, not the pinned IP)
+                # so the reconstructed URL always carries the real hostname forward.
                 current_url = urljoin(current_url, location)
                 continue
 
             # Extract content
             extracted_text, title = self._extract_content(body, content_type)
 
+            # final_url always shows the original hostname, never the pinned IP literal,
+            # so callers see where they logically ended up, not transport internals.
             return FetchResponse(
                 url=request.url,
-                final_url=str(response.url),
+                final_url=current_url,
                 status_code=response.status_code,
                 content_type=content_type,
                 content_length=len(body),
@@ -435,7 +611,9 @@ class SearXNGSearchProvider(SearchProvider):
         except httpx.TimeoutException as exc:
             raise SearchProviderError("Search provider timed out") from exc
         except (httpx.HTTPError, ValueError, json.JSONDecodeError) as exc:
-            raise SearchProviderError(f"Search provider returned an invalid response: {exc}") from exc
+            raise SearchProviderError(
+                f"Search provider returned an invalid response: {exc}"
+            ) from exc
 
         if not isinstance(payload, dict) or not isinstance(payload.get("results"), list):
             raise SearchProviderError("Search provider response has no results list")

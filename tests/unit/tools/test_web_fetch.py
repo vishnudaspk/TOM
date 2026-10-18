@@ -1,12 +1,10 @@
 """Focused tests for the deterministic local web.fetch tool."""
 
 import asyncio
-from typing import Any
 
 import httpx
 import pytest
 from pydantic import ValidationError
-
 from tom.schemas.config import ToolsConfig
 from tom.security.permissions import PermissionEngine, PermissionLevel
 from tom.tools.executor import ToolExecutor
@@ -113,7 +111,9 @@ class TestBuiltinFetchProvider:
         """
 
         def handler(request: httpx.Request) -> httpx.Response:
-            assert request.url == "https://example.com/article"
+            assert request.url.path == "/article"
+            assert request.headers.get("host") == "example.com"
+            assert request.extensions.get("sni_hostname") == "example.com"
             return _fetch_response(html.encode("utf-8"), url=str(request.url))
 
         client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
@@ -138,7 +138,9 @@ class TestBuiltinFetchProvider:
         text = "Plain text content\nWith multiple lines"
 
         def handler(request: httpx.Request) -> httpx.Response:
-            return _fetch_response(text.encode("utf-8"), headers={"content-type": "text/plain"}, url=str(request.url))
+            return _fetch_response(
+                text.encode("utf-8"), headers={"content-type": "text/plain"}, url=str(request.url)
+            )
 
         client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
         provider = BuiltinFetchProvider(client=client)
@@ -153,7 +155,7 @@ class TestBuiltinFetchProvider:
         html = "<html><body>Final page</body></html>"
 
         def handler(request: httpx.Request) -> httpx.Response:
-            if str(request.url) == "https://example.com/start":
+            if request.url.path == "/start":
                 return httpx.Response(
                     status_code=302,
                     headers={"location": "https://example.com/final"},
@@ -172,7 +174,7 @@ class TestBuiltinFetchProvider:
 
     def test_redirect_to_different_host_is_validated(self) -> None:
         def handler(request: httpx.Request) -> httpx.Response:
-            if str(request.url) == "https://example.com/start":
+            if request.url.path == "/start":
                 return httpx.Response(
                     status_code=302,
                     headers={"location": "https://github.com/final"},
@@ -189,7 +191,7 @@ class TestBuiltinFetchProvider:
 
     def test_redirect_to_private_ip_is_blocked(self) -> None:
         def handler(request: httpx.Request) -> httpx.Response:
-            if str(request.url) == "https://example.com/start":
+            if request.url.path == "/start":
                 return httpx.Response(
                     status_code=302,
                     headers={"location": "http://192.168.1.1/admin"},
@@ -205,7 +207,7 @@ class TestBuiltinFetchProvider:
 
     def test_redirect_to_non_http_scheme_is_blocked(self) -> None:
         def handler(request: httpx.Request) -> httpx.Response:
-            if str(request.url) == "https://example.com/start":
+            if request.url.path == "/start":
                 return httpx.Response(
                     status_code=302,
                     headers={"location": "ftp://example.com/file"},
@@ -234,7 +236,9 @@ class TestBuiltinFetchProvider:
         provider = BuiltinFetchProvider(client=client)
 
         with pytest.raises(FetchProviderError, match="Exceeded maximum redirects"):
-            asyncio.run(provider.fetch(FetchRequest(url="https://example.com/redirect/0", max_redirects=10)))
+            asyncio.run(
+                provider.fetch(FetchRequest(url="https://example.com/redirect/0", max_redirects=10))
+            )
 
     def test_response_size_limit_is_enforced(self) -> None:
         large_body = b"x" * 2_000_000  # 2 MB
@@ -246,7 +250,11 @@ class TestBuiltinFetchProvider:
         provider = BuiltinFetchProvider(client=client)
 
         with pytest.raises(FetchProviderError, match="exceeds"):
-            asyncio.run(provider.fetch(FetchRequest(url="https://example.com/large", max_response_bytes=1_000_000)))
+            asyncio.run(
+                provider.fetch(
+                    FetchRequest(url="https://example.com/large", max_response_bytes=1_000_000)
+                )
+            )
 
     def test_content_length_header_is_checked(self) -> None:
         def handler(request: httpx.Request) -> httpx.Response:
@@ -261,11 +269,19 @@ class TestBuiltinFetchProvider:
         provider = BuiltinFetchProvider(client=client)
 
         with pytest.raises(FetchProviderError, match="exceeds limit"):
-            asyncio.run(provider.fetch(FetchRequest(url="https://example.com/large", max_response_bytes=1_000_000)))
+            asyncio.run(
+                provider.fetch(
+                    FetchRequest(url="https://example.com/large", max_response_bytes=1_000_000)
+                )
+            )
 
     def test_disallowed_content_type_is_rejected(self) -> None:
         def handler(request: httpx.Request) -> httpx.Response:
-            return _fetch_response(b"binary data", headers={"content-type": "application/octet-stream"}, url=str(request.url))
+            return _fetch_response(
+                b"binary data",
+                headers={"content-type": "application/octet-stream"},
+                url=str(request.url),
+            )
 
         client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
         provider = BuiltinFetchProvider(client=client)
@@ -287,7 +303,9 @@ class TestBuiltinFetchProvider:
 
         # Just verify the fetch completes with the configured timeout
         # (Real timeout testing requires a real network connection)
-        result = asyncio.run(provider.fetch(FetchRequest(url="https://example.com/slow", timeout_seconds=5.0)))
+        result = asyncio.run(
+            provider.fetch(FetchRequest(url="https://example.com/slow", timeout_seconds=5.0))
+        )
         assert result.status_code == 200
 
     def test_empty_body_returns_empty_text(self) -> None:
@@ -404,15 +422,23 @@ class TestWebFetchToolRegistration:
         registry = ToolRegistry()
 
         def handler(request: httpx.Request) -> httpx.Response:
-            return _fetch_response(b'{"key": "value"}', headers={"content-type": "application/json"}, url=str(request.url))
+            return _fetch_response(
+                b'{"key": "value"}',
+                headers={"content-type": "application/json"},
+                url=str(request.url),
+            )
 
         client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
         provider = BuiltinFetchProvider(client=client)
         try:
             # Default allowed types don't include application/json
             create_web_tools(registry=registry, config=config, fetch_provider=provider)
-            executor = ToolExecutor(registry=registry, permission_engine=PermissionEngine(), config=config)
-            result = asyncio.run(executor.execute("web.fetch", {"url": "https://example.com/data.json"}))
+            executor = ToolExecutor(
+                registry=registry, permission_engine=PermissionEngine(), config=config
+            )
+            result = asyncio.run(
+                executor.execute("web.fetch", {"url": "https://example.com/data.json"})
+            )
             assert result.success is False
             assert "not allowed" in result.error
         finally:

@@ -31,6 +31,8 @@ from tom.security.confirmation import (
     ConfirmationRequest,
 )
 from tom.security.permissions import (
+    DEFAULT_TOOL_PERMISSIONS,
+    PERSONAL_ACTION_ESCALATION,
     PermissionDeniedError,
     PermissionEngine,
     PermissionLevel,
@@ -38,6 +40,7 @@ from tom.security.permissions import (
 from tom.tools.bootstrap import setup_default_tools
 from tom.tools.executor import ToolExecutor
 from tom.tools.registry import (
+    ToolAlreadyExistsError,
     ToolDefinition,
     ToolNotFoundError,
     ToolRegistry,
@@ -606,14 +609,166 @@ class TestRegistryIsolation:
         assert "system.cpu_info" in names
 
     def test_total_tool_count(self) -> None:
-        """Phase 10 Iterations 1-2 add web.search and web.fetch to the 28-tool baseline."""
+        """Phase 10 Iterations 1-5: 28 baseline + 2 web + 3 personal + 1 vision = 34 tools."""
         reg = ToolRegistry()
         sys_defs, file_defs, memory_defs, voice_defs = setup_default_tools(registry=reg)
         assert len(sys_defs) == 7, f"Expected 7 system tools, got {len(sys_defs)}"
         assert len(file_defs) == 6, f"Expected 6 file tools, got {len(file_defs)}"
         assert len(memory_defs) == 5, f"Expected 5 memory tools, got {len(memory_defs)}"
         assert len(voice_defs) == 2, f"Expected 2 voice tools, got {len(voice_defs)}"
-        # 28 baseline + 2 web tools = 30 (vision and input tools also registered but not unpacked)
-        assert len(reg.list_tools()) == 30
+        # 28 baseline + 2 web + 3 personal + 1 vision (vision.analyze) = 34
+        assert len(reg.list_tools()) == 34
         assert reg.get_optional("web.search") is not None
         assert reg.get_optional("web.fetch") is not None
+        assert reg.get_optional("personal.note") is not None
+        assert reg.get_optional("personal.calendar") is not None
+        assert reg.get_optional("personal.reminder") is not None
+        assert reg.get_optional("vision.analyze") is not None
+
+
+# ---------------------------------------------------------------------------
+# Phase 10 Iteration 6: Tool Integration Acceptance Tests
+# ---------------------------------------------------------------------------
+
+
+class TestPhase10Iteration6ToolIntegration:
+    """Acceptance tests for Phase 10 Iteration 6 — Tool Integration.
+
+    Verifies:
+    1. Exactly 34 tools registered through canonical setup_default_tools.
+    2. No duplicate or conflicting registrations; all 34 tools unique.
+    3. Category distribution across all 8 tool categories.
+    4. Data-driven permission mapping covers all 34 tools without gaps.
+    5. JSON schema export succeeds for all 34 tools.
+    6. Configuration schema defaults align with YAML configuration.
+    7. Idempotent replacement behavior and duplicate rejection without replace flag.
+    """
+
+    EXPECTED_CATEGORIES = {
+        "system": 7,
+        "files": 6,
+        "memory": 5,
+        "voice": 2,
+        "vision": 5,
+        "os.input": 4,
+        "web": 2,
+        "personal": 3,
+    }
+
+    def test_canonical_34_tools_registered_with_no_duplicates(self) -> None:
+        reg = ToolRegistry()
+        setup_default_tools(registry=reg)
+        tools = reg.list_tools()
+
+        assert len(tools) == 34, f"Expected exactly 34 tools, got {len(tools)}"
+        names = [t.name for t in tools]
+        assert len(names) == len(set(names)) == 34, "Tool names must be strictly unique"
+        for name in names:
+            assert name in DEFAULT_TOOL_PERMISSIONS, (
+                f"Tool '{name}' missing from DEFAULT_TOOL_PERMISSIONS"
+            )
+
+    def test_category_distribution_across_8_categories(self) -> None:
+        reg = ToolRegistry()
+        setup_default_tools(registry=reg)
+
+        for cat, expected_count in self.EXPECTED_CATEGORIES.items():
+            cat_tools = reg.list_tools(category=cat)
+            assert len(cat_tools) == expected_count, (
+                f"Category '{cat}' expected {expected_count} tools, got {len(cat_tools)}"
+            )
+
+        total_counted = sum(len(reg.list_tools(category=c)) for c in self.EXPECTED_CATEGORIES)
+        assert total_counted == 34
+
+    def test_permission_engine_evaluates_all_34_tools(self) -> None:
+        engine = PermissionEngine()
+        reg = ToolRegistry()
+        setup_default_tools(registry=reg)
+
+        safe_count = 0
+        ask_count = 0
+
+        for tool_name in reg.list_tools():
+            name = tool_name.name
+            base_perm = DEFAULT_TOOL_PERMISSIONS[name]
+
+            if name in PERSONAL_ACTION_ESCALATION:
+                # Personal tools: retrieve is SAFE; mutations escalate to ASK_USER
+                read_decision = engine.evaluate(name, params={"action": "retrieve"})
+                assert read_decision.allowed is True
+                assert read_decision.requires_confirmation is False
+                assert read_decision.permission_level == PermissionLevel.SAFE
+
+                for mutation in ("create", "update", "delete"):
+                    mut_decision = engine.evaluate(name, params={"action": mutation})
+                    assert mut_decision.allowed is True
+                    assert mut_decision.requires_confirmation is True
+                    assert mut_decision.permission_level == PermissionLevel.ASK_USER
+            else:
+                decision = engine.evaluate(name)
+                assert decision.allowed is True
+                if base_perm == PermissionLevel.SAFE:
+                    assert decision.requires_confirmation is False
+                    assert decision.permission_level == PermissionLevel.SAFE
+                    safe_count += 1
+                elif base_perm == PermissionLevel.ASK_USER:
+                    assert decision.requires_confirmation is True
+                    assert decision.permission_level == PermissionLevel.ASK_USER
+                    ask_count += 1
+
+        # 25 safe non-personal tools + 6 ask_user tools + 3 personal tools = 34 tools
+        assert safe_count == 25
+        assert ask_count == 6
+
+    def test_json_schema_export_all_34_tools(self) -> None:
+        reg = ToolRegistry()
+        setup_default_tools(registry=reg)
+
+        schemas = reg.export_json_schemas()
+        assert len(schemas) == 34
+
+        for item in schemas:
+            assert item["type"] == "function"
+            fn = item["function"]
+            assert isinstance(fn["name"], str) and len(fn["name"]) > 0
+            assert isinstance(fn["description"], str) and len(fn["description"]) > 0
+            assert "parameters" in fn
+            params = fn["parameters"]
+            assert params.get("type") == "object"
+            assert "properties" in params
+
+    def test_tools_config_yaml_defaults_alignment(self) -> None:
+        import yaml
+
+        config_path = Path("config/tools.yaml")
+        assert config_path.is_file(), "config/tools.yaml must exist"
+
+        with config_path.open("r", encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+
+        cfg = ToolsConfig()
+        assert cfg.default_timeout_seconds == data["default_timeout_seconds"]
+        assert cfg.max_search_results == data["max_search_results"]
+        assert cfg.web_search_endpoint == data["web_search_endpoint"]
+        assert cfg.web_search_timeout_seconds == data["web_search_timeout_seconds"]
+        assert cfg.web_search_max_response_bytes == data["web_search_max_response_bytes"]
+        assert cfg.web_fetch_timeout_seconds == data["web_fetch_timeout_seconds"]
+        assert cfg.web_fetch_max_response_bytes == data["web_fetch_max_response_bytes"]
+        assert cfg.web_fetch_max_redirects == data["web_fetch_max_redirects"]
+        assert cfg.web_fetch_connect_timeout_seconds == data["web_fetch_connect_timeout_seconds"]
+        assert cfg.max_file_read_bytes == data["max_file_read_bytes"]
+
+    def test_registration_idempotency_and_no_conflicts(self) -> None:
+        reg = ToolRegistry()
+        # First registration
+        setup_default_tools(registry=reg, replace=True)
+        assert len(reg.list_tools()) == 34
+
+        # Repeated registration with replace=True succeeds and keeps 34 tools
+        setup_default_tools(registry=reg, replace=True)
+        assert len(reg.list_tools()) == 34
+
+        # Repeated registration with replace=False raises ToolAlreadyExistsError
+        with pytest.raises(ToolAlreadyExistsError):
+            setup_default_tools(registry=reg, replace=False)

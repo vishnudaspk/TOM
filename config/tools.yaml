@@ -2,7 +2,11 @@ default_timeout_seconds: 15.0
 max_search_results: 10
 web_search_endpoint: "http://127.0.0.1:8080/search"
 web_search_timeout_seconds: 10.0
-web_search_max_response_bytes: 1048576
+web_search_max_response_bytes: 1000000
+web_fetch_timeout_seconds: 10.0
+web_fetch_max_response_bytes: 1048576
+web_fetch_max_redirects: 10
+web_fetch_connect_timeout_seconds: 3.0
 max_file_read_bytes: 5000000
 allowed_directories:
   - "."
