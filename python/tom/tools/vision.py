@@ -359,7 +359,7 @@ def create_vision_tools(
             capability_used="FAST_VLM",
         )
 
-    async def analyze(params: VisionAnalyzeInput) -> VisionAnalyzeOutput:
+    async def analyze(params: VisionAnalyzeInput, resource_priority: int = 1) -> VisionAnalyzeOutput:
         """Analyze screen or cropped region via VisionManager capability routing."""
         mgr = _get_manager()
         frame = None
@@ -377,7 +377,7 @@ def create_vision_tools(
             capability=cap,
             max_tokens=params.max_tokens,
         )
-        res = await mgr.analyze(req)
+        res = await mgr.analyze(req, priority=resource_priority)
         return VisionAnalyzeOutput(
             text=res.text,
             capability_used=str(res.capability_used),

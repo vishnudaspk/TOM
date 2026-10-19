@@ -19,6 +19,7 @@ from typing import Any
 from tom.agents.executor import TaskExecutor
 from tom.agents.task_manager import TaskManager
 from tom.core.context import CancellationToken
+from tom.resources.policies import TaskPriority
 from tom.schemas.proactive import (
     CronTrigger,
     IntervalTrigger,
@@ -31,6 +32,10 @@ from tom.schemas.task import Task, TaskResult
 from tom.telemetry.logging import get_logger
 
 logger = get_logger(__name__, component="agents.proactive")
+
+# All proactive tasks declare background priority so interactive requests
+# can outrank them when resource capacity becomes available.
+PROACTIVE_RESOURCE_PRIORITY: TaskPriority = TaskPriority.BACKGROUND
 
 AnyTrigger = CronTrigger | IntervalTrigger | SystemEventTrigger
 
@@ -220,6 +225,11 @@ class ProactiveScheduler:
                     "is_proactive": True,
                     "trigger_id": trigger.trigger_id,
                     "trigger_name": trigger.name,
+                    # Resource priority declaration for governor arbitration.
+                    # Any resource acquisition by proactive tasks should pass
+                    # priority=PROACTIVE_RESOURCE_PRIORITY so interactive work
+                    # outranks background work when capacity is contended.
+                    "resource_priority": int(PROACTIVE_RESOURCE_PRIORITY),
                 },
             )
             token = self.task_manager.get_token(task.task_id)

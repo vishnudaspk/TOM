@@ -110,7 +110,10 @@ class TaskExecutor:
         # 2. Reconcile cancellation token
         token = cancellation_token or self.task_manager.get_token(task_id)
 
-        # 3. Transition to EXECUTING if not already
+        # 3. Get resource priority from task metadata (default to USER_INTERACTIVE)
+        resource_priority = task.metadata.get("resource_priority", 1)
+
+        # 4. Transition to EXECUTING if not already
         if task.state == TaskState.CREATED:
             self.task_manager.transition(task_id, TaskState.ROUTING)
             self.task_manager.transition(task_id, TaskState.EXECUTING)
@@ -251,6 +254,7 @@ class TaskExecutor:
                 tool_result: ToolResult = await self.tool_executor.execute(
                     step.tool_name,
                     params=step.parameters,
+                    resource_priority=resource_priority,
                 )
             except PermissionDeniedError as p_err:
                 tool_result = ToolResult.fail(error=str(p_err))

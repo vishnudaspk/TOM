@@ -1,6 +1,6 @@
 # TOM — Current State
 
-Last updated: 2026-10-18
+Last updated: 2026-10-19
 
 ## Now
 
@@ -9,21 +9,27 @@ Last updated: 2026-10-18
 | **Phases 0–8** | CLOSED & COMPLETE |
 | **Phase 9 core** | **9.0–9.4 COMPLETE & VERIFIED**; 9.5/9.6 remain unstarted |
 | **Phase 10** | **CLOSED — Iterations 1–7 COMPLETE & VERIFIED** (34 canonical tools registered, schema export, data-driven permissions, configuration defaults, security/verification exit gate) |
+| **Phase 11** | **CLOSED — Iterations 11.1–11.6 COMPLETE & VERIFIED** (Secret scrubbing via regex catalog + Shannon entropy heuristic, centralized `PathPolicy` jail & sensitive file blacklist, stdin-safe confirmation hook & anti-flooding rate limits, structured `SecurityAuditLogger`, `ToolExecutor` input/output/error scrubbing with `BaseModel` preservation, and 101 concrete adversarial tests) |
+| **Phase 12** | **CLOSED & COMPLETE — Iterations 12.1–12.5 COMPLETE & VERIFIED** (Resource governor safety gate, model lifecycle coordinator, priority arbitration & cooperative preemption fully integrated with real resource admission, 19 adversarial concurrency/stress tests including 100+ repeated cycles with zero drift, and full focused validation suite passed) |
+| **Phase 12 closeout** | Completed 2026-10-19. ADRs 059–062 documented. Ephemeral implementation plan removed. |
 | **Model runtime** | llama.cpp at `http://127.0.0.1:65400/v1`; generic OpenAI-compatible HTTP provider is the active abstraction |
 | **Backend migration** | Bionic/LM Studio is removed from active architecture; no active backend-specific alias remains |
-| **Plan** | Temporary implementation plan removed after status migration |
-| **Next** | Phase 10 CLOSED. Phase 9.5/9.6 require explicit user approval. |
+| **Plan** | Temporary Phase 12 implementation plan removed after closeout migration |
+| **Next** | Phase 13 — Agent Evaluation, Benchmarks & Hardening (unstarted; requires explicit approval) |
 | **Full-repo baseline** | 2026-10-02 Phase 8 exit: **1301 passed** (1218 Python + 83 Rust), **8 skipped**. Ruff/Cargo fmt/clippy clean. **Not rerun** since then. |
 | **9.0–9.4 incremental** | Targeted verification **833 passed** across voice, agents, core, and IPC tests. Voice alone: **317**. Full repo **not** re-run. |
-| **Phase 10 verification** | **34 tools registered & verified**; **246 affected-module tests passed** (45 Iteration 7 security tests + web/personal/vision/security/integration tests). Schema exports validated; YAML config aligned; `beautifulsoup4>=4.12.0` added to core deps. DNS rebinding mitigated via single-resolution IP pinning with multi-address fallback (connect-level errors only), Host header rewrite (port omitted for HTTPS/HTTP defaults), `sni_hostname` extension (`httpcore/_async/connection.py:107, 151` [EVIDENCE: verified, httpcore 1.0.9]), and `trust_env=False`. Remaining limitation: depends on httpcore honoring `sni_hostname` (verified at `httpcore/_async/connection.py:107, 151`); system proxies ignored via `trust_env=False`. |
+| **Phase 10 verification** | **34 tools registered & verified**; **246 affected-module tests passed** (45 Iteration 7 security tests + web/personal/vision/security/integration tests). Schema exports validated; YAML config aligned; `beautifulsoup4>=4.12.0` added to core deps. DNS rebinding mitigated via single-resolution IP pinning with multi-address fallback (connect-level errors only), Host header rewrite (port omitted for HTTPS/HTTP defaults), `sni_hostname` extension (`httpcore/_async/connection.py:107, 151` [EVIDENCE: verified, httpcore 1.0.9]), and `trust_env=False`. |
+| **Phase 11 verification** | **514 passed** in focused exit gate (243 security unit + 101 adversarial + 38 pipeline + 71 personal + 35 web + 26 vision), 1 warning (benign third-party `mss.mss` deprecation in `capture.py:70`). Zero failed, zero skipped. Ruff check/format clean; `git diff --check` clean. Secret scanner benchmark verified: 10 KB p50 = 0.4939 ms (< 1.0 ms SLA), throughput 19.77 MB/s. |
+| **Phase 12 verification** | **488 passed, 8 skipped** (optional deps `opencv-python`/`winocr`), zero failed in focused validation suite (`tests/unit/resources/`, `tests/unit/agents/`, `tests/unit/vision/`, `tests/integration/tools/test_tool_pipeline.py`). Resources suite alone: **105 passed** (19 stress + 16 governor integration + 15 model manager + 12 priority integration + 14 resource manager + 24 policy + 5 telemetry). 100 repeated contention cycles verified zero accounting drift. Ruff check/format clean; `git diff --check` clean. |
 
-## Architecture (locked Phases 0–8; 9.0–9.4 additive; 10.1–10.2 additive)
+## Architecture (locked Phases 0–8; 9.0–9.4 additive; 10.1–10.2 additive; 11.1–11.5 additive; 12.1–12.5 additive)
+
 
 Python brain ↔ Rust `tom-engine` over Named Pipe `\\.\pipe\tom-engine`.
 
 | Layer | Owns |
 |---|---|
-| **Python** | Router; `Agent` / `AgentOrchestrator` (6-state; **9.2** `stream()`); **34 tools** via `ToolExecutor` + `PermissionEngine`; `MemoryManager`; Phase 6 voice (`STTProvider`, `TTSProvider`, `VoicePipelineManager`, `VoiceInteractionManager`); Phase 7 vision; Phase 8 `TaskManager` / `TaskPlanner` / `TaskExecutor` / `ResourceManager` / `ProactiveScheduler`; **9.0** `MicrophoneLoop` + `VADDetector`; **9.1** `StreamingSTTProvider`; **9.2** `SentenceStreamer`; **9.3** `StreamingTTSProvider` + `IncrementalTTSStreamer`; **9.4** `ConversationTurnManager` + `ResponsePolicy`; **10.1** `web.search` (local SearXNG); **10.2** `web.fetch` (SSRF-safe, sanitized extraction); **10.3+4** `personal.note` / `personal.calendar` / `personal.reminder` (SQLite-backed, ProactiveScheduler-integrated); **10.5** `vision.analyze` (VisionManager-delegated, ephemeral/privacy-shielded); **10.6** Tool integration (canonical 34-tool registration, schema export, data-driven permissions, config alignment) |
+| **Python** | Router; `Agent` / `AgentOrchestrator` (6-state; **9.2** `stream()`); **34 tools** via `ToolExecutor` + `PermissionEngine`; `MemoryManager`; Phase 6 voice (`STTProvider`, `TTSProvider`, `VoicePipelineManager`, `VoiceInteractionManager`); Phase 7 vision; Phase 8 `TaskManager` / `TaskPlanner` / `TaskExecutor` / `ResourceManager` / `ProactiveScheduler`; **9.0** `MicrophoneLoop` + `VADDetector`; **9.1** `StreamingSTTProvider`; **9.2** `SentenceStreamer`; **9.3** `StreamingTTSProvider` + `IncrementalTTSStreamer`; **9.4** `ConversationTurnManager` + `ResponsePolicy`; **10.1** `web.search` (local SearXNG); **10.2** `web.fetch` (SSRF-safe, sanitized extraction); **10.3+4** `personal.note` / `personal.calendar` / `personal.reminder` (SQLite-backed, ProactiveScheduler-integrated); **10.5** `vision.analyze` (VisionManager-delegated, ephemeral/privacy-shielded); **10.6** Tool integration (canonical 34-tool registration, schema export, data-driven permissions, config alignment); **11.1** `SecretScrubber` (regex catalog + Shannon entropy $H \ge 4.5$, fail-safe redaction); **11.2** `PathPolicy` (centralized path jail, ADS/device/relative-drive/symlink blocking, sensitive file blacklist); **11.3** `ConsoleConfirmationHook` (stdin-safe, rate-limited) + `SecurityAuditLogger` (append-only); **11.4** `ToolExecutor` (end-to-end secret scrubbing, BaseModel preservation); **12.1** `ResourceManager` (atomic admission, 500 MB headroom, engine telemetry cache, heavy-lease scoping); **12.2** `ModelLifecycleCoordinator` (state machine UNLOADED/READY/BUSY/IDLE/ERROR, idle eviction hooks); **12.3** `PriorityResourceQueue` (starvation aging, FIFO, `TaskPriority` arbitration); **12.4** Concurrency stress verification (19 adversarial tests, 100+ cycles, zero drift); **12.5** Final validation & closeout |
 | **Rust** | IPC server; telemetry; `AudioManager` (capture/playback, ring buffer); `InputManager` (`SendInput`, clamp, cancel hotkey) |
 
 Tools (34): system 7, file 6, memory 5, voice 2 (`voice.announce`, `voice.status` SAFE), vision 5 (`vision.capture`, `vision.ocr`, `vision.find_element`, `vision.ask`, `vision.analyze` SAFE), OS input 4 (`get_cursor_pos` SAFE; `click` / `type_text` / `hotkey` ASK_USER), web 2 (`web.search`, `web.fetch` SAFE), personal 3 (`personal.note`, `personal.calendar` SAFE reads / ASK_USER mutations; `personal.reminder` SAFE reads / ASK_USER mutations with ProactiveScheduler lifecycle).
@@ -39,6 +45,13 @@ Tools (34): system 7, file 6, memory 5, voice 2 (`voice.announce`, `voice.status
 7. Offline tests: no GPU, network, or neural-weight downloads.
 8. **VAD owns speech boundaries** (Phase 9). STT must not add a competing endpoint detector.
 9. Python never injects mouse/keyboard; OS input is Rust `InputManager` via IPC.
+10. **Ingress/Egress Secret Sanitization**: All tool results, errors, confirmation displays, and standard log entries undergo secret scrubbing (`SecretScrubber`). If scrubbing encounters an error, fail-safe redaction (`***REDACTION_ERROR***`) applies.
+11. **Path Containment & Blacklist**: All filesystem access in `files.py` routes through `PathGuard` → `PathPolicy`. ADS colons, device paths, cross-drive relative paths, and blacklisted sensitive files (`.env`, `id_rsa`, etc.) are unconditionally rejected.
+12. **Confirmation Non-Blocking & Audit Invariant**: Interactive confirmations must never block in headless/CI environments (`isatty()` check). If security audit logging fails during confirmation, the operation is denied.
+13. **Result Type Preservation**: `ToolExecutor` secret scrubbing must preserve typed `BaseModel` instances in `ToolResult.data` to prevent breaking tool result contracts.
+14. **Lease Lifecycle & Inference Safety Invariant**: Incompatible heavy inference roles (reasoning vs. VLM) are mutually exclusive. Reasoning leases are released before tool dispatch to prevent nested deadlocks. Streaming generation leases remain held until client generator `.aclose()` completes to avoid re-granting VRAM while the server process may still be active.
+15. **Software Reservation vs. Physical VRAM Invariant**: Resource budgeting is enforced against internal software reservation limits and counters (`_allocated_vram_mb`), with a 500 MB safety headroom margin. Physical VRAM cannot be guaranteed server-side.
+16. **Priority Arbitration & Fairness Invariant**: When capacity frees, queued waiters are admitted by effective priority (`TaskPriority`, with starving background tasks promoted after 15s intervals) and FIFO sequence order. Priority ordering never bypasses safety headroom or mutual exclusion. Cooperative preemption tokens signal background tasks to yield; preemption is never forced termination.
 
 ## Hardware / env
 

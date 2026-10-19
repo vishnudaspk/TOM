@@ -1,8 +1,9 @@
 """TOM Sandboxed File Tools & Path-Traversal Guards.
 
 Provides safe, sandboxed filesystem tools with strict boundary enforcement:
-- PathGuard: path resolution, relative_to whitelist validation, traversal rejection,
-  Windows reserved device name checking (CON, PRN, AUX, NUL, COM1-9, LPT1-9).
+- PathGuard: thin wrapper around PathPolicy that adds the max_read_bytes quota.
+  PathPolicy owns all path-security logic (traversal, ADS, device paths, symlinks,
+  sensitive-file blacklist, containment). PathGuard retains its existing public API.
 - Tools:
   - files.read_file (SAFE)
   - files.list_directory (SAFE)
@@ -22,13 +23,12 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field
 
 from tom.schemas.config import ToolsConfig
-from tom.security.permissions import PermissionLevel, SecurityError
+from tom.security.permissions import PermissionLevel
+from tom.security.policies import PathPolicy
 from tom.tools.registry import ToolDefinition, ToolRegistry, default_registry
 
-# ---------------------------------------------------------------------------
-# Windows Reserved Names
-# ---------------------------------------------------------------------------
-
+# WINDOWS_RESERVED_NAMES kept for external callers that import it from here.
+# The canonical copy lives in tom.security.policies._WINDOWS_RESERVED_NAMES.
 WINDOWS_RESERVED_NAMES: frozenset[str] = frozenset(
     {
         "CON",
@@ -63,8 +63,12 @@ WINDOWS_RESERVED_NAMES: frozenset[str] = frozenset(
 
 
 class PathGuard:
-    """Security barrier enforcing directory sandboxing, path traversal guards,
-    Windows device name rejection, and file size quotas.
+    """Security barrier enforcing directory sandboxing and file size quotas.
+
+    All path-security logic (traversal, ADS, device paths, symlink escape,
+    sensitive-file blacklist, containment) is delegated to PathPolicy.
+    This class adds only the max_read_bytes quota and retains its existing
+    public API so that all callers continue to work without modification.
     """
 
     def __init__(
@@ -80,8 +84,11 @@ class PathGuard:
             max_read_bytes: Maximum number of bytes allowed to be read in read_file.
         """
         raw_dirs = allowed_directories if allowed_directories is not None else ["."]
+        # Resolve each allowed root once at construction time.
         self._allowed_dirs: list[Path] = [Path(d).resolve() for d in raw_dirs]
         self._max_read_bytes = max_read_bytes
+        # PathPolicy owns all security enforcement.
+        self._policy = PathPolicy(allowed_directories=self._allowed_dirs)
 
     @property
     def allowed_directories(self) -> list[Path]:
@@ -93,15 +100,6 @@ class PathGuard:
         """Return maximum read bytes limit."""
         return self._max_read_bytes
 
-    def _check_windows_reserved(self, p: Path) -> None:
-        """Reject paths containing Windows reserved device names."""
-        for part in p.parts:
-            # Check full component and root stem (e.g. CON or CON.txt)
-            clean_part = part.strip()
-            stem = clean_part.split(".")[0].upper()
-            if stem in WINDOWS_RESERVED_NAMES or clean_part.upper() in WINDOWS_RESERVED_NAMES:
-                raise SecurityError(f"Access to Windows reserved device name '{part}' is forbidden")
-
     def validate_path(
         self,
         raw_path: str | Path,
@@ -110,6 +108,9 @@ class PathGuard:
         check_is_dir: bool = False,
     ) -> Path:
         """Validate and resolve a path against sandbox constraints.
+
+        Delegates all security checks to PathPolicy and returns the resolved
+        canonical Path if all checks pass.
 
         Args:
             raw_path: Input path string or Path object.
@@ -121,65 +122,17 @@ class PathGuard:
             Resolved, canonical Path.
 
         Raises:
-            SecurityError: If traversal, boundary escape, or reserved names detected.
+            SecurityError: If traversal, boundary escape, ADS, device paths,
+                           symlink escape, or sensitive file detected.
             FileNotFoundError: If must_exist is True and path does not exist.
             ValueError: If file/dir type constraints are violated.
         """
-        path_str = str(raw_path)
-
-        # 1. Traversal syntax check on raw string
-        if ".." in Path(path_str).parts or "../" in path_str or "..\\" in path_str:
-            raise SecurityError(f"Path traversal sequence '..' detected in '{raw_path}'")
-
-        # 2. Windows reserved name check on raw components
-        self._check_windows_reserved(Path(path_str))
-
-        # 3. Canonical resolution
-        try:
-            p = Path(raw_path)
-            if not p.is_absolute() and self._allowed_dirs:
-                resolved = (self._allowed_dirs[0] / p).resolve()
-            else:
-                resolved = p.resolve()
-        except Exception as exc:
-            raise SecurityError(f"Failed to resolve path '{raw_path}': {exc}") from exc
-
-        # 4. Check Windows reserved name on resolved path
-        self._check_windows_reserved(resolved)
-
-        # 5. Sandbox boundary containment check using is_relative_to
-        contained = False
-        for base in self._allowed_dirs:
-            try:
-                if resolved.is_relative_to(base):
-                    contained = True
-                    break
-            except AttributeError:
-                # Python < 3.9 compatibility fallback
-                try:
-                    resolved.relative_to(base)
-                    contained = True
-                    break
-                except ValueError:
-                    pass
-
-        if not contained:
-            allowed_repr = [str(b) for b in self._allowed_dirs]
-            raise SecurityError(
-                f"Access to path '{raw_path}' is outside allowed directories: {allowed_repr}"
-            )
-
-        # 6. Existence checks
-        if must_exist and not resolved.exists():
-            raise FileNotFoundError(f"Path does not exist: {resolved}")
-
-        if resolved.exists():
-            if check_is_file and not resolved.is_file():
-                raise ValueError(f"Path is not a regular file: {resolved}")
-            if check_is_dir and not resolved.is_dir():
-                raise ValueError(f"Path is not a directory: {resolved}")
-
-        return resolved
+        return self._policy.validate(
+            raw_path,
+            must_exist=must_exist,
+            check_is_file=check_is_file,
+            check_is_dir=check_is_dir,
+        )
 
 
 # ---------------------------------------------------------------------------

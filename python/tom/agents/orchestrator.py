@@ -21,6 +21,7 @@ from tom.core.context import CancellationToken
 from tom.core.router import IntentRouter
 from tom.models.base import LLMProvider
 from tom.models.schemas import ModelRequest, ModelResponse, StreamChunk, ToolCallRequest
+from tom.resources.manager import ModelRole, ResourceManager
 from tom.schemas.agent import Message, Role
 from tom.schemas.router import RoutingDecision
 from tom.telemetry.logging import get_logger
@@ -47,9 +48,11 @@ class AgentOrchestrator:
         self,
         agent: Agent,
         router: IntentRouter,
+        resource_manager: ResourceManager | None = None,
     ) -> None:
         self._agent = agent
         self._router = router
+        self._resource_manager = resource_manager
 
     @property
     def agent(self) -> Agent:
@@ -130,8 +133,12 @@ class AgentOrchestrator:
             yield "I'm not sure how to help with that"
             return
 
-        async for delta in self._stream_agent_loop(prompt, token, _DEFAULT_MAX_STEPS):
-            yield delta
+        loop_gen = self._stream_agent_loop(prompt, token, _DEFAULT_MAX_STEPS)
+        try:
+            async for delta in loop_gen:
+                yield delta
+        finally:
+            await loop_gen.aclose()
 
     async def _execute_direct_tool(self, tool_name: str) -> str:
         """Execute a single tool and return its result text."""
@@ -252,7 +259,27 @@ class AgentOrchestrator:
             temperature=self._agent.config.temperature,
         )
 
+        if self._resource_manager is not None:
+            async with self._resource_manager.acquire(ModelRole.REASONING, required_vram_mb=5200):
+                return await provider.generate(req)
         return await provider.generate(req)
+
+    async def _think_stream(self) -> AsyncIterator[StreamChunk]:
+        """Call the model provider's streaming completion.
+
+        Returns an async iterator from the provider. The caller is responsible
+        for managing the resource lease (if any) around the iteration.
+        """
+        provider: LLMProvider = self._agent.model_provider
+        messages = self._agent.history.get_messages()
+        req = ModelRequest(
+            model="router",
+            messages=messages,
+            max_tokens=1024,
+            temperature=self._agent.config.temperature,
+            stream=True,
+        )
+        return provider.stream(req)
 
     async def _stream_agent_loop(
         self,
@@ -277,18 +304,45 @@ class AgentOrchestrator:
             collected: list[str] = []
             tool_calls: list[ToolCallRequest] = []
             try:
-                async for chunk in self._think_stream():
-                    if self._check_cancelled(token):
-                        if collected:
-                            self._agent.history.append(
-                                Message(role=Role.ASSISTANT, content="".join(collected))
-                            )
-                        return
-                    if chunk.content:
-                        collected.append(chunk.content)
-                        yield chunk.content
-                    if chunk.tool_call_delta is not None:
-                        tool_calls.append(chunk.tool_call_delta)
+                if self._resource_manager is not None:
+                    async with self._resource_manager.acquire(
+                        ModelRole.REASONING, required_vram_mb=5200
+                    ):
+                        stream_iter = await self._think_stream()
+                        try:
+                            async for chunk in stream_iter:
+                                if self._check_cancelled(token):
+                                    if collected:
+                                        self._agent.history.append(
+                                            Message(role=Role.ASSISTANT, content="".join(collected))
+                                        )
+                                    return
+                                if chunk.content:
+                                    collected.append(chunk.content)
+                                    yield chunk.content
+                                if chunk.tool_call_delta is not None:
+                                    tool_calls.append(chunk.tool_call_delta)
+                        finally:
+                            if hasattr(stream_iter, "aclose"):
+                                await stream_iter.aclose()
+                else:
+                    stream_iter = await self._think_stream()
+                    try:
+                        async for chunk in stream_iter:
+                            if self._check_cancelled(token):
+                                if collected:
+                                    self._agent.history.append(
+                                        Message(role=Role.ASSISTANT, content="".join(collected))
+                                    )
+                                return
+                            if chunk.content:
+                                collected.append(chunk.content)
+                                yield chunk.content
+                            if chunk.tool_call_delta is not None:
+                                tool_calls.append(chunk.tool_call_delta)
+                    finally:
+                        if hasattr(stream_iter, "aclose"):
+                            await stream_iter.aclose()
             except asyncio.CancelledError:
                 if self._agent.state != AgentState.TERMINATED:
                     self._agent.transition_to(
@@ -343,19 +397,6 @@ class AgentOrchestrator:
                 AgentState.ERROR,
                 metadata={"reason": "max_steps_exceeded"},
             )
-
-    def _think_stream(self) -> AsyncIterator[StreamChunk]:
-        """Call the model provider's streaming completion."""
-        provider: LLMProvider = self._agent.model_provider
-        messages = self._agent.history.get_messages()
-        req = ModelRequest(
-            model="router",
-            messages=messages,
-            max_tokens=1024,
-            temperature=self._agent.config.temperature,
-            stream=True,
-        )
-        return provider.stream(req)
 
     def _check_cancelled(
         self,

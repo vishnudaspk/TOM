@@ -13,21 +13,24 @@ from __future__ import annotations
 import asyncio
 import ctypes
 import subprocess
+import time
 import uuid
 from contextlib import AbstractAsyncContextManager
 from datetime import UTC, datetime
-from enum import StrEnum
 from typing import Any
 
 import psutil
 from pydantic import BaseModel, ConfigDict, Field
 
+from tom.resources.policies import PriorityResourceQueue, TaskPriority
+from tom.resources.types import ModelRole
 from tom.schemas.config import ResourcesConfig
 from tom.telemetry.logging import get_logger
 
 logger = get_logger(__name__)
 
 __all__ = [
+    "EngineTelemetryProvider",
     "InsufficientResourceError",
     "MockTelemetryProvider",
     "ModelRole",
@@ -40,14 +43,7 @@ __all__ = [
     "SystemTelemetryProvider",
 ]
 
-
-class ModelRole(StrEnum):
-    """Model execution roles with varying resource requirements."""
-
-    ROUTER = "router"
-    REASONING = "reasoning"
-    VLM = "vlm"
-    GENERAL = "general"
+# Removed ModelRole class definition - now imported from types.py
 
 
 class ResourceError(Exception):
@@ -216,6 +212,80 @@ class SystemTelemetryProvider(ResourceTelemetryProvider):
         )
 
 
+class EngineTelemetryProvider(ResourceTelemetryProvider):
+    """Bridges Rust Named Pipe IPC telemetry to ResourceManager with snapshot caching.
+
+    Maintains a thread-safe, short-lived cache (default 250 ms) to support
+    synchronous check_budget() evaluations without event-loop blocking.
+    Falls back gracefully to a secondary provider (default: SystemTelemetryProvider)
+    if the engine client is unavailable or returns an error.
+    """
+
+    def __init__(
+        self,
+        engine_client: Any,
+        fallback_provider: ResourceTelemetryProvider | None = None,
+        cache_ttl_seconds: float = 0.250,
+    ) -> None:
+        self._engine_client = engine_client
+        self._fallback = fallback_provider or SystemTelemetryProvider()
+        self._cache_ttl = cache_ttl_seconds
+        self._cached_telemetry: ResourceTelemetry | None = None
+        self._last_refresh_time: float = 0.0
+        self._refresh_lock = asyncio.Lock()
+
+    async def refresh_snapshot(self) -> ResourceTelemetry:
+        """Asynchronously query Rust engine and update cached snapshot."""
+        async with self._refresh_lock:
+            now = time.monotonic()
+            if (
+                self._cached_telemetry is not None
+                and (now - self._last_refresh_time) < self._cache_ttl
+            ):
+                return self._cached_telemetry
+
+            try:
+                gpu = await self._engine_client.get_gpu()
+                mem = await self._engine_client.get_memory()
+
+                vram_total = (getattr(gpu, "memory_total_bytes", None) or 0) / (1024.0 * 1024.0)
+                vram_used = (getattr(gpu, "memory_used_bytes", None) or 0) / (1024.0 * 1024.0)
+                vram_free = max(0.0, vram_total - vram_used)
+
+                ram_total = getattr(mem, "total_bytes", 0) / (1024.0 * 1024.0)
+                ram_used = getattr(mem, "used_bytes", 0) / (1024.0 * 1024.0)
+                ram_free = getattr(mem, "available_bytes", 0) / (1024.0 * 1024.0)
+
+                self._cached_telemetry = ResourceTelemetry(
+                    vram_total_mb=vram_total,
+                    vram_used_mb=vram_used,
+                    vram_free_mb=vram_free,
+                    ram_total_mb=ram_total,
+                    ram_used_mb=ram_used,
+                    ram_free_mb=ram_free,
+                    gpu_available=bool(getattr(gpu, "available", False)),
+                )
+                self._last_refresh_time = now
+                return self._cached_telemetry
+            except Exception as exc:
+                logger.warning("engine_telemetry_refresh_failed", error=str(exc))
+                fallback_telem = self._fallback.get_telemetry()
+                self._cached_telemetry = fallback_telem
+                self._last_refresh_time = now
+                return fallback_telem
+
+    def get_telemetry(self) -> ResourceTelemetry:
+        """Synchronously return current snapshot; falls back if uninitialized."""
+        if self._cached_telemetry is not None:
+            return self._cached_telemetry
+        return self._fallback.get_telemetry()
+
+    def is_available(self) -> bool:
+        if self._cached_telemetry is not None:
+            return self._cached_telemetry.gpu_available
+        return self._fallback.is_available()
+
+
 class MockTelemetryProvider(ResourceTelemetryProvider):
     """Deterministic, configurable telemetry test double for unit testing."""
 
@@ -257,7 +327,15 @@ class MockTelemetryProvider(ResourceTelemetryProvider):
 
 
 class ResourceLease:
-    """An active hardware allocation lease returned by ResourceManager."""
+    """An active hardware allocation lease returned by ResourceManager.
+
+    IMPORTANT: Releasing a lease only decrements TOM's internal accounting
+    counters and releases the mutual-exclusion lock. It does NOT guarantee
+    that physical GPU memory has been freed by the inference server
+    (llama.cpp). The server runs as a separate process and TOM cannot
+    observe or force CUDA memory release. The 500 MB safety headroom
+    margin is designed to absorb fragmentation and in-flight server work.
+    """
 
     def __init__(
         self,
@@ -280,7 +358,13 @@ class ResourceLease:
         return not self._released
 
     async def release(self) -> None:
-        """Release this resource lease idempotently."""
+        """Release this resource lease idempotently.
+
+        This only updates TOM's internal accounting and releases the
+        _heavy_lock. The underlying inference server may still hold
+        GPU memory for in-flight requests that were cancelled but not
+        yet terminated on the server side.
+        """
         if not self._released:
             self._released = True
             await self._manager.release(self)
@@ -308,6 +392,7 @@ class _AcquisitionContext(AbstractAsyncContextManager[ResourceLease]):
         required_ram_mb: int,
         blocking: bool,
         timeout: float | None,
+        priority: int = 1,  # Default: USER_INTERACTIVE
     ) -> None:
         self._manager = manager
         self._role = role
@@ -315,6 +400,7 @@ class _AcquisitionContext(AbstractAsyncContextManager[ResourceLease]):
         self._required_ram_mb = required_ram_mb
         self._blocking = blocking
         self._timeout = timeout
+        self.priority = priority  # Stored for future arbitration integration
         self._lease: ResourceLease | None = None
 
     def __await__(self) -> Any:
@@ -324,6 +410,7 @@ class _AcquisitionContext(AbstractAsyncContextManager[ResourceLease]):
             self._required_ram_mb,
             self._blocking,
             self._timeout,
+            self.priority,
         ).__await__()
 
     async def __aenter__(self) -> ResourceLease:
@@ -333,6 +420,7 @@ class _AcquisitionContext(AbstractAsyncContextManager[ResourceLease]):
             self._required_ram_mb,
             self._blocking,
             self._timeout,
+            self.priority,
         )
         return self._lease
 
@@ -363,12 +451,14 @@ class ResourceManager:
         config: ResourcesConfig | None = None,
         telemetry_provider: ResourceTelemetryProvider | None = None,
         safety_headroom_mb: int = 500,
+        clock: Any | None = None,
     ) -> None:
         self.config = config or ResourcesConfig()
         self.telemetry = telemetry_provider or SystemTelemetryProvider(
             gpu_device_id=self.config.gpu_device_id
         )
         self.safety_headroom_mb = safety_headroom_mb
+        self._clock = clock
 
         self._allocated_vram_mb = 0
         self._allocated_ram_mb = 0
@@ -376,6 +466,9 @@ class ResourceManager:
 
         self._heavy_lock = asyncio.Lock()
         self._state_lock = asyncio.Lock()
+        self._priority_queue = PriorityResourceQueue(clock=clock)
+        self._heavy_lock_reserved = False
+        self._current_heavy_vram_mb = 0
 
     @property
     def allocated_vram_mb(self) -> int:
@@ -416,6 +509,11 @@ class ResourceManager:
 
     def check_budget(self, required_vram_mb: int = 0, required_ram_mb: int = 0) -> bool:
         """Check if requested resources can be admitted without violating constraints."""
+        if required_vram_mb < 0 or required_ram_mb < 0:
+            raise ValueError(
+                f"Resource requirements must be non-negative, got vram={required_vram_mb}, ram={required_ram_mb}"
+            )
+
         usable_vram_ceiling = max(0, self.config.max_vram_mb - self.safety_headroom_mb)
 
         # Software budget check
@@ -450,6 +548,7 @@ class ResourceManager:
         required_ram_mb: int = 0,
         blocking: bool = True,
         timeout: float | None = None,
+        priority: int = 1,  # Default: TaskPriority.USER_INTERACTIVE
     ) -> _AcquisitionContext:
         """Request a resource lease for the given model role.
 
@@ -460,6 +559,17 @@ class ResourceManager:
         Or as an async context manager:
             async with manager.acquire(ModelRole.REASONING, ...) as lease:
                 ...
+
+        priority: TaskPriority numeric value (lower = higher priority).
+          Lower-priority (background) callers should pass TaskPriority.BACKGROUND.
+          The priority parameter is used for PriorityResourceQueue arbitration
+          when capacity is contended.
+
+        IMPORTANT: The returned lease only tracks TOM's internal resource
+        accounting. Releasing it does NOT guarantee the inference server
+        (llama.cpp) has freed physical GPU memory. The server runs as a
+        separate process; cancelled requests may continue executing
+        server-side. The 500 MB safety headroom absorbs this uncertainty.
         """
         return _AcquisitionContext(
             manager=self,
@@ -468,6 +578,7 @@ class ResourceManager:
             required_ram_mb=required_ram_mb,
             blocking=blocking,
             timeout=timeout,
+            priority=priority,
         )
 
     async def _acquire_internal(
@@ -477,62 +588,218 @@ class ResourceManager:
         required_ram_mb: int,
         blocking: bool,
         timeout: float | None,
+        priority: int = 1,
     ) -> ResourceLease:
-        heavy_acquired = False
-        is_heavy = role in self.HEAVY_ROLES
+        if required_vram_mb < 0 or required_ram_mb < 0:
+            raise ValueError(
+                f"Resource requirements must be non-negative, got vram={required_vram_mb}, ram={required_ram_mb}"
+            )
 
-        if is_heavy:
-            if not blocking and self._heavy_lock.locked():
-                raise ResourceLockError(
-                    f"Heavy inference lock is already held; cannot acquire for {role}"
+        # Proactively refresh snapshot if provider supports it
+        if hasattr(self.telemetry, "refresh_snapshot") and callable(
+            self.telemetry.refresh_snapshot
+        ):
+            try:
+                await self.telemetry.refresh_snapshot()
+            except Exception as exc:
+                logger.debug("telemetry_refresh_skipped", error=str(exc))
+
+        # Fast path: try immediate grant under _state_lock
+        heavy_role = role in self.HEAVY_ROLES
+        lease: ResourceLease | None = None
+
+        async with self._state_lock:
+            if not self._check_budget_for_role(role, required_vram_mb, required_ram_mb):
+                raise InsufficientResourceError(
+                    f"Insufficient resources for {role}: required {required_vram_mb}MB VRAM "
+                    f"(headroom {self.safety_headroom_mb}MB), {required_ram_mb}MB RAM"
                 )
-            if timeout is not None:
+
+            if self._can_admit_immediate_locked(role, required_vram_mb, required_ram_mb):
+                lease = self._grant_immediate_locked(role, required_vram_mb, required_ram_mb)
+                if heavy_role:
+                    self._heavy_lock_reserved = True
+
+        if lease is not None:
+            if heavy_role:
                 try:
-                    await asyncio.wait_for(self._heavy_lock.acquire(), timeout=timeout)
-                except TimeoutError as err:
-                    raise ResourceLockError(
-                        f"Timeout of {timeout}s exceeded waiting for heavy inference lock ({role})"
-                    ) from err
-            else:
-                await self._heavy_lock.acquire()
-            heavy_acquired = True
+                    await self._heavy_lock.acquire()
+                except BaseException:
+                    async with self._state_lock:
+                        self._heavy_lock_reserved = False
+                    await asyncio.shield(self.release(lease))
+                    raise
+                async with self._state_lock:
+                    self._heavy_lock_reserved = False
+            return lease
+
+        # Not immediately grantable (heavy lock held) - only queue if blocking
+        if not blocking:
+            raise ResourceLockError(
+                f"Heavy inference lock is already held; cannot acquire for {role}"
+            )
+
+        # Enqueue and wait for grant
+        waiter = await self._priority_queue.enqueue(
+            role=role,
+            vram_mb=required_vram_mb,
+            ram_mb=required_ram_mb,
+            priority=TaskPriority(priority),
+        )
 
         try:
-            async with self._state_lock:
-                if not self.check_budget(required_vram_mb, required_ram_mb):
-                    raise InsufficientResourceError(
-                        f"Insufficient resources for {role}: required {required_vram_mb}MB VRAM "
-                        f"(headroom {self.safety_headroom_mb}MB), {required_ram_mb}MB RAM"
-                    )
+            if timeout is not None:
+                await asyncio.wait_for(waiter.ready_event.wait(), timeout=timeout)
+            else:
+                await waiter.ready_event.wait()
 
-                self._allocated_vram_mb += required_vram_mb
-                self._allocated_ram_mb += required_ram_mb
+            if waiter.cancelled:
+                raise asyncio.CancelledError()
 
-                lease = ResourceLease(
-                    manager=self,
-                    role=role,
-                    vram_mb=required_vram_mb,
-                    ram_mb=required_ram_mb,
-                )
-                self._active_leases[lease.lease_id] = lease
-                logger.info(
-                    "resource_lease_acquired",
-                    role=str(role),
-                    lease_id=lease.lease_id,
-                    vram_mb=required_vram_mb,
-                    ram_mb=required_ram_mb,
-                    total_allocated_vram_mb=self._allocated_vram_mb,
-                )
-                return lease
+            # Waiter was granted; for heavy roles, acquire the lock now
+            granted_lease = getattr(waiter, "lease", None)
+            if granted_lease is None:
+                raise ResourceError("Waiter granted but no lease assigned")
 
-        except BaseException:
-            # Cancellation or exception during state acquisition must release heavy lock
-            if heavy_acquired and self._heavy_lock.locked():
-                self._heavy_lock.release()
+            if heavy_role:
+                try:
+                    await self._heavy_lock.acquire()
+                except BaseException:
+                    async with self._state_lock:
+                        self._heavy_lock_reserved = False
+                    await asyncio.shield(self.release(granted_lease))
+                    raise
+                async with self._state_lock:
+                    self._heavy_lock_reserved = False
+            return granted_lease
+
+        except TimeoutError:
+            # Clean up waiter on timeout
+            lease_to_cleanup = getattr(waiter, "lease", None)
+            if lease_to_cleanup is not None:
+                await asyncio.shield(self.release(lease_to_cleanup))
+            else:
+                await self._priority_queue.remove(waiter.waiter_id)
+            raise ResourceLockError(
+                f"Timeout of {timeout}s exceeded waiting for resource ({role})"
+            ) from None
+        except asyncio.CancelledError:
+            # Clean up waiter on cancellation
+            lease_to_cleanup = getattr(waiter, "lease", None)
+            if lease_to_cleanup is not None:
+                await asyncio.shield(self.release(lease_to_cleanup))
+            else:
+                await self._priority_queue.remove(waiter.waiter_id)
             raise
+
+    def _check_budget_for_role(
+        self, role: ModelRole, required_vram_mb: int, required_ram_mb: int
+    ) -> bool:
+        """Check budget for a role, accounting for current heavy holder's VRAM if applicable."""
+        if role in self.HEAVY_ROLES:
+            effective_allocated = self._allocated_vram_mb - self._current_heavy_vram_mb
+            usable_vram_ceiling = max(0, self.config.max_vram_mb - self.safety_headroom_mb)
+            if effective_allocated + required_vram_mb > usable_vram_ceiling:
+                return False
+            if self._allocated_ram_mb + required_ram_mb > self.config.max_ram_mb:
+                return False
+
+            # Live telemetry check (same as check_budget)
+            try:
+                telem = self.get_telemetry()
+                if telem.gpu_available and required_vram_mb > 0:
+                    available_free_vram = telem.vram_free_mb - self.safety_headroom_mb
+                    if required_vram_mb > available_free_vram:
+                        return False
+                if required_ram_mb > 0:
+                    if required_ram_mb > telem.ram_free_mb:
+                        return False
+            except Exception:
+                pass
+
+            return True
+        return self.check_budget(required_vram_mb, required_ram_mb)
+
+    def _can_admit_immediate_locked(self, role: ModelRole, vram_mb: int, ram_mb: int) -> bool:
+        """Check if a request can be granted immediately (must hold _state_lock)."""
+        if not self._check_budget_for_role(role, vram_mb, ram_mb):
+            return False
+        if role in self.HEAVY_ROLES:
+            return not self._heavy_lock.locked() and not self._heavy_lock_reserved
+        return True
+
+    def _grant_immediate_locked(self, role: ModelRole, vram_mb: int, ram_mb: int) -> ResourceLease:
+        """Grant a lease immediately (must hold _state_lock)."""
+        self._allocated_vram_mb += vram_mb
+        self._allocated_ram_mb += ram_mb
+        if role in self.HEAVY_ROLES:
+            self._current_heavy_vram_mb = vram_mb
+
+        lease = ResourceLease(
+            manager=self,
+            role=role,
+            vram_mb=vram_mb,
+            ram_mb=ram_mb,
+        )
+        self._active_leases[lease.lease_id] = lease
+        logger.info(
+            "resource_lease_acquired",
+            role=str(role),
+            lease_id=lease.lease_id,
+            vram_mb=vram_mb,
+            ram_mb=ram_mb,
+            total_allocated_vram_mb=self._allocated_vram_mb,
+        )
+        return lease
+
+    async def _dispatch_next_waiter(self) -> None:
+        """Grant the next admissible waiter from the priority queue (must hold _state_lock)."""
+
+        def can_admit(w: Any) -> bool:
+            # For heavy roles, check budget excluding current heavy holder's VRAM
+            # since they will release when the lock is acquired
+            if w.role in self.HEAVY_ROLES:
+                effective_allocated = self._allocated_vram_mb - self._current_heavy_vram_mb
+                usable_vram_ceiling = max(0, self.config.max_vram_mb - self.safety_headroom_mb)
+                if effective_allocated + w.vram_mb > usable_vram_ceiling:
+                    return False
+                if self._allocated_ram_mb + w.ram_mb > self.config.max_ram_mb:
+                    return False
+                return not self._heavy_lock.locked() and not self._heavy_lock_reserved
+
+            # For light roles, check budget normally
+            if not self.check_budget(w.vram_mb, w.ram_mb):
+                return False
+            return True
+
+        now = self._clock() if self._clock is not None else None
+        waiter = await self._priority_queue.pop_admissible(can_admit, now=now)
+        if waiter is None:
+            return
+
+        self._allocated_vram_mb += waiter.vram_mb
+        self._allocated_ram_mb += waiter.ram_mb
+
+        lease = ResourceLease(
+            manager=self,
+            role=waiter.role,
+            vram_mb=waiter.vram_mb,
+            ram_mb=waiter.ram_mb,
+        )
+        self._active_leases[lease.lease_id] = lease
+        waiter.lease = lease  # type: ignore[attr-defined]
+        waiter.granted = True
+
+        if waiter.role in self.HEAVY_ROLES:
+            self._heavy_lock_reserved = True
+            self._current_heavy_vram_mb = waiter.vram_mb
+
+        waiter.ready_event.set()
 
     async def release(self, lease: ResourceLease) -> None:
         """Release a resource lease and free associated locks and budgets."""
+        heavy_role = lease.role in self.HEAVY_ROLES
+
         async with self._state_lock:
             if lease.lease_id not in self._active_leases:
                 return  # Idempotent
@@ -541,8 +808,14 @@ class ResourceManager:
             self._allocated_vram_mb = max(0, self._allocated_vram_mb - lease.vram_mb)
             self._allocated_ram_mb = max(0, self._allocated_ram_mb - lease.ram_mb)
 
-        if lease.role in self.HEAVY_ROLES and self._heavy_lock.locked():
-            self._heavy_lock.release()
+            if heavy_role:
+                self._current_heavy_vram_mb = 0
+                self._heavy_lock_reserved = False
+                if self._heavy_lock.locked():
+                    self._heavy_lock.release()
+
+            # Dispatch next waiter while still holding _state_lock
+            await self._dispatch_next_waiter()
 
         logger.info(
             "resource_lease_released",

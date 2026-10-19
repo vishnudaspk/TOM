@@ -1,11 +1,13 @@
 """TOM security subsystem."""
 
+from tom.security.audit import SecurityAuditLogger
 from tom.security.confirmation import (
     AlwaysAllowConfirmationHook,
     AlwaysDenyConfirmationHook,
     CallbackConfirmationHook,
     ConfirmationHook,
     ConfirmationRequest,
+    ConfirmationTracker,
     ConsoleConfirmationHook,
 )
 from tom.security.permissions import (
@@ -18,6 +20,14 @@ from tom.security.permissions import (
     PermissionLevel,
     SecurityError,
 )
+from tom.security.policies import PathPolicy
+from tom.security.secrets import (
+    SecretScrubber,
+    get_default_scrubber,
+    scrub_object,
+    scrub_string,
+    shannon_entropy,
+)
 
 __all__ = [
     "AlwaysAllowConfirmationHook",
@@ -28,10 +38,18 @@ __all__ = [
     "ConfirmationRequest",
     "ConfirmationRequiredError",
     "ConfirmationTimeoutError",
+    "ConfirmationTracker",
     "ConsoleConfirmationHook",
+    "PathPolicy",
     "PermissionDecision",
     "PermissionDeniedError",
     "PermissionEngine",
     "PermissionLevel",
+    "SecretScrubber",
+    "SecurityAuditLogger",
     "SecurityError",
+    "get_default_scrubber",
+    "scrub_object",
+    "scrub_string",
+    "shannon_entropy",
 ]

@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 from PIL import Image
 
+from tom.resources.manager import InsufficientResourceError, ModelRole, ResourceManager
 from tom.schemas.vision import (
     BoundingBox,
     CapturedFrame,
@@ -59,6 +60,7 @@ class VisionManager:
         cv_detector: CVElementDetector | None = None,
         vlm_provider: VLMProvider | None = None,
         engine_client: Any | None = None,
+        resource_manager: ResourceManager | None = None,
         max_vram_mb: int = _DEFAULT_MAX_VRAM_MB,
         min_free_vram_mb: int = _DEFAULT_MIN_FREE_VRAM_MB,
     ) -> None:
@@ -67,6 +69,7 @@ class VisionManager:
         self._cv_detector = cv_detector or CVElementDetector()
         self._vlm_provider = vlm_provider
         self._engine_client = engine_client
+        self._resource_manager = resource_manager
         self._max_vram_mb = max_vram_mb
         self._min_free_vram_mb = min_free_vram_mb
 
@@ -179,8 +182,15 @@ class VisionManager:
             return image
         raise ValueError(f"Unsupported image type: {type(image)}")
 
-    async def analyze(self, request: VisionAnalysisRequest) -> VisionAnalysisResult:
-        """Perform visual analysis using capability-driven routing."""
+    async def analyze(
+        self, request: VisionAnalysisRequest, priority: int = 1
+    ) -> VisionAnalysisResult:
+        """Perform visual analysis using capability-driven routing.
+
+        Args:
+            request: The vision analysis request.
+            priority: TaskPriority numeric value (lower = higher priority) for resource arbitration.
+        """
         start_time = time.perf_counter()
         pil_image = self._resolve_image(request.image)
 
@@ -271,28 +281,43 @@ class VisionManager:
 
             # If OCR+CV did not locate the element and VLM is available, escalate to VLM
             if self._vlm_provider is not None:
-                vram_ok = await self.check_vram_available()
-                if vram_ok:
-                    vlm_boxes = await self._vlm_provider.locate_element(pil_image, request.query)
-                    if vlm_boxes:
-                        escalated_elements = [
-                            UIElement(
-                                element_type=ElementType.UNKNOWN,
-                                bounding_box=b,
-                                center=Point2D(x=b.center[0], y=b.center[1]),
-                                confidence=0.8,
-                                label=request.query,
+                if self._resource_manager is not None:
+                    try:
+                        async with self._resource_manager.acquire(
+                            ModelRole.VLM, required_vram_mb=5500, priority=priority
+                        ):
+                            vlm_boxes = await self._vlm_provider.locate_element(
+                                pil_image, request.query
                             )
-                            for b in vlm_boxes
-                        ]
-                        elapsed_ms = (time.perf_counter() - start_time) * 1000.0
-                        return VisionAnalysisResult(
-                            text=f"VLM located {len(vlm_boxes)} element(s) for '{request.query}'.",
-                            capability_used=VisionCapability.FAST_VLM,
-                            bounding_boxes=vlm_boxes,
-                            elements=escalated_elements,
-                            execution_time_ms=elapsed_ms,
+                    except InsufficientResourceError:
+                        vlm_boxes = []
+                else:
+                    vram_ok = await self.check_vram_available()
+                    if vram_ok:
+                        vlm_boxes = await self._vlm_provider.locate_element(
+                            pil_image, request.query
                         )
+                    else:
+                        vlm_boxes = []
+                if vlm_boxes:
+                    escalated_elements = [
+                        UIElement(
+                            element_type=ElementType.UNKNOWN,
+                            bounding_box=b,
+                            center=Point2D(x=b.center[0], y=b.center[1]),
+                            confidence=0.8,
+                            label=request.query,
+                        )
+                        for b in vlm_boxes
+                    ]
+                    elapsed_ms = (time.perf_counter() - start_time) * 1000.0
+                    return VisionAnalysisResult(
+                        text=f"VLM located {len(vlm_boxes)} element(s) for '{request.query}'.",
+                        capability_used=VisionCapability.FAST_VLM,
+                        bounding_boxes=vlm_boxes,
+                        elements=escalated_elements,
+                        execution_time_ms=elapsed_ms,
+                    )
 
             # Element not found
             elapsed_ms = (time.perf_counter() - start_time) * 1000.0
@@ -319,13 +344,6 @@ class VisionManager:
                 execution_time_ms=elapsed_ms,
             )
 
-        vram_ok = await self.check_vram_available()
-        if not vram_ok:
-            raise VLMError(
-                f"VRAM pressure detected; memory exceeds budget ({self._max_vram_mb} MB). "
-                f"VLM inference rejected to protect system stability."
-            )
-
         vlm_req = VLMRequest(
             prompt=request.query,
             image=pil_image,
@@ -333,7 +351,26 @@ class VisionManager:
             max_tokens=request.max_tokens,
             capability=capability,
         )
-        vlm_resp = await self._vlm_provider.analyze_image(vlm_req)
+
+        if self._resource_manager is not None:
+            try:
+                async with self._resource_manager.acquire(
+                    ModelRole.VLM, required_vram_mb=5500, priority=priority
+                ):
+                    vlm_resp = await self._vlm_provider.analyze_image(vlm_req)
+            except InsufficientResourceError as exc:
+                raise VLMError(
+                    f"VRAM pressure detected; memory exceeds budget. VLM inference rejected: {exc}"
+                ) from exc
+        else:
+            vram_ok = await self.check_vram_available()
+            if not vram_ok:
+                raise VLMError(
+                    f"VRAM pressure detected; memory exceeds budget ({self._max_vram_mb} MB). "
+                    f"VLM inference rejected to protect system stability."
+                )
+            vlm_resp = await self._vlm_provider.analyze_image(vlm_req)
+
         elapsed_ms = (time.perf_counter() - start_time) * 1000.0
 
         return VisionAnalysisResult(

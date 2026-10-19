@@ -142,7 +142,7 @@ class FakeVisionManager:
         self.ask_calls.append(prompt)
         return f"Perception response for: {prompt}"
 
-    async def analyze(self, request: VisionAnalysisRequest) -> VisionAnalysisResult:
+    async def analyze(self, request: VisionAnalysisRequest, priority: int = 1) -> VisionAnalysisResult:
         self.analyze_calls.append(request)
         if "fail" in request.query.lower():
             raise RuntimeError("VisionManager analysis internal failure")

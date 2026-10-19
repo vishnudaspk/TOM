@@ -16,6 +16,8 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 from typing import Any
 
+from tom.security.secrets import SecretScrubber, get_default_scrubber
+
 # Known sensitive field names that must never appear in cleartext in logs
 SENSITIVE_FIELD_NAMES: frozenset[str] = frozenset(
     {
@@ -34,9 +36,23 @@ SENSITIVE_FIELD_NAMES: frozenset[str] = frozenset(
     }
 )
 
+# Module-level scrubber instance for logging integration
+_LOG_SCRUBBER: SecretScrubber = get_default_scrubber()
+
 
 def redact_secrets(data: Any) -> Any:
-    """Recursively redact sensitive fields from dictionaries and lists."""
+    """Recursively redact sensitive fields from dictionaries and lists.
+
+    Applies both key-name filtering (for known sensitive field names) and
+    string-value scanning via SecretScrubber to catch credentials appearing
+    as values (e.g., in tool outputs, error messages, log context).
+
+    Args:
+        data: Any data structure (dict, list, tuple, primitive, Pydantic model).
+
+    Returns:
+        New data structure with secrets redacted. Original is not mutated.
+    """
     if isinstance(data, dict):
         redacted: dict[str, Any] = {}
         for k, v in data.items():
@@ -47,6 +63,9 @@ def redact_secrets(data: Any) -> Any:
         return redacted
     elif isinstance(data, (list, tuple)):
         return [redact_secrets(item) for item in data]
+    elif isinstance(data, str):
+        # Apply string-level secret scrubbing for credential values
+        return _LOG_SCRUBBER.scrub_string(data)
     return data
 
 
