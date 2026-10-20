@@ -310,6 +310,22 @@ class TestTier2ModelBacked:
         run_async(router.classify("test"))
         assert mock.call_count == 1
 
+    def test_tier2_request_includes_grammar(self) -> None:
+        """Assert Tier 2 request body contains top-level 'grammar' field."""
+        mock = MockModelProvider(responses=["SYSTEM"])
+        router = IntentRouter(model_provider=mock)
+        run_async(router.classify("ambiguous input"))
+
+        assert mock.last_request is not None
+        assert mock.last_request.grammar is not None
+        assert "SYSTEM" in mock.last_request.grammar
+        assert "FILES" in mock.last_request.grammar
+        assert "REASONING" in mock.last_request.grammar
+        assert "MEMORY" in mock.last_request.grammar
+        assert "VISION" in mock.last_request.grammar
+        assert "CHAT" in mock.last_request.grammar
+        assert "UNKNOWN" in mock.last_request.grammar
+
 
 # ---------------------------------------------------------------------------
 # Ambiguous / Unsupported Input

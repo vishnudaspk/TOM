@@ -133,6 +133,10 @@ _CLASSIFY_PROMPT = (
     "User request: {input}"
 )
 
+_CLASSIFY_GRAMMAR = (
+    "root ::= \"SYSTEM\" | \"FILES\" | \"REASONING\" | \"MEMORY\" | \"VISION\" | \"CHAT\" | \"UNKNOWN\""
+)
+
 _VALID_DOMAINS = {d.value for d in IntentDomain}
 
 
@@ -246,6 +250,7 @@ class IntentRouter:
             messages=[Message(role=Role.USER, content=prompt)],
             max_tokens=64,
             temperature=0.1,
+            grammar=_CLASSIFY_GRAMMAR,
         )
 
         response = await asyncio.wait_for(

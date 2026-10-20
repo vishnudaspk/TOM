@@ -12,8 +12,9 @@ from tom.ipc.errors import (
     IpcTimeoutError,
     NotConnectedError,
     RemoteError,
+    TransportError,
 )
-from tom.ipc.protocol import PROTOCOL_VERSION, IpcRequest
+from tom.ipc.protocol import PROTOCOL_VERSION, ConnectionState, IpcRequest
 from tom.schemas.config import IpcConfig
 
 
@@ -814,6 +815,8 @@ class ReconnectingMockTransport:
         if not self._connected:
             raise ConnectionLostError("Transport not connected")
         frame = await self.inbox.get()
+        if isinstance(frame, Exception):
+            raise frame
         if frame == b"":
             self._connected = False
             raise ConnectionLostError("Connection closed by peer (EOF)")
@@ -1064,3 +1067,407 @@ class TestReconnection:
         transport = ReconnectingMockTransport()
         client = NamedPipeIpcClient(transport=transport)
         assert client.reconnect_task is None
+
+    def test_client_idle_remains_connected(self) -> None:
+        """Client sitting idle without requests or incoming frames stays CONNECTED."""
+        async def _test() -> None:
+            transport = ReconnectingMockTransport()
+            client = NamedPipeIpcClient(transport=transport)
+            await client.connect()
+            assert client.is_connected is True
+            assert client.state == ConnectionState.CONNECTED
+
+            # Simulate idle period across several event loop ticks
+            for _ in range(10):
+                await asyncio.sleep(0.01)
+
+            assert client.is_connected is True
+            assert client.state == ConnectionState.CONNECTED
+            assert client.reconnect_task is None
+            await client.close()
+
+        run_async(_test())
+
+    def test_request_after_idle_period_succeeds(self) -> None:
+        """Request dispatched after an idle period completes and correlates successfully."""
+        async def _test() -> None:
+            transport = ReconnectingMockTransport()
+            client = NamedPipeIpcClient(transport=transport)
+            await client.connect()
+
+            # Idle ticks
+            for _ in range(10):
+                await asyncio.sleep(0.01)
+
+            assert client.is_connected is True
+
+            # Send request
+            req_task = asyncio.create_task(client.request("engine.status"))
+            while not transport.outbox:
+                await asyncio.sleep(0.005)
+
+            req = json.loads(transport.outbox[0].decode("utf-8"))
+            resp = {"id": req["id"], "version": 1, "success": True, "data": {"status": "ok"}}
+            transport.inbox.put_nowait(json.dumps(resp).encode("utf-8"))
+
+            res = await req_task
+            assert res == {"status": "ok"}
+            assert client.pending_count == 0
+            await client.close()
+
+        run_async(_test())
+
+    def test_transport_error_triggers_reconnect_and_closes_stale_transport(self) -> None:
+        """When transport raises TransportError, stale transport is closed and client reconnects."""
+        async def _test() -> None:
+            transport = ReconnectingMockTransport(fail_reconnect_times=0)
+            client = NamedPipeIpcClient(
+                transport=transport,
+                base_delay_s=0.0,
+                max_delay_s=0.0,
+                enable_jitter=False,
+            )
+            await client.connect()
+            initial_close_count = transport.close_call_count
+
+            # Trigger TransportError on read
+            transport.inbox.put_nowait(TransportError("Simulated transport read error"))
+
+            for _ in range(30):
+                await asyncio.sleep(0.005)
+                if client.state == ConnectionState.CONNECTED and transport.connect_call_count >= 2:
+                    break
+
+            assert client.state == ConnectionState.CONNECTED
+            # Old transport must have been closed when error was caught
+            assert transport.close_call_count > initial_close_count
+            assert transport.connect_call_count == 2
+            await client.close()
+
+        run_async(_test())
+
+    def test_shutdown_during_idle_exits_cleanly(self) -> None:
+        """Calling close() on an idle client cancels the receive loop and releases transport."""
+        async def _test() -> None:
+            transport = ReconnectingMockTransport()
+            client = NamedPipeIpcClient(transport=transport)
+            await client.connect()
+            assert client.is_connected is True
+
+            await asyncio.sleep(0.02)
+
+            await client.close()
+            assert client.is_connected is False
+            assert client.state == ConnectionState.CLOSED
+            assert client.reconnect_task is None
+            assert transport.close_call_count >= 1
+
+        run_async(_test())
+
+    def test_shutdown_during_reconnect_does_not_race(self) -> None:
+        """Calling close() while RECONNECTING stops reconnect loop and closes transport idempotently."""
+        async def _test() -> None:
+            transport = ReconnectingMockTransport(fail_reconnect_times=999)
+            client = NamedPipeIpcClient(
+                transport=transport,
+                base_delay_s=0.05,
+                max_delay_s=0.05,
+                enable_jitter=False,
+            )
+            await client.connect()
+            transport.inbox.put_nowait(b"")
+
+            for _ in range(20):
+                await asyncio.sleep(0.005)
+                if client.state == ConnectionState.RECONNECTING:
+                    break
+
+            assert client.state == ConnectionState.RECONNECTING
+            reconnect_task = client.reconnect_task
+            assert reconnect_task is not None
+
+            await client.close()
+            assert client.state == ConnectionState.CLOSED
+            assert reconnect_task.done()
+            assert transport.is_connected is False
+
+        run_async(_test())
+
+
+class TestReconnectionCycles:
+    """Validate retry cycle behavior after burst exhaustion."""
+
+    def test_reconnect_cycle_after_burst_exhaustion(self) -> None:
+        """Client should start a new reconnect burst after the first burst is exhausted."""
+        async def _test() -> None:
+            from tom.ipc.protocol import ConnectionState
+
+            # Always fail reconnects initially
+            transport = ReconnectingMockTransport(fail_reconnect_times=999)
+            from tom.schemas.config import IpcConfig
+
+            config = IpcConfig(max_reconnect_attempts=2)
+            client = NamedPipeIpcClient(
+                config=config,
+                transport=transport,
+                base_delay_s=0.0,
+                max_delay_s=0.0,
+                enable_jitter=False,
+                retry_cycle_delay_s=0.01,  # Short cycle delay for test
+            )
+
+            await client.connect()
+            assert client.state == ConnectionState.CONNECTED
+
+            # Trigger disconnect
+            transport.inbox.put_nowait(b"")
+
+            # Wait for first burst to exhaust (2 attempts) and enter DISCONNECTED
+            for _ in range(50):
+                await asyncio.sleep(0.005)
+                if client.state == ConnectionState.DISCONNECTED:
+                    break
+
+            assert client.state == ConnectionState.DISCONNECTED
+            # 1 initial connect + 2 reconnect attempts = 3
+            assert transport.connect_call_count == 3
+
+            # Now allow reconnects to succeed on the next cycle
+            transport.fail_reconnect_times = 0
+
+            # Wait for inter-cycle delay and next burst to succeed
+            for _ in range(100):
+                await asyncio.sleep(0.005)
+                if client.state == ConnectionState.CONNECTED:
+                    break
+
+            assert client.state == ConnectionState.CONNECTED
+            # 3 previous + 1 successful reconnect = 4
+            assert transport.connect_call_count == 4
+
+            await client.close()
+
+        run_async(_test())
+
+    def test_request_succeeds_after_recovery(self) -> None:
+        """Request should succeed through the recovered connection."""
+        async def _test() -> None:
+            from tom.ipc.protocol import ConnectionState
+
+            # Always fail reconnects initially
+            transport = ReconnectingMockTransport(fail_reconnect_times=999)
+            from tom.schemas.config import IpcConfig
+
+            config = IpcConfig(max_reconnect_attempts=1)
+            client = NamedPipeIpcClient(
+                config=config,
+                transport=transport,
+                base_delay_s=0.0,
+                max_delay_s=0.0,
+                enable_jitter=False,
+                retry_cycle_delay_s=0.01,
+            )
+
+            await client.connect()
+            assert client.state == ConnectionState.CONNECTED
+
+            # Trigger disconnect
+            transport.inbox.put_nowait(b"")
+
+            # Wait for burst to exhaust
+            for _ in range(30):
+                await asyncio.sleep(0.005)
+                if client.state == ConnectionState.DISCONNECTED:
+                    break
+
+            assert client.state == ConnectionState.DISCONNECTED
+
+            # Now allow reconnects to succeed
+            transport.fail_reconnect_times = 0
+
+            # Wait for recovery
+            for _ in range(100):
+                await asyncio.sleep(0.005)
+                if client.state == ConnectionState.CONNECTED:
+                    break
+
+            assert client.state == ConnectionState.CONNECTED
+
+            # Send request through recovered connection
+            req_task = asyncio.create_task(client.request("engine.status"))
+            while len(transport.outbox) < 1:  # Only the request, no initial ping
+                await asyncio.sleep(0.005)
+
+            req = json.loads(transport.outbox[0].decode("utf-8"))
+            resp = {"id": req["id"], "version": 1, "success": True, "data": {"status": "ok"}}
+            transport.inbox.put_nowait(json.dumps(resp).encode("utf-8"))
+
+            res = await req_task
+            assert res == {"status": "ok"}
+            assert client.pending_count == 0
+
+            await client.close()
+
+        run_async(_test())
+
+    def test_no_duplicate_receive_loops(self) -> None:
+        """Ensure only one receive loop runs at a time during reconnection."""
+        async def _test() -> None:
+            transport = ReconnectingMockTransport(fail_reconnect_times=1)
+            client = NamedPipeIpcClient(
+                transport=transport,
+                base_delay_s=0.0,
+                max_delay_s=0.0,
+                enable_jitter=False,
+                retry_cycle_delay_s=0.01,
+            )
+
+            await client.connect()
+            first_receive_task = client._receive_task
+            assert first_receive_task is not None
+            assert not first_receive_task.done()
+
+            # Trigger disconnect and reconnect
+            transport.inbox.put_nowait(b"")
+
+            for _ in range(50):
+                await asyncio.sleep(0.005)
+                if client.state == ConnectionState.CONNECTED and transport.connect_call_count >= 2:
+                    break
+
+            assert client.state == ConnectionState.CONNECTED
+            second_receive_task = client._receive_task
+
+            # Old task should be done, new task should be running
+            assert first_receive_task.done()
+            assert second_receive_task is not None
+            assert second_receive_task is not first_receive_task
+            assert not second_receive_task.done()
+
+            await client.close()
+
+        run_async(_test())
+
+    def test_explicit_connect_after_burst_exhaustion(self) -> None:
+        """Explicit connect() after burst exhaustion should work and cancel the reconnect cycle."""
+        async def _test() -> None:
+            from tom.ipc.protocol import ConnectionState
+
+            # Always fail reconnects
+            transport = ReconnectingMockTransport(fail_reconnect_times=999)
+            from tom.schemas.config import IpcConfig
+
+            config = IpcConfig(max_reconnect_attempts=2)
+            client = NamedPipeIpcClient(
+                config=config,
+                transport=transport,
+                base_delay_s=0.0,
+                max_delay_s=0.0,
+                enable_jitter=False,
+                retry_cycle_delay_s=0.01,
+            )
+
+            await client.connect()
+            assert client.state == ConnectionState.CONNECTED
+
+            # Trigger disconnect
+            transport.inbox.put_nowait(b"")
+
+            # Wait for burst to exhaust
+            for _ in range(50):
+                await asyncio.sleep(0.005)
+                if client.state == ConnectionState.DISCONNECTED:
+                    break
+
+            assert client.state == ConnectionState.DISCONNECTED
+            reconnect_task = client.reconnect_task
+            assert reconnect_task is not None
+            assert not reconnect_task.done()
+
+            # Now make reconnect succeed and call explicit connect()
+            transport.fail_reconnect_times = 0
+
+            await client.connect()
+            assert client.state == ConnectionState.CONNECTED
+            # Explicit connect should have cancelled the reconnect task
+            assert reconnect_task.done()
+
+            await client.close()
+
+        run_async(_test())
+
+    def test_pending_requests_failed_on_disconnect(self) -> None:
+        """In-flight requests must receive ConnectionLostError when transport drops."""
+        async def _test() -> None:
+            transport = ReconnectingMockTransport(fail_reconnect_times=999)
+            from tom.schemas.config import IpcConfig
+
+            config = IpcConfig(max_reconnect_attempts=1)
+            client = NamedPipeIpcClient(
+                config=config,
+                transport=transport,
+                base_delay_s=0.0,
+                max_delay_s=0.0,
+                enable_jitter=False,
+            )
+
+            await client.connect()
+
+            req_task = asyncio.create_task(client.request("slow.method", timeout_ms=5000))
+            while not transport.outbox:
+                await asyncio.sleep(0.005)
+
+            assert client.pending_count == 1
+
+            # Simulate connection drop
+            transport.inbox.put_nowait(b"")
+
+            with pytest.raises(ConnectionLostError):
+                await req_task
+
+            assert client.pending_count == 0
+            await client.close()
+
+        run_async(_test())
+
+    def test_shutdown_during_reconnect_cycle_stops_recovery(self) -> None:
+        """Calling close() during a reconnect cycle stops the loop and closes transport."""
+        async def _test() -> None:
+            from tom.ipc.protocol import ConnectionState
+
+            transport = ReconnectingMockTransport(fail_reconnect_times=999)
+            from tom.schemas.config import IpcConfig
+
+            config = IpcConfig(max_reconnect_attempts=0)  # Unlimited bursts
+            client = NamedPipeIpcClient(
+                config=config,
+                transport=transport,
+                base_delay_s=0.05,
+                max_delay_s=0.05,
+                enable_jitter=False,
+                retry_cycle_delay_s=0.01,
+            )
+
+            await client.connect()
+            transport.inbox.put_nowait(b"")
+
+            for _ in range(20):
+                await asyncio.sleep(0.005)
+                if client.state == ConnectionState.RECONNECTING:
+                    break
+
+            assert client.state == ConnectionState.RECONNECTING
+            reconnect_task = client.reconnect_task
+            assert reconnect_task is not None
+            assert not reconnect_task.done()
+
+            await client.close()
+            assert client.state == ConnectionState.CLOSED
+            assert reconnect_task.done()
+            assert transport.is_connected is False
+
+        run_async(_test())
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

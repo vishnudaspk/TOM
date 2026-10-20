@@ -712,7 +712,7 @@ class TestGovernorCancellationAndCleanup:
         assert not provider_closed.is_set()
         # CRITICAL SAFETY INVARIANT: The heavy lease MUST STILL BE ACTIVE!
         assert resource_manager.is_heavy_inference_active
-        assert resource_manager.allocated_vram_mb == 5200
+        assert resource_manager.allocated_vram_mb == 4531
 
         # Step 4: Attempting a second heavy inference (VLM) must be blocked because the slot is retained
         second_heavy_blocked = asyncio.Event()

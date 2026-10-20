@@ -1,4 +1,4 @@
-# Handoff — Phase 12 CLOSED & COMPLETE (Concurrency & Resource Management)
+# Handoff — Phase 14 Tray Mode & Desktop Integration COMPLETE
 
 Final architecture: TOM uses llama.cpp at `http://127.0.0.1:65400/v1` through the generic OpenAI-compatible `HttpModelProvider`. Bionic/LM Studio is not an active runtime dependency.
 
@@ -10,12 +10,30 @@ Invariants, hardware, and architecture: **`STATE.md`**. Phase ledger and ADRs 04
 - **Done:** Phase 10 **Iterations 1–7** (34 canonical tools registered, schema export, data-driven permissions, SSRF-safe `web.search`/`web.fetch`, SQLite personal tools, ephemeral `vision.analyze`, exit gate verified).
 - **Done:** Phase 11 **Iterations 11.1–11.6** (Secret scrubbing via regex catalog + Shannon entropy heuristic, centralized `PathPolicy` jail & sensitive file blacklist, stdin-safe confirmation hook & anti-flooding rate limits, structured `SecurityAuditLogger`, `ToolExecutor` input/output/error scrubbing with typed `BaseModel` preservation, 101 concrete adversarial tests, and secret scanner benchmark).
 - **Done:** Phase 12 **Iterations 12.1–12.5 CLOSED & COMPLETE** (Atomic Resource Governor, Engine Telemetry Cache, Model Lifecycle Coordinator, Priority Resource Queue Arbitration & Cooperative Preemption, Adversarial Concurrency Stress Suite with 100 cycles, and Focused Validation Gate).
+- **Done:** Phase 13 **IPC Stabilization, Tool Grounding & Runtime Fixes** (IPC idle/reconnect reliability, engine health accuracy, tool grounding/anti-fabrication, startup constructor fix).
+- **Done:** Phase 14 **Tray Mode & Desktop Integration** (System tray daemon with pystray, engine connection status monitoring, mute toggle, CLI/voice mode support).
 - **Runtime:** Generic HTTP provider with llama.cpp as the production endpoint; no backend-specific alias remains.
 - **Phase 12 Closeout Validation:**
   - Focused test suite: **488 passed, 8 skipped** (uninstalled optional deps `opencv-python`/`winocr`), zero failed across `tests/unit/resources/`, `tests/unit/agents/`, `tests/unit/vision/`, `tests/integration/tools/test_tool_pipeline.py`.
   - Resource tests alone: **105 passed** (19 stress + 16 governor integration + 15 model manager + 12 priority integration + 14 resource manager + 24 policy + 5 telemetry).
   - 100 repeated adversarial contention cycles executed with verified zero accounting drift, zero leaked leases, and zero abandoned waiters.
   - Quality checks: Ruff check clean, Ruff format clean (30 files checked), `git diff --check` clean.
+- **Phase 13 Targeted Validation:**
+  - IPC tests: 68 passed (including 6 new reconnection cycle tests)
+  - Core tests: 55 passed
+  - Tools tests: 230 passed (including 8 new fabricated-result prevention tests)
+  - Agents tests: 264 passed
+  - Integration tests: 87 passed
+  - Voice tests: 351 passed, 2 skipped
+  - Resources tests: 107 passed
+  - Security tests: 344 passed
+  - Quality checks: Ruff check clean, Ruff format clean, `git diff --check` clean
+- **Phase 14 Tray Mode Validation:**
+  - Tray unit tests: 33 passed (`tests/unit/desktop/test_tray.py`)
+  - Total targeted tests: 1620+ passed across all modules
+  - Tray daemon verified for CLI/voice modes with engine status monitoring
+  - Mute toggle, quit action, connection status display verified
+  - Quality checks: Ruff check clean, Ruff format clean, `git diff --check` clean
 - **Subsystem Architecture Summary:**
   - **Resource Admission & Headroom (ADR 054, ADR 060):** `ResourceManager` enforces software reservation limits (`max_vram_mb=7200`, `max_ram_mb=16384`) with a strict 500 MB safety headroom margin. Mutual exclusion is enforced between heavy roles (`ModelRole.REASONING` ~5.2 GB and `ModelRole.VLM` ~5.5 GB).
   - **Telemetry Snapshot Caching:** `EngineTelemetryProvider` pro-actively refreshes hardware telemetry via Rust engine IPC with a 250 ms snapshot cache and graceful fallback.
@@ -223,8 +241,8 @@ AsyncGenerator[str]  (SentenceStreamer)
 - Do NOT trust unconsumed generator timings or unpaced streaming audio feeds.
 
 ## Next Step
-- **Phase 11 CLOSED.** All exit gates satisfied. The master roadmap is `IMPLEMENTATIONPLAN.md`.
+- **Phase 14 (Tray Mode & Desktop Integration) COMPLETE.** All targeted fixes validated.
 - Next candidate phase:
-  - Phase 12 (Concurrency & Resource Management), OR
+  - Phase 13 — Agent Evaluation, Benchmarks & Hardening (the original Phase 13 roadmap item).
   - Phase 9.5/9.6 (Voice Pipeline Integration & Latency Calibration).
 - **Both require explicit user approval before starting.** Do not implement in this session.

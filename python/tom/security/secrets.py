@@ -143,7 +143,9 @@ def _is_whitelisted(token: str) -> bool:
 # ---------------------------------------------------------------------------
 
 # Candidate pattern for entropy heuristic: non-delimiter sequences >= 24 chars
-_ENTROPY_TOKEN_PATTERN = re.compile(r"[^\s,;:|\(\)\[\]{}]{24,}")
+# Path separators (/ and \\) split filesystem paths so individual
+# directory components do not trigger the entropy heuristic.
+_ENTROPY_TOKEN_PATTERN = re.compile(r"[^\s,;:|\(\)\[\]{}/\\]{24,}")
 
 # Quick filter: tokens that are purely alphabetic or purely numeric are never secrets
 _ALPHABETIC_ONLY_PATTERN = re.compile(r"^[A-Za-z]+$")

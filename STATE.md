@@ -1,6 +1,6 @@
 # TOM — Current State
 
-Last updated: 2026-10-19
+Last updated: 2026-10-21
 
 ## Now
 
@@ -12,6 +12,8 @@ Last updated: 2026-10-19
 | **Phase 11** | **CLOSED — Iterations 11.1–11.6 COMPLETE & VERIFIED** (Secret scrubbing via regex catalog + Shannon entropy heuristic, centralized `PathPolicy` jail & sensitive file blacklist, stdin-safe confirmation hook & anti-flooding rate limits, structured `SecurityAuditLogger`, `ToolExecutor` input/output/error scrubbing with `BaseModel` preservation, and 101 concrete adversarial tests) |
 | **Phase 12** | **CLOSED & COMPLETE — Iterations 12.1–12.5 COMPLETE & VERIFIED** (Resource governor safety gate, model lifecycle coordinator, priority arbitration & cooperative preemption fully integrated with real resource admission, 19 adversarial concurrency/stress tests including 100+ repeated cycles with zero drift, and full focused validation suite passed) |
 | **Phase 12 closeout** | Completed 2026-10-19. ADRs 059–062 documented. Ephemeral implementation plan removed. |
+| **Phase 13 (IPC Stabilization & Tool Grounding)** | **COMPLETE — Targeted stabilization** (IPC idle/reconnect reliability, engine health accuracy, tool grounding/anti-fabrication, startup constructor fix) |
+| **Phase 14 (Tray Mode & Desktop Integration)** | **COMPLETE — System tray daemon** (pystray integration, engine connection status, mute toggle, CLI/voice mode support, 33 unit tests) |
 | **Model runtime** | llama.cpp at `http://127.0.0.1:65400/v1`; generic OpenAI-compatible HTTP provider is the active abstraction |
 | **Backend migration** | Bionic/LM Studio is removed from active architecture; no active backend-specific alias remains |
 | **Plan** | Temporary Phase 12 implementation plan removed after closeout migration |
@@ -20,7 +22,9 @@ Last updated: 2026-10-19
 | **9.0–9.4 incremental** | Targeted verification **833 passed** across voice, agents, core, and IPC tests. Voice alone: **317**. Full repo **not** re-run. |
 | **Phase 10 verification** | **34 tools registered & verified**; **246 affected-module tests passed** (45 Iteration 7 security tests + web/personal/vision/security/integration tests). Schema exports validated; YAML config aligned; `beautifulsoup4>=4.12.0` added to core deps. DNS rebinding mitigated via single-resolution IP pinning with multi-address fallback (connect-level errors only), Host header rewrite (port omitted for HTTPS/HTTP defaults), `sni_hostname` extension (`httpcore/_async/connection.py:107, 151` [EVIDENCE: verified, httpcore 1.0.9]), and `trust_env=False`. |
 | **Phase 11 verification** | **514 passed** in focused exit gate (243 security unit + 101 adversarial + 38 pipeline + 71 personal + 35 web + 26 vision), 1 warning (benign third-party `mss.mss` deprecation in `capture.py:70`). Zero failed, zero skipped. Ruff check/format clean; `git diff --check` clean. Secret scanner benchmark verified: 10 KB p50 = 0.4939 ms (< 1.0 ms SLA), throughput 19.77 MB/s. |
-| **Phase 12 verification** | **488 passed, 8 skipped** (optional deps `opencv-python`/`winocr`), zero failed in focused validation suite (`tests/unit/resources/`, `tests/unit/agents/`, `tests/unit/vision/`, `tests/integration/tools/test_tool_pipeline.py`). Resources suite alone: **105 passed** (19 stress + 16 governor integration + 15 model manager + 12 priority integration + 14 resource manager + 24 policy + 5 telemetry). 100 repeated contention cycles verified zero accounting drift. Ruff check/format clean; `git diff --check` clean. |
+| **Phase 12 verification** | **488 passed, 8 skipped** (optional deps `opencv-python`/`winocr`), zero failed in focused validation suite (`tests/unit/resources/`, `tests/unit/agents/`, `test/unit/vision/`, `tests/integration/tools/test_tool_pipeline.py`). Resources suite alone: **105 passed** (19 stress + 16 governor integration + 15 model manager + 12 priority integration + 14 resource manager + 24 policy + 5 telemetry). 100 repeated contention cycles verified zero accounting drift. Ruff check/format clean; `git diff --check` clean. |
+| **Phase 13 (IPC/Tools) verification** | **777+ targeted tests passed** (IPC: 68, Core: 55, Tools: 230, Agents: 264, Integration: 87, Voice: 351, Resources: 107, Security: 344). Ruff check/format clean; `git diff --check` clean. |
+| **Phase 14 (Tray Mode) verification** | **33 tray unit tests passed**, 1620+ total targeted tests passed. Tray daemon integrated for CLI/voice modes with engine status monitoring. Ruff check/format clean; `git diff --check` clean. |
 
 ## Architecture (locked Phases 0–8; 9.0–9.4 additive; 10.1–10.2 additive; 11.1–11.5 additive; 12.1–12.5 additive)
 

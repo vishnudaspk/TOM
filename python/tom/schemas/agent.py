@@ -71,6 +71,12 @@ class AgentConfig(BaseModel):
         le=2.0,
         description="Sampling temperature for the reasoning model",
     )
+    reasoning_vram_mb: int = Field(
+        default=5200,
+        ge=0,
+        le=8192,
+        description="VRAM requirement for the reasoning model in MB",
+    )
 
     @field_validator("name")
     @classmethod

@@ -104,6 +104,10 @@ class ModelRequest(BaseModel):
         default=None,
         description="Optional JSON tool schemas (OpenAI-compatible format)",
     )
+    grammar: str | None = Field(
+        default=None,
+        description="GBNF grammar for constrained generation (llama.cpp compatible)",
+    )
     extra_params: dict[str, Any] = Field(
         default_factory=dict,
         description="Provider-specific extra parameters passed through opaquely",

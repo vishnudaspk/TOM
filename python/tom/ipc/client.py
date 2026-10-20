@@ -47,6 +47,7 @@ class NamedPipeIpcClient:
         base_delay_s: float = 0.5,
         max_delay_s: float = 30.0,
         enable_jitter: bool = True,
+        retry_cycle_delay_s: float = 30.0,
     ) -> None:
         """Initialize IPC client with configuration and transport seam.
 
@@ -63,6 +64,7 @@ class NamedPipeIpcClient:
         self._base_delay_s: float = base_delay_s
         self._max_delay_s: float = max_delay_s
         self._enable_jitter: bool = enable_jitter
+        self._retry_cycle_delay_s: float = retry_cycle_delay_s
 
     @property
     def state(self) -> ConnectionState:
@@ -134,7 +136,7 @@ class NamedPipeIpcClient:
             self._reconnect_task.cancel()
             try:
                 await self._reconnect_task
-            except asyncio.CancelledError:
+            except (asyncio.CancelledError, MaxRetriesExceededError):
                 pass
             self._reconnect_task = None
 
@@ -323,8 +325,16 @@ class NamedPipeIpcClient:
             logger.debug("ipc_receive_loop_stopped")
 
         # If we broke out due to a transport error (not due to intentional close/cancel),
-        # kick off automatic reconnection.
+        # ensure stale transport resources are closed before attempting to reconnect.
         if disconnected_by_error and not self._closed:
+            try:
+                await self._transport.close()
+            except Exception as close_err:
+                logger.debug("ipc_transport_close_on_disconnect_failed", error=str(close_err))
+
+            if self._closed:
+                return
+
             self._set_state(ConnectionState.RECONNECTING)
             loop = asyncio.get_running_loop()
             self._reconnect_task = loop.create_task(
@@ -343,87 +353,124 @@ class NamedPipeIpcClient:
     async def _reconnect_loop(self) -> None:
         """Background reconnection task: retry transport.connect() with exponential backoff.
 
-        Exits when:
-        - Connection is re-established (state → CONNECTED, receive loop restarted).
-        - Max reconnect attempts exceeded (state → DISCONNECTED, raises MaxRetriesExceededError logged).
-        - Client is closed (state == CLOSED, exits silently).
+        Behavior:
+        - Attempts are grouped into bounded bursts (max_reconnect_attempts per burst).
+        - After a burst is exhausted, the client enters DISCONNECTED state but does NOT
+          give up permanently. Instead, it waits retry_cycle_delay_s and starts a new burst.
+        - This ensures the client eventually recovers when the engine becomes available
+          after a prolonged outage.
+        - Client close() cancels the loop cleanly.
         """
-        attempt = 0
         max_attempts = self._config.max_reconnect_attempts
+        cycle = 0
 
         logger.info(
             "ipc_reconnect_loop_started",
-            max_attempts=max_attempts,
+            max_attempts_per_burst=max_attempts,
+            retry_cycle_delay_s=self._retry_cycle_delay_s,
         )
 
         while self._state != ConnectionState.CLOSED:
-            attempt += 1
+            cycle += 1
+            attempt = 0
 
-            if max_attempts > 0 and attempt > max_attempts:
-                logger.error(
-                    "ipc_reconnect_max_retries_exceeded",
-                    attempts=attempt - 1,
-                    max_attempts=max_attempts,
-                )
-                self._set_state(ConnectionState.DISCONNECTED)
-                # Raise so callers awaiting the task see the failure.
-                raise MaxRetriesExceededError(
-                    f"Failed to reconnect after {max_attempts} attempt(s)"
-                )
-
-            delay = self._backoff_delay(attempt)
             logger.info(
-                "ipc_reconnect_attempt",
-                attempt=attempt,
+                "ipc_reconnect_cycle_started",
+                cycle=cycle,
                 max_attempts=max_attempts,
-                delay_s=round(delay, 3),
             )
 
-            # Wait the backoff delay; bail early if closed.
-            if delay > 0:
-                try:
-                    await asyncio.sleep(delay)
-                except asyncio.CancelledError:
-                    logger.debug("ipc_reconnect_loop_cancelled_during_sleep")
-                    return
-            else:
-                # Zero delay: still yield so other tasks (e.g. close()) can run.
-                await asyncio.sleep(0)
+            while self._state != ConnectionState.CLOSED:
+                attempt += 1
 
-            if self._state == ConnectionState.CLOSED:
-                return
+                if max_attempts > 0 and attempt > max_attempts:
+                    logger.warning(
+                        "ipc_reconnect_burst_exhausted",
+                        cycle=cycle,
+                        attempts=attempt - 1,
+                        max_attempts=max_attempts,
+                    )
+                    self._set_state(ConnectionState.DISCONNECTED)
+                    try:
+                        await self._transport.close()
+                    except Exception:
+                        pass
+                    break  # Exit inner loop to start inter-cycle delay
 
-            try:
-                await self._transport.connect()
-            except asyncio.CancelledError:
-                logger.debug("ipc_reconnect_loop_cancelled_during_connect")
-                return
-            except Exception as exc:
-                logger.warning(
-                    "ipc_reconnect_attempt_failed",
+                delay = self._backoff_delay(attempt)
+                logger.info(
+                    "ipc_reconnect_attempt",
+                    cycle=cycle,
                     attempt=attempt,
-                    error=str(exc),
+                    max_attempts=max_attempts,
+                    delay_s=round(delay, 3),
                 )
-                continue  # Retry with next backoff delay
 
-            # Successfully reconnected — restart receive loop.
-            if self._state == ConnectionState.CLOSED:
-                # Closed while we were connecting; clean up.
-                await self._transport.close()
+                # Wait the backoff delay; bail early if closed.
+                if delay > 0:
+                    try:
+                        await asyncio.sleep(delay)
+                    except asyncio.CancelledError:
+                        logger.debug("ipc_reconnect_loop_cancelled_during_sleep")
+                        return
+                else:
+                    # Zero delay: still yield so other tasks (e.g. close()) can run.
+                    await asyncio.sleep(0)
+
+                if self._state == ConnectionState.CLOSED:
+                    return
+
+                try:
+                    await self._transport.connect()
+                except asyncio.CancelledError:
+                    logger.debug("ipc_reconnect_loop_cancelled_during_connect")
+                    return
+                except Exception as exc:
+                    try:
+                        await self._transport.close()
+                    except Exception:
+                        pass
+                    logger.warning(
+                        "ipc_reconnect_attempt_failed",
+                        cycle=cycle,
+                        attempt=attempt,
+                        error=str(exc),
+                    )
+                    continue  # Retry with next backoff delay
+
+                # Successfully reconnected — restart receive loop.
+                if self._state == ConnectionState.CLOSED:
+                    # Closed while we were connecting; clean up.
+                    await self._transport.close()
+                    return
+
+                loop = asyncio.get_running_loop()
+                self._receive_task = loop.create_task(
+                    self._receive_loop(),
+                    name="tom_ipc_receive_loop",
+                )
+                self._set_state(ConnectionState.CONNECTED)
+                logger.info(
+                    "ipc_reconnect_succeeded",
+                    cycle=cycle,
+                    attempt=attempt,
+                    pipe_name=getattr(self._transport, "pipe_name", "unknown"),
+                )
                 return
 
-            loop = asyncio.get_running_loop()
-            self._receive_task = loop.create_task(
-                self._receive_loop(),
-                name="tom_ipc_receive_loop",
-            )
-            self._set_state(ConnectionState.CONNECTED)
+            # Inter-cycle delay before starting next burst
+            if self._state == ConnectionState.CLOSED:
+                return
             logger.info(
-                "ipc_reconnect_succeeded",
-                attempt=attempt,
-                pipe_name=getattr(self._transport, "pipe_name", "unknown"),
+                "ipc_reconnect_cycle_delay",
+                cycle=cycle,
+                delay_s=self._retry_cycle_delay_s,
             )
-            return
+            try:
+                await asyncio.sleep(self._retry_cycle_delay_s)
+            except asyncio.CancelledError:
+                logger.debug("ipc_reconnect_loop_cancelled_during_cycle_delay")
+                return
 
     async def close(self) -> None:
         """Idempotently close the IPC client, stop receive loop, and release transport."""

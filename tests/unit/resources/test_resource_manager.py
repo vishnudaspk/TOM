@@ -317,3 +317,75 @@ class TestResourceManager:
 
         assert resource_manager.allocated_vram_mb == 0
         assert not resource_manager.is_heavy_inference_active
+
+
+class TestResidentModelTracking:
+    """Tests for resident model VRAM tracking (llama-server already loaded model)."""
+
+    @pytest.mark.anyio
+    async def test_resident_model_allows_lease_despite_low_free_vram(self) -> None:
+        """With fake NVML reporting 3500MB free, resident model lease SUCCEEDS."""
+        # Simulate: GPU has 8192 MB total, 4692 MB used (model loaded), 3500 MB free
+        # Required: 5200 MB for reasoning model
+        # Without residency: available = 3500 - 500 = 3000 < 5200 -> FAIL
+        # With residency: available = 3500 + 5200 - 500 = 8200 >= 5200 -> PASS
+        telemetry = MockTelemetryProvider(
+            vram_total_mb=8192.0,
+            vram_used_mb=4692.0,
+            vram_free_mb=3500.0,
+            ram_total_mb=16384.0,
+            ram_used_mb=4000.0,
+            ram_free_mb=12384.0,
+            gpu_available=True,
+        )
+        config = ResourcesConfig(max_vram_mb=7200, max_ram_mb=12000, gpu_device_id=0)
+        mgr = ResourceManager(
+            config=config,
+            telemetry_provider=telemetry,
+            safety_headroom_mb=500,
+        )
+
+        # Without residency registration, acquisition should fail
+        assert mgr.check_budget(required_vram_mb=5200) is False
+        with pytest.raises(InsufficientResourceError):
+            await mgr.acquire(role=ModelRole.REASONING, required_vram_mb=5200)
+
+        # Register model as resident (llama-server already has it loaded)
+        mgr.register_resident_model(ModelRole.REASONING, 5200)
+
+        # Now acquisition should succeed
+        assert mgr.check_budget(required_vram_mb=5200) is True
+        lease = await mgr.acquire(role=ModelRole.REASONING, required_vram_mb=5200)
+        assert lease.is_active
+        assert lease.role == ModelRole.REASONING
+        assert lease.vram_mb == 5200
+        await lease.release()
+
+    @pytest.mark.anyio
+    async def test_ceiling_exceeded_refuses_lease_with_new_message(self) -> None:
+        """Software ceiling exceeded -> lease refused with descriptive error."""
+        telemetry = MockTelemetryProvider(
+            vram_total_mb=8192.0,
+            vram_used_mb=1000.0,
+            vram_free_mb=7192.0,
+            ram_total_mb=16384.0,
+            ram_used_mb=4000.0,
+            ram_free_mb=12384.0,
+            gpu_available=True,
+        )
+        config = ResourcesConfig(max_vram_mb=7200, max_ram_mb=12000, gpu_device_id=0)
+        mgr = ResourceManager(
+            config=config,
+            telemetry_provider=telemetry,
+            safety_headroom_mb=500,
+        )
+
+        # Ceiling is 7200 - 500 = 6700 MB. Request 6701 MB.
+        with pytest.raises(InsufficientResourceError) as exc_info:
+            await mgr.acquire(role=ModelRole.GENERAL, required_vram_mb=6701)
+
+        error_msg = str(exc_info.value)
+        # New error message should include real numbers
+        assert "required 6701MB VRAM" in error_msg
+        assert "headroom 500MB" in error_msg
+        assert "0MB RAM" in error_msg  # No RAM requested

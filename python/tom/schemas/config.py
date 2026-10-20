@@ -305,6 +305,23 @@ class VisionConfig(BaseModel):
     )
 
 
+class TelemetryConfig(BaseModel):
+    """Telemetry and logging configuration."""
+
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = Field(
+        default="INFO",
+        description="Minimum log level for file output",
+    )
+    json_output: bool = Field(
+        default=True,
+        description="Use structured JSON format for logs",
+    )
+    health_check_timeout_ms: int = Field(
+        default=5000,
+        description="Per-check timeout for health check mode (ms)",
+    )
+
+
 class TOMConfig(BaseModel):
     """Master configuration root for TOM."""
 
@@ -319,3 +336,4 @@ class TOMConfig(BaseModel):
     ipc: IpcConfig = Field(default_factory=IpcConfig)
     vision: VisionConfig = Field(default_factory=VisionConfig)
     task: TaskConfig = Field(default_factory=TaskConfig)
+    telemetry: TelemetryConfig = Field(default_factory=TelemetryConfig)

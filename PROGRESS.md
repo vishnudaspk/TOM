@@ -26,6 +26,8 @@
 | 12.3 | Priority Arbitration & Cooperative Preemption | **COMPLETE** | 24 policy tests + 12 integration tests (priority ordering, FIFO, starvation aging, waiter cancellation, exactly-once grants, cooperative preemption, proactive BACKGROUND propagation, voice priority); `TaskPriority.BACKGROUND` wired into `ProactiveScheduler`; `priority` param drives `ResourceManager.acquire()` via `PriorityResourceQueue`; 350 total passing (86 resource + 264 agents/vision regression) | 2026-10-19 |
 | 12.4 | Adversarial Concurrency Stress Suite | **COMPLETE** | 19 stress tests covering mutual exclusion, priority fairness, cancellation at boundary, deadlock prevention, and 100 deterministic contention cycles with zero accounting drift | 2026-10-19 |
 | 12.5 | Focused Validation & Phase Closeout | **COMPLETE — Phase 12 CLOSED** | 488 passed, 8 skipped (optional deps `opencv-python`/`winocr`), zero failed across `tests/unit/resources/`, `tests/unit/agents/`, `tests/unit/vision/`, `tests/integration/tools/test_tool_pipeline.py`. Ruff check/format clean; `git diff --check` clean. ADRs 059–062 documented; ephemeral implementation plan removed. | 2026-10-19 |
+| 13 | IPC Stabilization & Tool Grounding | **COMPLETE** | 777+ targeted tests passed (IPC: 68, Core: 55, Tools: 230, Agents: 264, Integration: 87, Voice: 351, Resources: 107, Security: 344). Ruff check/format clean; `git diff --check` clean. | 2026-10-21 |
+| 14 | Tray Mode & Desktop Integration | **COMPLETE** | 33 tray unit tests passed, 1620+ total targeted tests passed. Tray daemon integrated for CLI/voice modes with engine status monitoring, mute toggle, quit action. Ruff check/format clean; `git diff --check` clean. | 2026-10-21 |
 
 ## Current baseline
 
@@ -146,6 +148,58 @@
 
 
 **10.7 Security & Verification (Exit Gate) — COMPLETE (2026-10-18).** Added regression suite verifying SSRF defense-in-depth, scheme restrictions, same-host and cross-host redirect revalidation, DNS-rebinding IP pinning with multi-address fallback (connect-level errors only; HTTP-status errors not retried), `sni_hostname` extension (`httpcore/_async/connection.py:107, 151` [EVIDENCE: verified, httpcore 1.0.9]), correct Host header construction (port omitted for HTTPS/HTTP default ports, bracketed for IPv6 targets), relative and absolute redirect `final_url` always showing original hostname, untrusted content isolation, personal data deletion atomicity, vision ephemeral contract, and 34-tool registry integrity. Tests: `tests/unit/security/test_phase10_iteration7.py` (45 tests); 246 affected-module tests passed across tools, personal, vision, and security modules. Phase 10 CLOSED. Remaining limitation: depends on httpcore honoring `sni_hostname` (verified at `httpcore/_async/connection.py:107, 151`); system proxies ignored via `trust_env=False`.
+
+## Phase 13 — IPC Stabilization, Tool Grounding & Runtime Fixes (2026-10-21)
+
+**13.1 IPC Idle Behavior & Reconnection Lifecycle — COMPLETE.**
+- Root cause: Previous 30s idle read timeout caused spurious disconnections. Fixed by changing `NamedPipeTransport.read_timeout_s` default to `None` (indefinite wait).
+- Root cause: After max reconnect attempts (default 5) exhausted, client permanently entered `DISCONNECTED` state with no automatic recovery. Fixed by implementing retry cycles: after each burst of `max_reconnect_attempts`, client waits `retry_cycle_delay_s` (default 30s) and starts a new burst, continuing until engine is available or client is closed.
+- Changes: `python/tom/ipc/transport.py` (indefinite read timeout), `python/tom/ipc/client.py` (retry cycle logic, `retry_cycle_delay_s` parameter).
+- Tests added: `TestReconnectionCycles` (6 tests) covering burst exhaustion, automatic recovery after prolonged outage, request success through recovered connection, no duplicate receive loops, explicit `connect()` after exhaustion, pending request cleanup, shutdown during reconnect cycle.
+
+**13.2 Engine Health Reporting & Lifecycle — VERIFIED.**
+- Health checks in `scripts/health_check.py` and `LifecycleManager.start()` use actual IPC requests (`engine.ping`, `engine.status`, `system.gpu`, `system.memory`) and HTTP `/models` endpoint — no fabricated claims.
+- Verified: `LifecycleManager.start()` performs ping + status; health check CLI performs ping, GPU, RAM, inference endpoint, and model state checks.
+- No code changes required; behavior already correct.
+
+**13.3 Fabricated Tool Results Prevention — COMPLETE.**
+- Root cause: System prompts did not explicitly mandate tool use for factual queries; model could hallucinate system info (GPU, processes, weather, services) without calling tools.
+- Fix: Strengthened `VOICE_SYSTEM_PROMPT` and `CLI_SYSTEM_PROMPT` in `python/tom/agents/prompts.py` with `MANDATORY TOOL USAGE` section requiring tool calls for system state, files, web, and real-time data; explicit prohibition on fabricating results when tools unavailable/denied/failed.
+- Regression tests: `TestFabricatedToolResultsPrevention` (8 tests) in `tests/unit/tools/test_executor.py` proving missing/denied/failed/timeout tools cannot be represented as successful with invented output; covers both `ToolExecutor` and `Agent.execute_tool` paths.
+
+**13.4 Startup Constructor Fix — COMPLETE.**
+- Issue: `FasterWhisperSTTProvider.__init__()` and `KokoroTTSProvider.__init__()` accept config objects (`STTConfig`, `TTSConfig`), but `python/tom/main.py` passed keyword arguments (`model_path`, `device`, `compute_type`).
+- Fix: Updated `main.py` to construct proper config objects (`STTConfig`, `TTSConfig`) for both providers.
+- Verified: Unit tests for STT/TTS pass; providers instantiate correctly.
+
+**Verification:** 777+ targeted tests passed across IPC, core, tools, agents, integration, voice, resources, and security. Ruff check/format clean; `git diff --check` clean.
+
+## Phase 14 — Tray Mode & Desktop Integration (2026-10-21)
+
+**14.1 Tray Daemon Implementation — COMPLETE.**
+- Implemented `TrayDaemon` class in `python/tom/desktop/tray.py` using `pystray` with graceful degradation when dependencies unavailable.
+- Added programmatic tray icon generation via Pillow (`create_tray_icon_image`).
+- Menu items: status display (engine connection + microphone state), mute/unmute toggle, open dashboard (placeholder), quit.
+- Mute toggle integrates with `InteractionCore._mic` (MicrophoneLoop) for voice mode.
+
+**14.2 Engine Connection Status Monitoring — COMPLETE.**
+- Tray displays real-time engine connection status: "Connected" / "Disconnected" via `EngineClient._ipc.is_connected`.
+- Status callback mechanism allows dynamic status updates from `TomApp`.
+- Status text format: "TOM — Connected — Listening" / "TOM — Disconnected — Muted".
+
+**14.3 Multi-Mode Support — COMPLETE.**
+- Tray daemon starts in both CLI mode (`_run_cli`) and voice mode (`_run_voice`).
+- Shared `_start_tray_daemon` method in `TomApp` with configurable status callback.
+- Graceful degradation when `pystray` or `Pillow` not installed (returns `HAS_TRAY=False`).
+
+**14.4 Startup Constructor Fix Integration — COMPLETE.**
+- Tray daemon receives `EngineClient` for status monitoring.
+- Status callback captures live IPC connection state from `TomApp._engine_client`.
+
+**14.5 Verification — COMPLETE.**
+- 33 unit tests in `tests/unit/desktop/test_tray.py` covering initialization, menu creation, mute toggle, quit handling, connection status callback, start/stop lifecycle, and edge cases.
+- 1620+ total targeted tests pass across all affected modules.
+- Ruff check/format clean; `git diff --check` clean.
 
 ## Phase 11
 

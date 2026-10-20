@@ -62,13 +62,14 @@ class NamedPipeTransport:
         self,
         pipe_name: str = PIPE_NAME,
         connect_timeout_s: float = 3.0,
-        read_timeout_s: float = 30.0,
+        read_timeout_s: float | None = None,
         config: IpcConfig | None = None,
     ) -> None:
         """Initialize transport with pipe endpoint and timeout parameters.
 
         If `config` is provided, `pipe_name` and `connect_timeout_s` are
         derived from `config.pipe_name` and `config.connection_timeout_ms`.
+        `read_timeout_s` defaults to None for indefinite idle reading.
         """
         if config is not None:
             self._pipe_name = config.pipe_name
@@ -101,8 +102,8 @@ class NamedPipeTransport:
         return self._connect_timeout_s
 
     @property
-    def read_timeout_s(self) -> float:
-        """Return the read safety timeout in seconds."""
+    def read_timeout_s(self) -> float | None:
+        """Return the read safety timeout in seconds, or None if indefinite."""
         return self._read_timeout_s
 
     async def connect(self) -> None:
@@ -207,11 +208,15 @@ class NamedPipeTransport:
             raise NotConnectedError("Transport is not connected")
 
         try:
-            line = await asyncio.wait_for(
-                self._reader.readline(),
-                timeout=self._read_timeout_s,
-            )
+            if self._read_timeout_s is not None:
+                line = await asyncio.wait_for(
+                    self._reader.readline(),
+                    timeout=self._read_timeout_s,
+                )
+            else:
+                line = await self._reader.readline()
         except TimeoutError as err:
+            self._connected = False
             logger.warning(
                 "ipc_transport_read_timeout",
                 timeout_s=self._read_timeout_s,
@@ -219,6 +224,7 @@ class NamedPipeTransport:
             raise TransportError(f"Transport read timed out after {self._read_timeout_s}s") from err
         except ValueError as err:
             # Raised by asyncio StreamReader if line exceeded buffer limit without delimiter
+            self._connected = False
             logger.warning("ipc_transport_frame_too_large_buffer", error=str(err))
             raise FrameTooLargeError(size=MAX_FRAME_BYTES + 1, max_bytes=MAX_FRAME_BYTES) from err
         except (OSError, ConnectionResetError) as err:

@@ -162,6 +162,8 @@ def _build_request_payload(request: ModelRequest, *, stream: bool) -> dict[str, 
     if request.tools:
         payload["tools"] = request.tools
         payload["tool_choice"] = "auto"
+    if request.grammar is not None:
+        payload["grammar"] = request.grammar
     # Pass through extra provider-specific params
     payload.update(request.extra_params)
     return payload
@@ -298,6 +300,10 @@ class HttpModelProvider(LLMProvider):
         payload = _build_request_payload(request, stream=False)
         t_start = time.perf_counter()
 
+        logger.debug(
+            "http_provider_request_body",
+            payload=payload,
+        )
         logger.info(
             "http_provider_generate_start",
             model=request.model,
@@ -346,8 +352,8 @@ class HttpModelProvider(LLMProvider):
             async for chunk in provider.stream(request): ...
 
         Parses Server-Sent Events (SSE) format:
-            data: <json>\\n\\n
-            data: [DONE]\\n\\n
+            data: <json>\n\n
+            data: [DONE]\n\n
 
         Args:
             request: Typed TOM model request.
@@ -364,6 +370,10 @@ class HttpModelProvider(LLMProvider):
         """
         payload = _build_request_payload(request, stream=True)
 
+        logger.debug(
+            "http_provider_request_body",
+            payload=payload,
+        )
         logger.info(
             "http_provider_stream_start",
             model=request.model,
@@ -492,3 +502,19 @@ class HttpModelProvider(LLMProvider):
         except Exception as exc:
             logger.info("http_provider_health_check_failed", error=str(exc))
             return False
+
+    async def list_models(self) -> list[dict[str, Any]]:
+        """Return list of models currently loaded in the inference server.
+
+        Calls GET /v1/models and returns the 'data' array.
+        Returns empty list on any failure.
+        """
+        try:
+            async with self._client(stream=False) as client:
+                resp = await client.get("/models")
+                if resp.status_code == 200:
+                    data = resp.json()
+                    return data.get("data", [])
+        except Exception as exc:
+            logger.info("http_provider_list_models_failed", error=str(exc))
+        return []

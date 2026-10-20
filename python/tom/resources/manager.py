@@ -470,6 +470,9 @@ class ResourceManager:
         self._heavy_lock_reserved = False
         self._current_heavy_vram_mb = 0
 
+        # Resident model tracking: role -> vram_mb for models already loaded in llama-server
+        self._resident_vram: dict[ModelRole, int] = {}
+
     @property
     def allocated_vram_mb(self) -> int:
         """Currently tracked software VRAM allocations in MB."""
@@ -489,6 +492,26 @@ class ResourceManager:
     def is_heavy_inference_active(self) -> bool:
         """Return True if a heavy model (reasoning or VLM) holds the execution lock."""
         return self._heavy_lock.locked()
+
+    def register_resident_model(self, role: ModelRole, vram_mb: int) -> None:
+        """Register a model as already resident in the inference server.
+
+        When a model is resident, its VRAM usage is accounted as already allocated
+        physically but not tracked in TOM's software budget. The live telemetry check
+        will treat this VRAM as available for the same model role.
+        """
+        self._resident_vram[role] = vram_mb
+        logger.info("resident_model_registered", role=str(role), vram_mb=vram_mb)
+
+    def clear_resident_model(self, role: ModelRole) -> None:
+        """Clear a previously registered resident model."""
+        if role in self._resident_vram:
+            del self._resident_vram[role]
+            logger.info("resident_model_cleared", role=str(role))
+
+    def get_resident_vram(self, role: ModelRole) -> int:
+        """Return the VRAM registered as resident for a role, or 0 if none."""
+        return self._resident_vram.get(role, 0)
 
     def get_telemetry(self) -> ResourceTelemetry:
         """Query underlying telemetry provider."""
@@ -523,12 +546,13 @@ class ResourceManager:
         if self._allocated_ram_mb + required_ram_mb > self.config.max_ram_mb:
             return False
 
-        # Live telemetry check
+        # Live telemetry check - account for any resident models
         try:
             telem = self.get_telemetry()
             if telem.gpu_available and required_vram_mb > 0:
-                # Live free VRAM minus 500MB safety headroom must cover required VRAM
-                available_free_vram = telem.vram_free_mb - self.safety_headroom_mb
+                # Sum all resident VRAM (conservative: assume all resident models could be the one requesting)
+                total_resident_vram = sum(self._resident_vram.values())
+                available_free_vram = telem.vram_free_mb + total_resident_vram - self.safety_headroom_mb
                 if required_vram_mb > available_free_vram:
                     return False
 
@@ -610,9 +634,18 @@ class ResourceManager:
 
         async with self._state_lock:
             if not self._check_budget_for_role(role, required_vram_mb, required_ram_mb):
+                # Get telemetry for detailed error message
+                telem = self.get_telemetry()
+                if telem.gpu_available:
+                    physical_free_str = f"{telem.vram_free_mb:.0f}MB"
+                else:
+                    physical_free_str = "N/A"
+                ceiling = max(0, self.config.max_vram_mb - self.safety_headroom_mb)
+                allocated = self._allocated_vram_mb
                 raise InsufficientResourceError(
                     f"Insufficient resources for {role}: required {required_vram_mb}MB VRAM "
-                    f"(headroom {self.safety_headroom_mb}MB), {required_ram_mb}MB RAM"
+                    f"(headroom {self.safety_headroom_mb}MB, physical_free={physical_free_str}, "
+                    f"ceiling={ceiling}MB, allocated={allocated}MB), {required_ram_mb}MB RAM"
                 )
 
             if self._can_admit_immediate_locked(role, required_vram_mb, required_ram_mb):
@@ -704,11 +737,14 @@ class ResourceManager:
             if self._allocated_ram_mb + required_ram_mb > self.config.max_ram_mb:
                 return False
 
-            # Live telemetry check (same as check_budget)
+            # Live telemetry check - account for resident models
             try:
                 telem = self.get_telemetry()
                 if telem.gpu_available and required_vram_mb > 0:
-                    available_free_vram = telem.vram_free_mb - self.safety_headroom_mb
+                    resident_vram = self._resident_vram.get(role, 0)
+                    # If model is resident, its VRAM is already in telem.vram_used_mb
+                    # Available VRAM for this model = free VRAM + resident VRAM (its own memory)
+                    available_free_vram = telem.vram_free_mb + resident_vram - self.safety_headroom_mb
                     if required_vram_mb > available_free_vram:
                         return False
                 if required_ram_mb > 0:
@@ -765,6 +801,21 @@ class ResourceManager:
                     return False
                 if self._allocated_ram_mb + w.ram_mb > self.config.max_ram_mb:
                     return False
+
+                # Live telemetry check with resident model accounting
+                try:
+                    telem = self.get_telemetry()
+                    if telem.gpu_available and w.vram_mb > 0:
+                        resident_vram = self._resident_vram.get(w.role, 0)
+                        available_free_vram = telem.vram_free_mb + resident_vram - self.safety_headroom_mb
+                        if w.vram_mb > available_free_vram:
+                            return False
+                    if w.ram_mb > 0:
+                        if w.ram_mb > telem.ram_free_mb:
+                            return False
+                except Exception:
+                    pass
+
                 return not self._heavy_lock.locked() and not self._heavy_lock_reserved
 
             # For light roles, check budget normally

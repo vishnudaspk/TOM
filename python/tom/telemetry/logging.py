@@ -5,15 +5,19 @@ Adheres to plan.md §44 and skills/coding/structured-logging:
 - Automatic redaction of sensitive credentials and keys
 - Pipeline timing and latency measurement
 - Component, event, and task correlation
+- Session ID correlation for test isolation
 """
 
 import json
 import logging
+import os
 import sys
 import time
+import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from tom.security.secrets import SecretScrubber, get_default_scrubber
@@ -38,6 +42,20 @@ SENSITIVE_FIELD_NAMES: frozenset[str] = frozenset(
 
 # Module-level scrubber instance for logging integration
 _LOG_SCRUBBER: SecretScrubber = get_default_scrubber()
+
+# Session ID for test isolation - set at startup
+_SESSION_ID: str = os.environ.get("TOM_SESSION_ID", uuid.uuid4().hex[:8])
+
+
+def get_session_id() -> str:
+    """Return the current session ID."""
+    return _SESSION_ID
+
+
+def set_session_id(session_id: str) -> None:
+    """Set the session ID for the current process."""
+    global _SESSION_ID
+    _SESSION_ID = session_id
 
 
 def redact_secrets(data: Any) -> Any:
@@ -81,6 +99,7 @@ class StructuredJsonFormatter(logging.Formatter):
             "logger": record.name,
             "component": getattr(record, "component", record.name),
             "event": getattr(record, "event", record.getMessage()),
+            "session_id": _SESSION_ID,
         }
 
         # Optional task correlation ID
@@ -220,8 +239,22 @@ class TomLoggerAdapter(logging.LoggerAdapter):
 _configured: bool = False
 
 
-def configure_logging(level: str = "INFO", json_output: bool = True) -> None:
-    """Configure root logger for TOM with structured JSON formatting."""
+def configure_logging(
+    level: str = "INFO",
+    json_output: bool = True,
+    verbose: bool = False,
+    log_file: str | None = None,
+) -> None:
+    """Configure root logger for TOM with structured JSON formatting.
+
+    Non-verbose: all logs → logs/tom.log (RotatingFileHandler, 5MB x 3)
+    Verbose: INFO/DEBUG → stderr, WARNING+ → stderr, all → logs/tom.log
+    stdout = chat output ONLY (never logs)
+
+    Args:
+        log_file: Optional custom log file path. If not provided, uses
+                  TOM_LOG_FILE env var or defaults to logs/tom.log
+    """
     global _configured
     root_logger = logging.getLogger("tom")
     root_logger.setLevel(getattr(logging, level.upper(), logging.INFO))
@@ -229,15 +262,55 @@ def configure_logging(level: str = "INFO", json_output: bool = True) -> None:
     # Clear existing handlers to prevent duplicate logs
     root_logger.handlers.clear()
 
-    handler = logging.StreamHandler(sys.stdout)
+    # Always log to file (RotatingFileHandler, 5MB x 3)
+    from logging.handlers import RotatingFileHandler
+    if log_file is None:
+        log_file = os.environ.get("TOM_LOG_FILE", "logs/tom.log")
+    log_path = Path(log_file)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    file_handler = RotatingFileHandler(
+        log_path,
+        maxBytes=5_000_000,
+        backupCount=3,
+        encoding="utf-8",
+    )
     if json_output:
-        handler.setFormatter(StructuredJsonFormatter())
+        file_handler.setFormatter(StructuredJsonFormatter())
     else:
-        handler.setFormatter(
+        file_handler.setFormatter(
             logging.Formatter("[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s")
         )
+    root_logger.addHandler(file_handler)
 
-    root_logger.addHandler(handler)
+    if verbose:
+        # INFO/DEBUG → stderr (not stdout)
+        stderr_handler = logging.StreamHandler(sys.stderr)
+        stderr_handler.setLevel(logging.DEBUG)
+        if json_output:
+            stderr_handler.setFormatter(StructuredJsonFormatter())
+        else:
+            stderr_handler.setFormatter(
+                logging.Formatter("[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s")
+            )
+        root_logger.addHandler(stderr_handler)
+    else:
+        # Non-verbose: WARNING+ → stderr
+        stderr_handler = logging.StreamHandler(sys.stderr)
+        stderr_handler.setLevel(logging.WARNING)
+        if json_output:
+            stderr_handler.setFormatter(StructuredJsonFormatter())
+        else:
+            stderr_handler.setFormatter(
+                logging.Formatter("[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s")
+            )
+        root_logger.addHandler(stderr_handler)
+
+    # Suppress noisy third-party loggers
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("asyncio").setLevel(logging.WARNING)
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+
     root_logger.propagate = False
     _configured = True
 

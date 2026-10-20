@@ -66,11 +66,17 @@ class MockModelProvider(LLMProvider):
         self._health = health
         self._call_count = 0
         self._index = 0
+        self._last_request: ModelRequest | None = None
 
     @property
     def call_count(self) -> int:
         """Total number of generate/stream calls made."""
         return self._call_count
+
+    @property
+    def last_request(self) -> ModelRequest | None:
+        """Return the most recent ModelRequest received, or None if no calls yet."""
+        return self._last_request
 
     def _next_entry(self) -> str | ModelResponse | BaseException:
         """Pop the next scripted entry from the queue."""
@@ -124,6 +130,7 @@ class MockModelProvider(LLMProvider):
             asyncio.CancelledError: Caller cancelled task (re-raised cleanly).
         """
         self._call_count += 1
+        self._last_request = request
         if self._latency_seconds > 0:
             await asyncio.sleep(self._latency_seconds)
         entry = self._next_entry()
@@ -162,6 +169,7 @@ class MockModelProvider(LLMProvider):
             asyncio.CancelledError: Caller cancelled task (re-raised cleanly).
         """
         self._call_count += 1
+        self._last_request = request
         if self._latency_seconds > 0:
             await asyncio.sleep(self._latency_seconds)
         entry = self._next_entry()

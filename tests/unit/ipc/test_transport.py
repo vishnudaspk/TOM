@@ -102,7 +102,9 @@ class MockTransport:
         return list(self._written_frames)
 
 
-def create_connected_pipe_transport() -> tuple[
+def create_connected_pipe_transport(
+    read_timeout_s: float | None = None,
+) -> tuple[
     NamedPipeTransport, asyncio.StreamReader, DummyTransport
 ]:
     """Helper creating an already-connected NamedPipeTransport backed by in-memory streams."""
@@ -112,7 +114,7 @@ def create_connected_pipe_transport() -> tuple[
     dummy_transport = DummyTransport(protocol)
     writer = asyncio.StreamWriter(dummy_transport, protocol, reader, loop)
 
-    transport = NamedPipeTransport(connect_timeout_s=1.0, read_timeout_s=1.0)
+    transport = NamedPipeTransport(connect_timeout_s=1.0, read_timeout_s=read_timeout_s)
     transport._reader = reader
     transport._writer = writer
     transport._connected = True
@@ -138,7 +140,7 @@ class TestTransportInitialization:
         transport = NamedPipeTransport()
         assert transport.pipe_name == PIPE_NAME
         assert transport.connect_timeout_s == 3.0
-        assert transport.read_timeout_s == 30.0
+        assert transport.read_timeout_s is None
         assert transport.is_connected is False
 
     def test_custom_parameters(self) -> None:
@@ -159,7 +161,7 @@ class TestTransportInitialization:
         transport = NamedPipeTransport(config=config)
         assert transport.pipe_name == r"\\.\pipe\tom-from-config"
         assert transport.connect_timeout_s == 4.5
-        assert transport.read_timeout_s == 30.0
+        assert transport.read_timeout_s is None
 
 
 class TestTransportConnect:
@@ -374,6 +376,25 @@ class TestTransportFraming:
                 await transport.read_frame()
 
             assert "timed out" in str(exc_info.value)
+            assert transport.is_connected is False
+
+        run_async(_test())
+
+    def test_read_frame_indefinite_by_default_completes_when_data_arrives(self) -> None:
+        async def _test() -> None:
+            transport, reader, _ = create_connected_pipe_transport()
+            assert transport.read_timeout_s is None
+
+            # Spawn reading task before data is present
+            read_task = asyncio.create_task(transport.read_frame())
+            await asyncio.sleep(0.01)
+            assert not read_task.done()
+
+            # Feed data and ensure read_frame completes cleanly
+            reader.feed_data(b'{"method": "engine.status"}\n')
+            result = await read_task
+            assert result == b'{"method": "engine.status"}'
+            assert transport.is_connected is True
 
         run_async(_test())
 

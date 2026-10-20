@@ -24,7 +24,7 @@ def test_load_yaml_configs():
 
     assert isinstance(config, TOMConfig)
     assert config.models.router.vram_required_mb == 1200
-    assert config.models.reasoning.vram_required_mb == 5200
+    assert config.models.reasoning.vram_required_mb == 4531
     assert config.resources.max_vram_mb == 7200
     assert config.resources.whisper_on_gpu is False
     assert "." in config.tools.allowed_directories

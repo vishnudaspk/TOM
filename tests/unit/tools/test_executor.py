@@ -462,3 +462,171 @@ class TestToolExecutorErrorHandlingAndTiming:
         assert res.success is True
         assert res.data == {"custom": True}
         assert res.execution_time_ms > 0.0
+
+
+class TestFabricatedToolResultsPrevention:
+    """Regression tests ensuring missing/denied/failed tools cannot be represented as successful with invented output."""
+
+    def test_missing_tool_raises_not_found_not_fake_success(self) -> None:
+        """Executing an unregistered tool must raise ToolNotFoundError, never return fake success."""
+        registry = ToolRegistry()
+        executor = ToolExecutor(registry=registry)
+
+        with pytest.raises(ToolNotFoundError):
+            run_async(executor.execute("nonexistent.tool", {}))
+
+    def test_denied_tool_raises_permission_denied_not_fake_success(self) -> None:
+        """A tool denied by PermissionEngine must raise PermissionDeniedError, never return fake success."""
+        registry = ToolRegistry()
+
+        @registry.tool(
+            name="test.denied",
+            permission_level=PermissionLevel.BLOCK,
+        )
+        def denied_tool() -> str:
+            return "should not run"
+
+        # Use a permission engine that blocks everything
+        class DenyAllPermissionEngine(PermissionEngine):
+            def evaluate(self, tool_def, params=None):
+                from tom.security.permissions import PermissionDecision, PermissionLevel
+                return PermissionDecision(
+                    allowed=False,
+                    permission_level=PermissionLevel.BLOCK,
+                    reason="Blocked by test engine",
+                )
+
+        executor = ToolExecutor(
+            registry=registry,
+            permission_engine=DenyAllPermissionEngine(),
+        )
+
+        with pytest.raises(PermissionDeniedError):
+            run_async(executor.execute("test.denied", {}))
+
+    def test_failed_tool_returns_error_not_fake_success(self) -> None:
+        """A tool that fails at runtime must return ToolResult.fail, never fake success data."""
+        registry = ToolRegistry()
+
+        @registry.tool(name="test.fail")
+        def failing_tool() -> str:
+            raise RuntimeError("intentional failure")
+
+        executor = ToolExecutor(registry=registry)
+        res = run_async(executor.execute("test.fail", {}))
+
+        assert res.success is False
+        assert res.error is not None
+        assert "intentional failure" in res.error
+        assert res.data is None  # No fake data
+
+    def test_tool_timeout_returns_error_not_fake_success(self) -> None:
+        """A tool that times out must return ToolResult.fail with timeout error, never fake success data."""
+        registry = ToolRegistry()
+
+        @registry.tool(name="test.timeout", timeout_seconds=0.01)
+        async def slow_tool() -> str:
+            await asyncio.sleep(1.0)
+            return "too slow"
+
+        executor = ToolExecutor(registry=registry)
+        res = run_async(executor.execute("test.timeout", {}))
+
+        assert res.success is False
+        assert res.error is not None
+        assert "timed out" in res.error.lower()
+        assert res.data is None  # No fake data
+
+    def test_missing_tool_via_agent_executor_raises_not_found(self) -> None:
+        """Agent.execute_tool must return ToolResult.fail for missing tools, not fake success."""
+        from tom.agents.base import Agent
+        from tom.agents.dependencies import AgentDependencies
+        from tom.schemas.agent import AgentConfig
+
+        registry = ToolRegistry()
+        deps = AgentDependencies(executor=ToolExecutor(registry=registry))
+        agent = Agent(config=AgentConfig(), dependencies=deps)
+
+        res = run_async(agent.execute_tool("nonexistent.tool"))
+        assert res.success is False
+        assert res.error is not None
+        assert "not registered" in res.error
+        assert res.data is None
+
+    def test_denied_tool_via_agent_executor_raises_permission_denied(self) -> None:
+        """Agent.execute_tool must return ToolResult.fail for denied tools, not fake success."""
+        from tom.agents.base import Agent
+        from tom.agents.dependencies import AgentDependencies
+        from tom.schemas.agent import AgentConfig
+        from tom.security.permissions import PermissionDecision, PermissionEngine, PermissionLevel
+
+        registry = ToolRegistry()
+
+        @registry.tool(
+            name="test.denied",
+            permission_level=PermissionLevel.BLOCK,
+        )
+        def denied_tool() -> str:
+            return "should not run"
+
+        class DenyAllPermissionEngine(PermissionEngine):
+            def evaluate(self, tool_def, params=None):
+                return PermissionDecision(
+                    allowed=False,
+                    permission_level=PermissionLevel.BLOCK,
+                    reason="Blocked by test engine",
+                )
+
+        deps = AgentDependencies(executor=ToolExecutor(
+            registry=registry,
+            permission_engine=DenyAllPermissionEngine(),
+        ))
+        agent = Agent(config=AgentConfig(), dependencies=deps)
+
+        res = run_async(agent.execute_tool("test.denied"))
+        assert res.success is False
+        assert res.error is not None
+        assert "denied" in res.error.lower() or "prohibited" in res.error.lower()
+        assert res.data is None
+
+    def test_failed_tool_via_agent_executor_returns_error_result(self) -> None:
+        """Agent.execute_tool must return ToolResult.fail for runtime tool failures, not fake success."""
+        from tom.agents.base import Agent
+        from tom.agents.dependencies import AgentDependencies
+        from tom.schemas.agent import AgentConfig
+
+        registry = ToolRegistry()
+
+        @registry.tool(name="test.fail")
+        def failing_tool() -> str:
+            raise RuntimeError("intentional failure")
+
+        deps = AgentDependencies(executor=ToolExecutor(registry=registry))
+        agent = Agent(config=AgentConfig(), dependencies=deps)
+
+        res = run_async(agent.execute_tool("test.fail"))
+
+        assert res.success is False
+        assert res.error is not None
+        assert "intentional failure" in res.error
+        assert res.data is None
+
+    def test_tool_result_never_contains_unverified_factual_claims(self) -> None:
+        """ToolResult data must only contain actual tool output, never synthesized claims."""
+        registry = ToolRegistry()
+
+        @registry.tool(name="test.gpu")
+        def gpu_tool() -> dict:
+            return {"name": "RTX 4060", "vram_mb": 8192}
+
+        executor = ToolExecutor(registry=registry)
+        res = run_async(executor.execute("test.gpu", {}))
+
+        # Verify the result contains actual tool output
+        assert res.success is True
+        assert res.data == {"name": "RTX 4060", "vram_mb": 8192}
+        # The result should NOT contain fabricated data like "GTX 1650" or "4 GB"
+        data_str = str(res.data)
+        assert "GTX 1650" not in data_str
+        assert "4 GB" not in data_str
+        assert "4096" not in data_str  # 4GB in MB

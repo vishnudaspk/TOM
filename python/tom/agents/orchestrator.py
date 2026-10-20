@@ -20,9 +20,11 @@ from tom.agents.base import Agent, AgentState
 from tom.core.context import CancellationToken
 from tom.core.router import IntentRouter
 from tom.models.base import LLMProvider
+from tom.models.providers.http import HttpModelProvider
 from tom.models.schemas import ModelRequest, ModelResponse, StreamChunk, ToolCallRequest
 from tom.resources.manager import ModelRole, ResourceManager
 from tom.schemas.agent import Message, Role
+from tom.schemas.config import TOMConfig
 from tom.schemas.router import RoutingDecision
 from tom.telemetry.logging import get_logger
 from tom.tools.registry import ToolResult
@@ -49,10 +51,12 @@ class AgentOrchestrator:
         agent: Agent,
         router: IntentRouter,
         resource_manager: ResourceManager | None = None,
+        config: TOMConfig | None = None,
     ) -> None:
         self._agent = agent
         self._router = router
         self._resource_manager = resource_manager
+        self._config = config
 
     @property
     def agent(self) -> Agent:
@@ -260,9 +264,37 @@ class AgentOrchestrator:
         )
 
         if self._resource_manager is not None:
-            async with self._resource_manager.acquire(ModelRole.REASONING, required_vram_mb=5200):
+            # Get VRAM requirement from loaded config (single source of truth)
+            # for BOTH resident registration and lease acquisition
+            reasoning_vram_mb = self._config.models.reasoning.vram_required_mb if self._config else 4531
+            await self._maybe_register_resident_model(ModelRole.REASONING, reasoning_vram_mb)
+            async with self._resource_manager.acquire(ModelRole.REASONING, required_vram_mb=reasoning_vram_mb):
                 return await provider.generate(req)
         return await provider.generate(req)
+
+    async def _maybe_register_resident_model(self, role: ModelRole, required_vram_mb: int) -> None:
+        """Check if the model for the given role is resident in llama-server and register it."""
+        if self._resource_manager is None:
+            return
+        # Only check for heavy roles that use the llama-server
+        if role not in (ModelRole.REASONING, ModelRole.VLM):
+            return
+        # Avoid re-checking if already registered
+        if self._resource_manager.get_resident_vram(role) > 0:
+            return
+        # Check if provider is HttpModelProvider (has list_models)
+        provider = self._agent.model_provider
+        if not isinstance(provider, HttpModelProvider):
+            return
+        try:
+            models = await provider.list_models()
+            # Check if any model is loaded (llama-server returns loaded models in /v1/models)
+            if models:
+                # Model is resident - register its VRAM usage
+                self._resource_manager.register_resident_model(role, required_vram_mb)
+                logger.info("model_resident_detected", role=str(role), model_count=len(models))
+        except Exception as exc:
+            logger.debug("residency_check_failed", role=str(role), error=str(exc))
 
     async def _think_stream(self) -> AsyncIterator[StreamChunk]:
         """Call the model provider's streaming completion.
@@ -305,8 +337,10 @@ class AgentOrchestrator:
             tool_calls: list[ToolCallRequest] = []
             try:
                 if self._resource_manager is not None:
+                    reasoning_vram_mb = self._config.models.reasoning.vram_required_mb if self._config else 4531
+                    await self._maybe_register_resident_model(ModelRole.REASONING, reasoning_vram_mb)
                     async with self._resource_manager.acquire(
-                        ModelRole.REASONING, required_vram_mb=5200
+                        ModelRole.REASONING, required_vram_mb=reasoning_vram_mb
                     ):
                         stream_iter = await self._think_stream()
                         try:

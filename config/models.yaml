@@ -10,7 +10,7 @@ reasoning:
   provider: "local"
   model_name: "Qwen/Qwen2.5-7B-Instruct-GGUF"
   quantization: "Q4_K_M"
-  vram_required_mb: 5200
+  vram_required_mb: 4531
   context_length: 8192
   temperature: 0.7
 

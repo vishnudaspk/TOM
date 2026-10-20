@@ -48,6 +48,10 @@ vision = [
 memory = [
     "qdrant-client>=1.7.0",
 ]
+desktop = [
+    "pystray>=0.19.0",
+    "pillow>=10.0.0",
+]
 
 [project.scripts]
 tom = "tom.main:main"
@@ -58,8 +62,11 @@ where = ["python"]
 [tool.pytest.ini_options]
 minversion = "7.0"
 addopts = "-ra -q --strict-markers"
+markers = [
+    "live: marks tests as live e2e tests requiring engine and llama-server",
+]
 testpaths = ["tests"]
-pythonpath = ["python"]
+pythonpath = ["python", "."]
 
 [tool.ruff]
 line-length = 100

@@ -347,48 +347,50 @@ class TestFasterWhisperSTTProviderConfig:
 class TestFasterWhisperMissingDependency:
     def test_missing_faster_whisper_raises_unavailable(self) -> None:
         """Simulate faster_whisper not installed."""
-        # Temporarily remove faster_whisper from sys.modules
-        saved = sys.modules.pop("faster_whisper", ...)
+        saved = sys.modules.get("faster_whisper")
+        sys.modules["faster_whisper"] = None  # type: ignore[assignment]
         try:
             provider = FasterWhisperSTTProvider()
             provider._model = None  # noqa: SLF001
             with pytest.raises(STTUnavailableError, match="faster-whisper"):
                 provider._ensure_loaded()  # noqa: SLF001
         finally:
-            if saved is not ...:
-                sys.modules["faster_whisper"] = saved  # type: ignore[assignment]
-            elif "faster_whisper" in sys.modules:
-                del sys.modules["faster_whisper"]
+            if saved is not None:
+                sys.modules["faster_whisper"] = saved
+            else:
+                sys.modules.pop("faster_whisper", None)
 
     def test_transcribe_raises_unavailable_on_missing_dep(self) -> None:
         async def _test() -> None:
-            saved = sys.modules.pop("faster_whisper", ...)
+            saved = sys.modules.get("faster_whisper")
+            sys.modules["faster_whisper"] = None  # type: ignore[assignment]
             try:
                 provider = FasterWhisperSTTProvider()
                 provider._model = None  # noqa: SLF001
                 with pytest.raises(STTUnavailableError):
                     await provider.transcribe(_make_request())
             finally:
-                if saved is not ...:
-                    sys.modules["faster_whisper"] = saved  # type: ignore[assignment]
-                elif "faster_whisper" in sys.modules:
-                    del sys.modules["faster_whisper"]
+                if saved is not None:
+                    sys.modules["faster_whisper"] = saved
+                else:
+                    sys.modules.pop("faster_whisper", None)
 
         run_async(_test())
 
     def test_check_health_false_on_missing_dep(self) -> None:
         async def _test() -> None:
-            saved = sys.modules.pop("faster_whisper", ...)
+            saved = sys.modules.get("faster_whisper")
+            sys.modules["faster_whisper"] = None  # type: ignore[assignment]
             try:
                 provider = FasterWhisperSTTProvider()
                 provider._model = None  # noqa: SLF001
                 result = await provider.check_health()
                 assert result is False
             finally:
-                if saved is not ...:
-                    sys.modules["faster_whisper"] = saved  # type: ignore[assignment]
-                elif "faster_whisper" in sys.modules:
-                    del sys.modules["faster_whisper"]
+                if saved is not None:
+                    sys.modules["faster_whisper"] = saved
+                else:
+                    sys.modules.pop("faster_whisper", None)
 
         run_async(_test())
 
@@ -545,7 +547,7 @@ class TestFasterWhisperSTTProviderWithMockModel:
                 sys.modules.pop("faster_whisper", None)
                 sys.modules.pop("numpy", None)
 
-            mock_np.frombuffer.assert_called_once()
+            mock_np.array.assert_called_once()
             assert result.text == "hello world"
 
         run_async(_test())

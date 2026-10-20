@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import asyncio
 
+import pytest
+
+pytest.importorskip("pipecat", reason="pipecat optional dep not installed")
+
 from tom.voice.smart_turn import SmartTurnV3Arbiter, TurnArbitrationDecision
 
 

@@ -108,9 +108,11 @@ class LifecycleManager:
         if self._started and not self._stopped:
             raise LifecycleError("LifecycleManager is already running")
 
-        # 1. Configure structured logging
+        # 1. Configure structured logging (only if not already configured)
         try:
-            configure_logging()
+            from tom.telemetry.logging import _configured
+            if not _configured:
+                configure_logging()
         except Exception as exc:
             self._logger.warning("lifecycle_logging_config_warning", error=str(exc))
 
