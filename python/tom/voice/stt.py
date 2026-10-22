@@ -14,7 +14,7 @@ from __future__ import annotations
 import asyncio
 import time
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from tom.schemas.voice import TranscriptionRequest, TranscriptionResult, TranscriptionSegment
 
@@ -168,6 +168,7 @@ class STTConfig:
         language: str | None = None,
         beam_size: int = 1,  # Optimized: beam_size=1 is ~10-15% faster than 5
         vad_filter: bool = False,
+        mode: Literal["final_only", "rolling"] = "final_only",
     ) -> None:
         self.model_name = model_name
         self.device = device
@@ -176,6 +177,7 @@ class STTConfig:
         self.language = language
         self.beam_size = beam_size
         self.vad_filter = vad_filter
+        self.mode = mode
 
 
 # ---------------------------------------------------------------------------
@@ -218,12 +220,50 @@ class FasterWhisperSTTProvider(STTProvider):
             raise STTUnavailableError(
                 "faster-whisper is not installed. Install it with: pip install faster-whisper"
             ) from exc
+
+        # Try CUDA first if device is cuda, fall back to CPU
+        device = self._config.device
+        compute_type = self._config.compute_type
+        cpu_threads = self._config.cpu_threads
+
+        if device == "cuda":
+            # Try CUDA with int8_float16 for better performance
+            if compute_type == "int8":
+                compute_type = "int8_float16"
+            try:
+                self._model = WhisperModel(
+                    self._config.model_name,
+                    device="cuda",
+                    compute_type=compute_type,
+                )
+                # Dummy decode for CUDA warmup
+                import numpy as np
+                dummy_audio = np.zeros(16000, dtype=np.float32)  # 1 second of silence
+                self._model.transcribe(dummy_audio, beam_size=1, language="en")
+                import logging
+                logging.getLogger(__name__).info(
+                    "faster-whisper loaded on CUDA with compute_type=%s", compute_type
+                )
+                return
+            except Exception as cuda_exc:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "CUDA initialization failed (%s), falling back to CPU", cuda_exc
+                )
+                # Fall through to CPU
+
+        # CPU fallback
         try:
             self._model = WhisperModel(
                 self._config.model_name,
-                device=self._config.device,
-                compute_type=self._config.compute_type,
-                cpu_threads=self._config.cpu_threads,
+                device="cpu",
+                compute_type="int8",
+                cpu_threads=cpu_threads,
+            )
+            import logging
+            logging.getLogger(__name__).info(
+                "faster-whisper loaded on CPU with compute_type=int8, cpu_threads=%d",
+                cpu_threads,
             )
         except Exception as exc:
             raise STTUnavailableError(

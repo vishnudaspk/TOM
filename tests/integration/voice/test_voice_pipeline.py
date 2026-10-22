@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import asyncio
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from tom.agents.dependencies import AgentDependencies
@@ -22,6 +22,7 @@ from tom.ipc.protocol import (
 )
 from tom.schemas.agent import ConversationHistory, Role
 from tom.schemas.voice import (
+    TranscriptionRequest,
     VoicePipelineState,
     VoiceTurnResult,
 )
@@ -583,15 +584,15 @@ class TestRealProviderConfigurationAndSafety:
         custom_provider = FasterWhisperSTTProvider(config=custom_config)
         assert custom_provider._config.model_name == "tiny.en"
 
-    def test_faster_whisper_unavailable_dependency_handling(self) -> None:
+    @pytest.mark.anyio
+    async def test_faster_whisper_unavailable_dependency_handling(self) -> None:
         """When faster_whisper is not installed, transcribe() cleanly raises STTUnavailableError."""
         provider = FasterWhisperSTTProvider()
-        req = MagicMock()
-        req.samples = [0.1, 0.2]
-        req.sample_rate = 16000
+        request = TranscriptionRequest(samples=[0.1, 0.2], sample_rate=16000)
 
-        with pytest.raises(STTUnavailableError, match="faster-whisper is not installed"):
-            asyncio.run(provider.transcribe(req))
+        with patch.dict("sys.modules", {"faster_whisper": None}):
+            with pytest.raises(STTUnavailableError, match="faster-whisper is not installed"):
+                await provider.transcribe(request)
 
     def test_kokoro_config_validation_and_cpu_first_defaults(self) -> None:
         """Kokoro config enforces CPU-first defaults and validates parameters."""
@@ -616,5 +617,6 @@ class TestRealProviderConfigurationAndSafety:
         req = MagicMock()
         req.text = "Testing voice synthesis"
 
-        with pytest.raises(TTSUnavailableError, match="kokoro-onnx is not installed"):
-            asyncio.run(provider.synthesize(req))
+        with patch.dict("sys.modules", {"kokoro_onnx": None}):
+            with pytest.raises(TTSUnavailableError, match="kokoro-onnx is not installed"):
+                provider._ensure_loaded()

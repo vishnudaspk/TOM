@@ -397,7 +397,12 @@ class TurnExecutor:
         final = ""
         partial_marked = False
         try:
-            async for partial in self._stt.stream_transcribe(_pcm(), token):
+            async for partial in self._stt.stream_transcribe(
+                _pcm(),
+                token,
+                on_decode_start=lambda: tracer.mark(LatencyStage.STT_DECODE_START) if tracer else None,
+                on_decode_end=lambda: tracer.mark(LatencyStage.STT_DECODE_END) if tracer else None,
+            ):
                 if not self._alive(epoch, token):
                     return ""
                 if not partial_marked and not partial.is_final and partial.text.strip():
@@ -480,6 +485,10 @@ class TurnExecutor:
                 _sentences(),
                 token=None,
                 playback_observer=self._playback_observer(epoch, token, tracer),
+                on_first_synth_start=lambda: tracer.mark(LatencyStage.TTS_FIRST_SYNTH_START) if tracer else None,
+                on_first_synth_end=lambda: tracer.mark(LatencyStage.TTS_FIRST_SYNTH_END) if tracer else None,
+                on_playback_started=lambda: tracer.mark(LatencyStage.PLAYBACK_STARTED) if tracer else None,
+                on_playback_completed=lambda: tracer.mark(LatencyStage.PLAYBACK_COMPLETED) if tracer else None,
             )
         ) as stream:
             async for chunk in stream:
@@ -1112,7 +1121,12 @@ class InteractionCore:
             # 9.6: snapshot the turn's marks before the tracer is dropped so
             # interrupted and failed turns are still measurable.
             if self._tracer is not None:
-                self._reports.append(self._tracer.get_report())
+                report = self._tracer.get_report()
+                self._reports.append(report)
+                logger.info(
+                    VoiceEventNames.LATENCY_REPORT,
+                    latency_report=report.as_dict(),
+                )
             self._tracer = None
         self._playback_active = False
         if self._stopping or self._stopped or self._barging_in:

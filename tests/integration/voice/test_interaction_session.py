@@ -86,7 +86,7 @@ class FlakyEngine:
     """Engine stand-in that can wedge one playback call for barge-in testing."""
 
     def __init__(self) -> None:
-        self.play_calls: list[list[float]] = []
+        self.play_calls: list[bytes] = []
         self.stop_calls = 0
         self.play_failures = 0
         self.block_next_playback = False
@@ -98,14 +98,27 @@ class FlakyEngine:
     async def stop_audio_capture(self) -> None:
         return None
 
+    async def get_system_time(self) -> dict:
+        return {
+            "timestamp_secs": 1700000000,
+            "timestamp_nanos": 0,
+            "offset_seconds": -28800,
+            "timezone_name": "PST",
+            "iso8601": "2023-11-14T12:00:00-08:00",
+        }
+
     async def play_audio_buffer(
         self,
-        samples: list[float],
+        audio_data: bytes | None = None,
+        samples: list[float] | None = None,
         device_name: str | None = None,
         sample_rate: int = 24000,
         channels: int = 1,
     ) -> None:
-        self.play_calls.append(list(samples))
+        if audio_data is not None:
+            self.play_calls.append(audio_data)
+        elif samples is not None:
+            self.play_calls.append(samples)
         if self.fail_next_play:
             self.fail_next_play = False
             self.play_failures += 1
@@ -149,6 +162,9 @@ class FlakySTT(StreamingSTTProvider):
         self,
         audio_stream: AsyncGenerator[bytes, None],
         token: CancellationToken | None = None,
+        *,
+        on_decode_start: Callable[[], None] | None = None,
+        on_decode_end: Callable[[], None] | None = None,
     ) -> AsyncGenerator[PartialTranscript, None]:
         async for _chunk in audio_stream:
             if token is not None and token.is_cancelled():
@@ -160,6 +176,10 @@ class FlakySTT(StreamingSTTProvider):
             self.fail_next = False
             raise RuntimeError("stt backend unavailable")
         self.utterances += 1
+        if on_decode_start is not None:
+            on_decode_start()
+        if on_decode_end is not None:
+            on_decode_end()
         yield PartialTranscript(text=text, is_final=True, confidence=1.0)
 
 
@@ -395,6 +415,7 @@ def test_eight_turn_session_survives_every_failure_and_stays_measurable() -> Non
             lambda: session.engine.block_next_playback is False,
             what="playback entering the wedge",
         )
+        session.mic.resume()
         await session.mic.push_samples([0.5] * 320)
         await session.mic.push_samples([0.5] * 320)
         await wait_until(lambda: len(core.latency_reports) >= 4, what="barge-in report")

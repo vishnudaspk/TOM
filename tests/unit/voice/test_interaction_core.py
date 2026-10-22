@@ -93,14 +93,32 @@ class FakeEngine:
     async def get_captured_speech(self, clear: bool = True) -> Any:
         raise AssertionError("InteractionCore must not poll the engine directly")
 
+    async def get_system_time(self) -> dict:
+        return {
+            "timestamp_secs": 1700000000,
+            "timestamp_nanos": 0,
+            "offset_seconds": -28800,
+            "timezone_name": "PST",
+            "iso8601": "2023-11-14T12:00:00-08:00",
+        }
+
     async def play_audio_buffer(
         self,
-        samples: list[float],
+        samples: list[float] | None = None,
+        audio_data: bytes | None = None,
         device_name: str | None = None,
         sample_rate: int = 24000,
         channels: int = 1,
     ) -> None:
-        self.play_calls.append(list(samples))
+        # Convert audio_data to samples for recording, matching EngineClient behavior
+        if audio_data is not None:
+            from tom.voice.audio_utils import pcm16_bytes_to_samples
+            samples_list = pcm16_bytes_to_samples(audio_data)
+        elif samples is not None:
+            samples_list = list(samples)
+        else:
+            samples_list = []
+        self.play_calls.append(samples_list)
         self.playback_started.set()
         if self.block_playback:
             await self.release_playback.wait()
@@ -132,6 +150,9 @@ class ScriptedSTT(StreamingSTTProvider):
         self,
         audio_stream: AsyncGenerator[bytes, None],
         token: CancellationToken | None = None,
+        *,
+        on_decode_start: Callable[[], None] | None = None,
+        on_decode_end: Callable[[], None] | None = None,
     ) -> AsyncGenerator[PartialTranscript, None]:
         size = 0
         async for chunk in audio_stream:
@@ -143,7 +164,11 @@ class ScriptedSTT(StreamingSTTProvider):
             self.cancelled += 1
             return
         self.utterance_bytes.append(size)
+        if on_decode_start is not None:
+            on_decode_start()
         text = self._transcripts.pop(0) if self._transcripts else self._default
+        if on_decode_end is not None:
+            on_decode_end()
         yield PartialTranscript(text=text, is_final=True, confidence=1.0)
 
 
@@ -214,9 +239,15 @@ def build_core(
     engine: FakeEngine | None = None,
     task_manager: Any = None,
     reuse_pipeline: bool = False,
-    turn_arbitrator: Any = None,
+    turn_arbitrator: Any = ...,
 ) -> tuple[InteractionCore, dict[str, Any]]:
-    """Wire a complete 9.0-9.5 stack from deterministic fakes."""
+    """Wire a complete 9.0-9.5 stack from deterministic fakes.
+
+    Args:
+        turn_arbitrator: Arbitration strategy. Defaults to CompleteArbiter().
+                         Pass None explicitly for VAD-only mode (no Smart Turn).
+                         Pass Ellipsis (...) to use the default CompleteArbiter().
+    """
     engine = engine or FakeEngine()
     mic = MicrophoneLoop(
         config=MicrophoneConfig(
@@ -238,6 +269,11 @@ def build_core(
             tts_provider=tts,  # type: ignore[arg-type]
             engine_client=engine,  # type: ignore[arg-type]
         )
+
+    # Preserve explicit None for VAD-only mode; default to CompleteArbiter() when omitted
+    if turn_arbitrator is ...:
+        turn_arbitrator = CompleteArbiter()
+
     core = InteractionCore(
         mic_loop=mic,
         stt=stt,
@@ -247,7 +283,7 @@ def build_core(
         policy=ResponsePolicy(),
         engine=engine,  # type: ignore[arg-type]
         pipeline=pipeline,
-        turn_arbitrator=turn_arbitrator or CompleteArbiter(),
+        turn_arbitrator=turn_arbitrator,
     )
     return core, {
         "mic": mic,
@@ -280,7 +316,11 @@ async def say(mic: MicrophoneLoop, *, frames: int = 4) -> None:
 
 
 async def interrupt(mic: MicrophoneLoop) -> None:
-    """Push a speech onset, which the core treats as a barge-in."""
+    """Push a speech onset, which the core treats as a barge-in.
+
+    Resumes the microphone first to simulate hardware capture continuing during playback pause.
+    """
+    mic.resume()
     await mic.push_samples([0.5] * 320)
     await mic.push_samples([0.5] * 320)
 

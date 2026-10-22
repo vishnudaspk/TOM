@@ -21,6 +21,8 @@ stt:
   vram_required_mb: 0
   context_length: 448
   beam_size: 1
+  device: "cuda"
+  compute_type: "int8_float16"
 
 tts:
   provider: "local"

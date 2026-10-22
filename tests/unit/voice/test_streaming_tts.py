@@ -106,13 +106,22 @@ class GatedEngine:
 
     async def play_audio_buffer(
         self,
-        samples: list[float],
+        samples: list[float] | None = None,
+        audio_data: bytes | None = None,
         device_name: str | None = None,
         sample_rate: int = 24000,
         channels: int = 1,
     ) -> None:
         index = len(self.play_calls) + 1
-        self.play_calls.append(list(samples))
+        # Convert audio_data to samples for backward compatibility with test assertions
+        if audio_data is not None:
+            from tom.voice.audio_utils import pcm16_bytes_to_samples
+            samples_list = pcm16_bytes_to_samples(audio_data)
+        elif samples is not None:
+            samples_list = list(samples)
+        else:
+            samples_list = []
+        self.play_calls.append(samples_list)
         self._timeline.add("play_start", str(index))
         if self._synth_gate is not None:
             # Sentence 2 synthesis may only finish once sentence 1 is playing.

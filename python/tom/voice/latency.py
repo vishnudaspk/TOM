@@ -14,32 +14,42 @@ Design constraints
   sleeping, no hardware, and no model.
 
 Stage semantics (plan section 10.2)
------------------------------------
-==============================  ==========================================
-Stage                           Meaning
-==============================  ==========================================
-``SPEECH_END``                  VAD committed the utterance
-``STT_FINAL``                   Streaming STT produced its final transcript
-``STT_PARTIAL1``                First streaming STT partial (telemetry only)
-``LLM_FIRST_TOKEN``             First streamed delta from the orchestrator
-``SENTENCE1``                   First speakable sentence chunked
-``FIRST_AUDIO``                 First audio chunk ready for playback
-``PLAYBACK_STARTED``            Engine accepted the first playback buffer
-``BARGE_IN_ONSET``              User speech onset detected (interrupt)
-``BARGE_IN_STOP``               ``stop_audio_playback()`` returned
-==============================  ==========================================
+ -----------------------------------
+ ==============================  ==========================================
+ Stage                           Meaning
+ ==============================  ==========================================
+ ``SPEECH_END``                  VAD committed the utterance
+ ``STT_FINAL``                   Streaming STT produced its final transcript
+ ``STT_PARTIAL1``                First streaming STT partial (telemetry only)
+ ``LLM_FIRST_TOKEN``             First streamed delta from the orchestrator
+ ``SENTENCE1``                   First speakable sentence chunked
+ ``FIRST_AUDIO``                 First audio chunk ready for playback
+ ``PLAYBACK_STARTED``            First PCM frame handed to output device callback
+ ``PLAYBACK_COMPLETED``          Output device stream has drained (audio finished)
+ ``BARGE_IN_ONSET``              User speech onset detected (interrupt)
+ ``BARGE_IN_STOP``               ``stop_audio_playback()`` returned
+ ``STT_QUEUE_WAIT``              Time waiting for decode pool (telemetry)
+ ``STT_DECODE_START``            STT inference actually started
+ ``STT_DECODE_END``              STT inference finished
+ ``TTS_FIRST_SYNTH_START``       First TTS synthesis task started
+ ``TTS_FIRST_SYNTH_END``         First TTS synthesis task completed
+ ==============================  ==========================================
 
-Derived metrics
----------------
-* ``stt_finalization_ms``      = ``STT_FINAL``      - ``SPEECH_END``
-* ``llm_ttft_ms``              = ``LLM_FIRST_TOKEN`` - ``STT_FINAL``
-* ``sentence1_ms``             = ``SENTENCE1``      - ``LLM_FIRST_TOKEN``
-* ``tts_first_audio_ms``       = ``FIRST_AUDIO``    - ``SENTENCE1``
-* ``playback_latency_ms``      = ``PLAYBACK_STARTED`` - ``FIRST_AUDIO``
-* ``perceived_response_ms``    = ``PLAYBACK_STARTED`` - ``SPEECH_END``
-* ``barge_in_stop_ms``         = ``BARGE_IN_STOP``  - ``BARGE_IN_ONSET``
-* ``endpointing_ms``           = ``SPEECH_END``     - turn start (the
-  hangover the VAD waited before committing the utterance)
+ Derived metrics
+ ---------------
+ * ``stt_finalization_ms``      = ``STT_FINAL``      - ``SPEECH_END``
+ * ``stt_queue_wait_ms``        = ``STT_DECODE_START`` - ``STT_FINAL``
+ * ``stt_decode_ms``            = ``STT_DECODE_END``   - ``STT_DECODE_START``
+ * ``llm_ttft_ms``              = ``LLM_FIRST_TOKEN`` - ``STT_FINAL``
+ * ``sentence1_ms``             = ``SENTENCE1``      - ``LLM_FIRST_TOKEN``
+ * ``tts_first_audio_ms``       = ``FIRST_AUDIO``    - ``SENTENCE1``
+ * ``tts_first_synth_ms``       = ``TTS_FIRST_SYNTH_END`` - ``TTS_FIRST_SYNTH_START``
+ * ``playback_latency_ms``      = ``PLAYBACK_STARTED`` - ``FIRST_AUDIO``
+ * ``perceived_response_ms``    = ``PLAYBACK_STARTED`` - ``SPEECH_END``
+ * ``user_stop_to_first_audio_ms`` = ``FIRST_AUDIO``   - ``SPEECH_END``
+ * ``barge_in_stop_ms``         = ``BARGE_IN_STOP``  - ``BARGE_IN_ONSET``
+ * ``endpointing_ms``           = ``SPEECH_END``     - turn start (the
+   hangover the VAD waited before committing the utterance)
 
 SLA table (plan section 10.2). Targets are the primary acceptance criteria;
 ceilings are the hard limits. :meth:`InteractionLatencyTracer.assert_slas`
@@ -75,8 +85,14 @@ class LatencyStage(StrEnum):
     SENTENCE1 = "sentence1"
     FIRST_AUDIO = "first_audio"
     PLAYBACK_STARTED = "playback_started"
+    PLAYBACK_COMPLETED = "playback_completed"
     BARGE_IN_ONSET = "barge_in_onset"
     BARGE_IN_STOP = "barge_in_stop"
+    STT_QUEUE_WAIT = "stt_queue_wait"
+    STT_DECODE_START = "stt_decode_start"
+    STT_DECODE_END = "stt_decode_end"
+    TTS_FIRST_SYNTH_START = "tts_first_synth_start"
+    TTS_FIRST_SYNTH_END = "tts_first_synth_end"
 
 
 @dataclass(frozen=True)
@@ -128,11 +144,15 @@ LATENCY_SLAS: dict[str, tuple[float, float]] = {
     "endpointing_ms": (300.0, 600.0),
     "stt_first_partial_ms": (200.0, 350.0),
     "stt_finalization_ms": (350.0, 500.0),
+    "stt_queue_wait_ms": (50.0, 150.0),
+    "stt_decode_ms": (200.0, 400.0),
     "llm_ttft_ms": (500.0, 1000.0),
     "sentence1_ms": (50.0, 100.0),
     "tts_first_audio_ms": (350.0, 500.0),
-    "playback_latency_ms": (100.0, 250.0),
+    "tts_first_synth_ms": (200.0, 400.0),
+    "playback_latency_ms": (50.0, 150.0),
     "perceived_response_ms": (1500.0, 2200.0),
+    "user_stop_to_first_audio_ms": (1500.0, 2200.0),
     "barge_in_stop_ms": (150.0, 250.0),
 }
 
@@ -359,10 +379,14 @@ class InteractionLatencyTracer:
 _METRIC_STAGES: dict[str, tuple[LatencyStage, LatencyStage]] = {
     "stt_first_partial_ms": (LatencyStage.SPEECH_END, LatencyStage.STT_PARTIAL1),
     "stt_finalization_ms": (LatencyStage.SPEECH_END, LatencyStage.STT_FINAL),
+    "stt_queue_wait_ms": (LatencyStage.STT_FINAL, LatencyStage.STT_DECODE_START),
+    "stt_decode_ms": (LatencyStage.STT_DECODE_START, LatencyStage.STT_DECODE_END),
     "llm_ttft_ms": (LatencyStage.STT_FINAL, LatencyStage.LLM_FIRST_TOKEN),
     "sentence1_ms": (LatencyStage.LLM_FIRST_TOKEN, LatencyStage.SENTENCE1),
     "tts_first_audio_ms": (LatencyStage.SENTENCE1, LatencyStage.FIRST_AUDIO),
+    "tts_first_synth_ms": (LatencyStage.TTS_FIRST_SYNTH_START, LatencyStage.TTS_FIRST_SYNTH_END),
     "playback_latency_ms": (LatencyStage.FIRST_AUDIO, LatencyStage.PLAYBACK_STARTED),
     "perceived_response_ms": (LatencyStage.SPEECH_END, LatencyStage.PLAYBACK_STARTED),
+    "user_stop_to_first_audio_ms": (LatencyStage.SPEECH_END, LatencyStage.FIRST_AUDIO),
     "barge_in_stop_ms": (LatencyStage.BARGE_IN_ONSET, LatencyStage.BARGE_IN_STOP),
 }

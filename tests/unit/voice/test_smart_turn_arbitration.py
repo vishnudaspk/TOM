@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 import asyncio
-
-import pytest
-
-pytest.importorskip("pipecat", reason="pipecat optional dep not installed")
+from enum import Enum
 
 from tom.voice.smart_turn import SmartTurnV3Arbiter, TurnArbitrationDecision
+
+try:
+    from pipecat.audio.turn.base_turn_analyzer import EndOfTurnState
+except ImportError:
+    class EndOfTurnState(Enum):
+        COMPLETE = 1
+        INCOMPLETE = 2
+
 
 
 class FakeAnalyzer:
@@ -28,8 +33,6 @@ class FakeAnalyzer:
 
 def test_smart_turn_completion_is_advisory_and_vad_remains_authoritative():
     async def _test() -> None:
-        from pipecat.audio.turn.base_turn_analyzer import EndOfTurnState
-
         complete = SmartTurnV3Arbiter(FakeAnalyzer(EndOfTurnState.COMPLETE))
         continuing = SmartTurnV3Arbiter(FakeAnalyzer(EndOfTurnState.INCOMPLETE))
 

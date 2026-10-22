@@ -117,6 +117,7 @@ def test_progressive_partials_then_final_matching_full_text() -> None:
             inner,
             min_window_bytes=len(FRAME_PCM),
             hop_bytes=len(FRAME_PCM),
+            mode="rolling",
         )
         results = await collect(adapter, pcm_chunks(3))
         partials = [r for r in results if not r.is_final]
@@ -135,6 +136,7 @@ def test_partials_are_deduplicated() -> None:
             DuplicateSTTProvider(),
             min_window_bytes=len(FRAME_PCM),
             hop_bytes=len(FRAME_PCM),
+            mode="rolling",
         )
         results = await collect(adapter, pcm_chunks(5))
         partials = [r for r in results if not r.is_final]
@@ -175,6 +177,7 @@ def test_first_partial_under_250ms_offline() -> None:
             MockSTTProvider(transcript="ready"),
             min_window_bytes=len(FRAME_PCM),
             hop_bytes=len(FRAME_PCM),
+            mode="rolling",
         )
         t0 = time.perf_counter()
         first_ms: float | None = None
@@ -195,6 +198,7 @@ def test_voice_events_finalize_on_speech_end_not_internal_vad() -> None:
             inner,
             min_window_bytes=len(FRAME_PCM),
             hop_bytes=len(FRAME_PCM),
+            mode="rolling",
         )
 
         async def events() -> AsyncGenerator[Any, None]:

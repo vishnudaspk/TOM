@@ -27,7 +27,7 @@ class TestProtocolConstants:
         assert PIPE_NAME == r"\\.\pipe\tom-engine"
 
     def test_max_frame_bytes(self) -> None:
-        assert MAX_FRAME_BYTES == 1_048_576
+        assert MAX_FRAME_BYTES == 4_194_304
 
     def test_error_codes_match_rust_exhaustive(self) -> None:
         expected_codes = {

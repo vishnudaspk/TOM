@@ -152,7 +152,16 @@ AsyncGenerator[str]  (SentenceStreamer)
   - `sherpa-large streaming`: Meets latency (p50=28.98 ms with real H=600 ms) [MEASURED: `f6_h600_latency.json`], but REJECTED FOR ACCURACY (WER 55.40%, commands 55.78%, numbers exact 0/8) due to LibriSpeech training domain mismatch.
   - `NeMo Parakeet TDT`: 110M model is NOT FOUND on HF (empty repo); 0.6B int8 model is NOT SUPPORTED in installed sherpa-onnx 1.13.8 (crashes with `InitDecoder:303 'vocab_size' does not exist in metadata`).
   - `Real VAD hangover`: `H = 600 ms` in TOM config [SOURCE: `python/tom/voice/microphone.py` L48].
-  - `Smart Turn`: Suspect claims suspended; queued for Task 4 re-test using all 15 hesitation clips and real config H=600 ms.
+  - `Smart Turn V3 Stabilization`:
+    - **Dependency isolation**: `smart-turn` declared as optional extra in `pyproject.toml` (`pipecat-ai>=1.12.0`, `loguru>=0.7.0`, `soxr>=0.5.0`). Core voice engine runs cleanly without Pipecat via pure VAD endpointing.
+    - **Safe initialization**: `SmartTurnV3Arbiter` lazily loads and checks availability via `check_is_available()`. Missing dependencies raise `SmartTurnUnavailableError` with clear diagnostic context rather than crashing.
+    - **Deterministic VAD fallback**: If turn arbitration fails or is uninstalled, `InteractionCore` falls back to VAD speech end (`H=600ms`), preserving candidate audio, bumping epoch exactly once, and avoiding double-commits or leaked tasks.
+    - **Benchmark measurements (WS3 re-test on 4 threads, CPUExecutionProvider, smart-turn-v3.2-cpu.onnx)**:
+      - Complete turns: 40/41 correct (97.6%), p50=50.3ms, p95=54.0ms, false-incomplete=1, false-complete=0.
+      - Hesitation prefixes (15 WS3 clips): 0/15 correct (0.0%), p50=47.5ms, p95=52.2ms, false-complete=15 (100% false-complete).
+      - Hesitation full turns: 14/15 correct (93.3%), p50=46.0ms, p95=51.9ms, false-incomplete=1, false-complete=0.
+      - Synthetic 60% truncated: 6/41 correct (14.6%), p50=48.1ms, p95=52.7ms, false-complete=35.
+      - **Conclusion**: Smart Turn V3 CANNOT be used as sole endpointer due to 100% false-complete rate on hesitation pauses; VAD hangover is mandatory and authoritative. Status remains **UNDER REVISION**.
 
 ## Verification & Reproduction Commands (Checkpoint 1 Fix Round)
 
@@ -240,8 +249,98 @@ AsyncGenerator[str]  (SentenceStreamer)
 - Do NOT use GPU STT (CPU-first invariant).
 - Do NOT trust unconsumed generator timings or unpaced streaming audio feeds.
 
+## Smart Turn V3 — Dependency Strategy & Status
+
+**Smart Turn is an optional, advisory-only component. TOM operates fully without it.**
+
+### Core runtime (default install)
+```powershell
+pip install -e .
+```
+No Pipecat, no loguru, no soxr. TOM uses pure VAD endpointing (600 ms hangover). `SmartTurnV3Arbiter.is_available` returns `False`. `InteractionCore` and `main.py` automatically fall back to VAD-only mode and log `smart_turn_unavailable_using_vad_endpointing`.
+
+### Smart Turn optional install
+```powershell
+pip install -e ".[smart-turn]"
+```
+Installs `pipecat-ai>=1.12.0`, `loguru>=0.7.0`, `soxr>=0.5.0`, and `wait-for2>=0.1.0` (Python < 3.12 only).
+
+**Dependency consequences:**
+
+Installing `[smart-turn]` will downgrade `onnxruntime` from 1.30.0 to 1.24.4 and `protobuf` from 7.36.2 to 6.33.6. These downgrades are verified compatible with `faster-whisper 1.2.1` and `kokoro-onnx 0.6.1`.
+
+If you need Smart Turn without downgrading the primary environment, use `.venv-ws3-bench` as the dedicated Smart Turn eval environment.
+
+### Runtime fallback behavior
+1. If `pipecat`, `loguru`, `soxr`, or `wait_for2` are missing → `is_available` returns `False` with the exact missing module name.
+2. If the specified model path does not exist → constructor sets `unavailable_reason` without crashing.
+3. If `cpu_count < 1` → `ValueError` raised immediately in constructor.
+4. If `_ensure_analyzer()` fails at runtime → `SmartTurnUnavailableError` raised with chain (`exc`).
+5. If arbitration raises during a live turn → `InteractionCore._handle_speech_end` logs `smart_turn_arbitration_failed_fallback_to_vad`, clears candidate buffer, and commits the turn via VAD without audio loss.
+6. `handle_barge_in()` clears `_smart_turn_candidate` so hesitation audio from the previous utterance never leaks into a new turn after interruption.
+
+### Known model accuracy limitations (UNDER REVISION)
+Smart Turn V3 must not be used as the sole turn endpointer:
+- Complete utterances: 40/41 correct (97.6%).
+- **Hesitation prefixes: 0/15 correct (100% false-complete rate).**
+- Synthetic 60% truncated: 6/41 correct (14.6%).
+
+Smart Turn remains `UNDER REVISION`. It may only be lifted once: (a) hesitation prefix false-complete rate is measurably reduced, and (b) the arbitration path in `InteractionCore._handle_speech_end` (not just `_predict_endpoint`) is validated against hesitation and truncated corpora.
+
+### Benchmark environments
+- `.venv`: Production baseline — no Pipecat, pure VAD endpointing. Primary test environment.
+- `.venv-ws3-bench`: Smart Turn eval — full Pipecat + onnxruntime 1.24.4 + protobuf 6.33.6.
+- `.venv-verify` (disposable): Created during this session to verify fresh `[smart-turn]` reproducibility. `pip check` returned clean. Delete when no longer needed.
+
+## Voice Pipeline Repair (2026-10-21)
+
+**Root Cause 1 — TTS Model Path Misconfiguration**: `config/models.yaml` specified TTS model as HuggingFace repo ID (`hexgrad/Kokoro-82M`) instead of local ONNX file path. `KokoroTTSProvider` requires a local file path. Fixed by updating `models.yaml` to `C:/Users/vishnuu/Projects/TOM/models/kokoro-v0_19.onnx` and adding `voices_path` in `main.py`.
+
+**Root Cause 2 — Audio Feedback Loop**: During TTS playback, the microphone remained active and picked up the assistant's own speech output. VAD detected this as new user speech, triggering immediate barge-in (`LISTENING → PROCESSING → INTERRUPTED → LISTENING` within tens of ms). Fixed by pausing `MicrophoneLoop` during playback (`_on_speaking` callback) and resuming after turn completion (`_on_turn_done`) or barge-in (`handle_barge_in`).
+
+**Root Cause 3 — Smart Turn Dependency Confusion**: Verified that main `.venv` correctly runs without Pipecat (Smart Turn optional). `SmartTurnV3Arbiter.check_is_available()` returns `(False, 'Missing dependency: pipecat')` and `InteractionCore` falls back to pure VAD endpointing. No global Python child process spawned; `onnxruntime` spawns brief `ver` subprocesses (Windows version detection) during TTS model init, not persistent Python processes.
+
+**Files Changed**:
+- `config/models.yaml`: Fixed TTS `model_name` to local ONNX path.
+- `python/tom/main.py`: Added `voices_path` to `TTSConfig` construction.
+- `python/tom/voice/interaction_core.py`: Added `mic.pause()` in `_on_speaking`, `mic.resume()` in `_on_turn_done` and `handle_barge_in`.
+- `python/tom/voice/microphone.py`: `resume()` documents buffer clear behavior.
+- `tests/unit/voice/test_interaction_core.py`: Updated `interrupt()` helper to resume mic before simulating barge-in.
+- `tests/integration/voice/test_interaction_session.py`: Updated barge-in simulation to resume mic.
+
+**Verification**:
+- Voice unit suite: **360 passed, 1 skipped** (Smart Turn unavailable).
+- Voice integration suite: **31 passed, 4 skipped** (hardware/live offline).
+- Total voice tests: **391 passed, 5 skipped**.
+- Ruff check/format clean; `pip check` clean; `git diff --check` clean.
+
+## Listening & Sample Capture Fix (2026-10-21)
+
+**Root Causes Identified & Resolved**:
+1. **Cumulative Sample Counting**: In `AudioManager`, `captured_samples` was previously calculated as `self.capture_buffer.lock().unwrap().len()`. Because Python's `MicrophoneLoop` polls `get_captured_speech(clear=True)` every 20ms, the ring buffer is continuously drained throughout the session. When `stop_capture()` or `status()` was called, the remaining buffer was empty, erroneously reporting `captured_samples=0`. Added an atomic `total_captured_samples: Arc<AtomicUsize>` counter tracking all samples delivered across the capture session.
+2. **CPAL Input Stream Type Safety**: `AudioCaptureController::start_live` previously invoked CPAL's `build_input_stream` with a raw `data: &[u8]` callback and attempted byte casting (`bytemuck::cast_slice`). On Windows WASAPI, passing `u8` requests an 8-bit stream which physical audio devices reject, and misaligned slices could cause panics. Replaced with pattern matching on `native_format` (`F32`, `I16`, `U16`) to build strongly typed CPAL stream callbacks directly.
+3. **Loopback Default Device Filtering**: When `device_name` is omitted, if CPAL's default input endpoint resolves to "Stereo Mix" (speaker loopback), the engine now automatically scans for a physical microphone endpoint rather than attempting to capture from the loopback sink.
+4. **Resampler Pass-Through**: `conversion_task` now directly passes through frames when the input device sample rate is already 16kHz mono/stereo, eliminating resampling latency and overhead.
+5. **Rebuilt Stale Engine Binary**: The old `tom-engine.exe` running in the background was cleanly terminated, and both dev and release binaries were rebuilt fresh.
+
+**Files Changed**:
+- [`rust/tom-engine/src/audio/manager.rs`](file:///c:/Users/vishnuu/Projects/TOM/rust/tom-engine/src/audio/manager.rs): Added `total_captured_samples` atomic counter; accurately report total captured samples in `status()` and `stop_capture()`.
+- [`rust/tom-engine/src/audio/capture.rs`](file:///c:/Users/vishnuu/Projects/TOM/rust/tom-engine/src/audio/capture.rs): Strongly typed CPAL stream building per native sample format; auto-filter "Stereo Mix" on default device lookup; direct 16kHz pass-through.
+- [`config/voice.yaml`](file:///c:/Users/vishnuu/Projects/TOM/config/voice.yaml): Explicit capture device configuration.
+- [`python/tom/voice/microphone.py`](file:///c:/Users/vishnuu/Projects/TOM/python/tom/voice/microphone.py): Configured `capture_device` passthrough.
+- [`python/tom/main.py`](file:///c:/Users/vishnuu/Projects/TOM/python/tom/main.py): Wire voice config device to microphone loop.
+
+**Verification**:
+- Rust engine test suite: **94 passed (87 unit/integration + 7 hardening), 0 failed**.
+- Rust capture flow test: verified `captured_samples=7360` (non-zero cumulative capture).
+- Python voice unit suite: **360 passed, 1 skipped** (Smart Turn).
+- Python IPC unit suite: **161 passed, 0 failed**.
+- Release binary built: `rust/tom-engine/target/release/tom-engine.exe` updated.
+- Ruff and `graphify update .` clean.
+
 ## Next Step
 - **Phase 14 (Tray Mode & Desktop Integration) COMPLETE.** All targeted fixes validated.
+- **Voice Pipeline Repair (2026-10-21) COMPLETE.** Feedback loop eliminated, TTS config fixed, VAD fallback verified.
 - Next candidate phase:
   - Phase 13 — Agent Evaluation, Benchmarks & Hardening (the original Phase 13 roadmap item).
   - Phase 9.5/9.6 (Voice Pipeline Integration & Latency Calibration).

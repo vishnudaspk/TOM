@@ -7,7 +7,7 @@ Last updated: 2026-10-21
 | Item | Value |
 |---|---|
 | **Phases 0–8** | CLOSED & COMPLETE |
-| **Phase 9 core** | **9.0–9.4 COMPLETE & VERIFIED**; 9.5/9.6 remain unstarted |
+| **Phase 9 core** | **9.0–9.4 COMPLETE & VERIFIED**; **9.5/9.6 VOICE PIPELINE REPAIR COMPLETE** (mic pause/resume during TTS, TTS config fix, VAD fallback verified) |
 | **Phase 10** | **CLOSED — Iterations 1–7 COMPLETE & VERIFIED** (34 canonical tools registered, schema export, data-driven permissions, configuration defaults, security/verification exit gate) |
 | **Phase 11** | **CLOSED — Iterations 11.1–11.6 COMPLETE & VERIFIED** (Secret scrubbing via regex catalog + Shannon entropy heuristic, centralized `PathPolicy` jail & sensitive file blacklist, stdin-safe confirmation hook & anti-flooding rate limits, structured `SecurityAuditLogger`, `ToolExecutor` input/output/error scrubbing with `BaseModel` preservation, and 101 concrete adversarial tests) |
 | **Phase 12** | **CLOSED & COMPLETE — Iterations 12.1–12.5 COMPLETE & VERIFIED** (Resource governor safety gate, model lifecycle coordinator, priority arbitration & cooperative preemption fully integrated with real resource admission, 19 adversarial concurrency/stress tests including 100+ repeated cycles with zero drift, and full focused validation suite passed) |
@@ -25,6 +25,7 @@ Last updated: 2026-10-21
 | **Phase 12 verification** | **488 passed, 8 skipped** (optional deps `opencv-python`/`winocr`), zero failed in focused validation suite (`tests/unit/resources/`, `tests/unit/agents/`, `test/unit/vision/`, `tests/integration/tools/test_tool_pipeline.py`). Resources suite alone: **105 passed** (19 stress + 16 governor integration + 15 model manager + 12 priority integration + 14 resource manager + 24 policy + 5 telemetry). 100 repeated contention cycles verified zero accounting drift. Ruff check/format clean; `git diff --check` clean. |
 | **Phase 13 (IPC/Tools) verification** | **777+ targeted tests passed** (IPC: 68, Core: 55, Tools: 230, Agents: 264, Integration: 87, Voice: 351, Resources: 107, Security: 344). Ruff check/format clean; `git diff --check` clean. |
 | **Phase 14 (Tray Mode) verification** | **33 tray unit tests passed**, 1620+ total targeted tests passed. Tray daemon integrated for CLI/voice modes with engine status monitoring. Ruff check/format clean; `git diff --check` clean. |
+| **Voice Pipeline Repair (2026-10-21)** | **391 passed, 5 skipped** across voice unit + integration tests. Fixed: TTS model path config (local file vs HF repo), microphone pause/resume during TTS playback to prevent feedback loop, Smart Turn VAD fallback verified. Ruff check/format clean; `pip check` clean. |
 
 ## Architecture (locked Phases 0–8; 9.0–9.4 additive; 10.1–10.2 additive; 11.1–11.5 additive; 12.1–12.5 additive)
 
@@ -74,6 +75,6 @@ Tools (34): system 7, file 6, memory 5, voice 2 (`voice.announce`, `voice.status
 - **9.B WS0** Measurement integrity: complete and documented as preliminary from feed start, not speech onset.
 - **9.B WS1** Cheap faster-whisper tuning: complete; beam_size=1 produced the best tested profile, but latency remains above the 350 ms target and requires separate acceptance work.
 - **9.B WS2** Streaming-native STT evaluation: audit/superseded by the Checkpoint 1 remeasurement; no Phase 10 implementation is implied.
-- **9.B WS3** Turn detection & Smart Turn: revision remains queued for explicit Task 4 review; no production claim is made here.
+- **9.B WS3** Turn detection & Smart Turn: **STABILIZED & VERIFIED UNDER REVISION** (Smart Turn V3 optionalized in pyproject.toml `smart-turn` extra; safe lazy initialization with `SmartTurnUnavailableError` and `check_is_available()`; deterministic fallback to VAD speech-end without double-commit or audio loss; CPUExecutionProvider confirmed with bundled `smart-turn-v3.2-cpu.onnx`; 100% false-complete on hesitation prefixes confirmed via benchmark [0/15 correct], proving Smart Turn cannot serve as sole endpointer and must remain paired with VAD hangover; 64 voice tests passing including 6 new fallback/safety tests).
 
 Files, gaps, and 9.5 contract: **`HANDOFF.md`**. Ledger and ADRs: **`PROGRESS.md`**. Phase 9.5/9.6 are intentionally deferred.

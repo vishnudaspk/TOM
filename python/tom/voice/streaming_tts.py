@@ -136,6 +136,11 @@ class IncrementalTTSStreamer(StreamingTTSProvider):
         max_concurrent_synthesis: int = 2,
         playback_drain_timeout_s: float = _PLAYBACK_DRAIN_TIMEOUT_S,
         playback_device: str | None = None,
+        # Latency callbacks (optional, for instrumentation)
+        on_first_synth_start: Callable[[], None] | None = None,
+        on_first_synth_end: Callable[[], None] | None = None,
+        on_playback_started: Callable[[], None] | None = None,
+        on_playback_completed: Callable[[], None] | None = None,
     ) -> None:
         if max_concurrent_synthesis < 1:
             raise ValueError("max_concurrent_synthesis must be >= 1")
@@ -149,6 +154,12 @@ class IncrementalTTSStreamer(StreamingTTSProvider):
         self._drain_timeout_s = playback_drain_timeout_s
         self._playback_device = playback_device
         self._executor: ThreadPoolExecutor | None = None
+        # Latency callbacks
+        self._on_first_synth_start = on_first_synth_start
+        self._on_first_synth_end = on_first_synth_end
+        self._on_playback_started = on_playback_started
+        self._on_playback_completed = on_playback_completed
+        self._first_synth_started = False
 
     # ------------------------------------------------------------------
     # TTSProvider interface (Phase 6 contract preserved)
@@ -190,6 +201,10 @@ class IncrementalTTSStreamer(StreamingTTSProvider):
         token: CancellationToken | None = None,
         *,
         playback_observer: Callable[[], None] | None = None,
+        on_first_synth_start: Callable[[], None] | None = None,
+        on_first_synth_end: Callable[[], None] | None = None,
+        on_playback_started: Callable[[], None] | None = None,
+        on_playback_completed: Callable[[], None] | None = None,
     ) -> AsyncGenerator[SynthesisChunk, None]:
         """Synthesize ``sentences`` in order, pipelining synthesis against playback.
 
@@ -201,6 +216,17 @@ class IncrementalTTSStreamer(StreamingTTSProvider):
         """
         if token is not None and token.is_cancelled():
             return
+
+        # Per-turn latency callbacks
+        if on_first_synth_start is not None:
+            self._on_first_synth_start = on_first_synth_start
+        if on_first_synth_end is not None:
+            self._on_first_synth_end = on_first_synth_end
+        if on_playback_started is not None:
+            self._on_playback_started = on_playback_started
+        if on_playback_completed is not None:
+            self._on_playback_completed = on_playback_completed
+        self._first_synth_started = False
 
         slots: asyncio.Queue[Any] = asyncio.Queue()
         out_queue: asyncio.Queue[Any] = asyncio.Queue()
@@ -317,6 +343,9 @@ class IncrementalTTSStreamer(StreamingTTSProvider):
         semaphore: asyncio.Semaphore,
     ) -> _Playable | None:
         """Synthesize one sentence off the event loop; None when synthesis fails."""
+        if index == 0 and self._on_first_synth_start is not None and not self._first_synth_started:
+            self._first_synth_started = True
+            self._on_first_synth_start()
         try:
             request = SynthesisRequest(
                 text=sentence,
@@ -338,6 +367,9 @@ class IncrementalTTSStreamer(StreamingTTSProvider):
             return None
         finally:
             semaphore.release()
+
+        if index == 0 and self._on_first_synth_end is not None:
+            self._on_first_synth_end()
 
         return _Playable(
             chunk=SynthesisChunk(
@@ -409,15 +441,15 @@ class IncrementalTTSStreamer(StreamingTTSProvider):
         if self._engine is None:
             return
         observed = False
+        first_chunk = True
         while True:
             item = await play_queue.get()
             if item is _EOF:
+                if self._on_playback_completed is not None:
+                    self._on_playback_completed()
                 return
             if token is not None and token.is_cancelled():
                 return
-            if not observed and playback_observer is not None:
-                observed = True
-                playback_observer()
             chunk = item.chunk
             await self._engine.play_audio_buffer(
                 audio_data=chunk.audio_data,
@@ -425,6 +457,13 @@ class IncrementalTTSStreamer(StreamingTTSProvider):
                 channels=item.channels,
                 device_name=self._playback_device,
             )
+            if first_chunk:
+                first_chunk = False
+                if not observed and playback_observer is not None:
+                    observed = True
+                    playback_observer()
+                if not observed and self._on_playback_started is not None:
+                    self._on_playback_started()
 
     async def _watch_cancellation(
         self,

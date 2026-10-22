@@ -218,3 +218,41 @@
 - `test_prompt_injection_containment.py` (11 tests): Untrusted content isolation (`untrusted: true`) and permission boundary preservation.
 - `tests/benchmarks/security/benchmark_secret_scanner.py`: 50 warm-up, 500 measured iterations across 10 KB, 50 KB, 1 MiB payloads. Measured 10 KB p50 = 0.4939 ms (passes SLA < 1.0 ms), throughput 19.77 MB/s.
 **11.6 Security Exit Gate & Quality — COMPLETE (2026-10-19).** Ran full focused security and affected-module exit gate: **514 passed**, 1 warning (benign third-party `mss.mss` deprecation in `capture.py:70`). Zero failed, zero skipped. Quality checks: `ruff check` passed clean; `ruff format --check` passed clean (30 files); `git diff --check` passed clean. Phase 11 CLOSED.
+
+## Voice Engine & Smart Turn V3 Stabilization Pass (2026-10-21)
+
+- **Smart Turn V3 Optionalization & Dependency Safety**: Declared `smart-turn` extra in `pyproject.toml` (`pipecat-ai>=1.12.0`, `loguru>=0.7.0`, `soxr>=0.5.0`). Kept core voice engine completely independent of Pipecat. Prevented unsafe downgrades of `onnxruntime 1.30.0` or `protobuf 7.36.2`.
+- **Observable Availability & Diagnostic Errors**: Implemented `SmartTurnUnavailableError` and `SmartTurnV3Arbiter.check_is_available()`. Missing dependencies or model loading errors produce clear diagnostic logs instead of crashing startup.
+- **Deterministic VAD Fallback**: When Smart Turn is uninstalled or fails during audio analysis, `InteractionCore` deterministically falls back to VAD speech end (`H=600ms`), preserving candidate audio without double-commits, leaked tasks, or epoch duplication. Added dependency injection seam `_injected_turn_arbitrator` to `TomApp`.
+- **ONNX Model & Provider Audit**: Confirmed bundled `smart-turn-v3.2-cpu.onnx` (8.68 MB) runs via `CPUExecutionProvider` on 4 threads. Logged selected model path and session execution providers.
+- **Benchmark Evaluation Re-run**: Executed `smart_turn_eval.py` across all 97 test samples:
+  - Complete turns (41 clips): 40/41 correct (97.6%), p50=50.3ms, p95=54.0ms, 0 false-complete, 1 false-incomplete.
+  - Hesitation prefixes (15 clips): 0/15 correct (0.0%), p50=47.5ms, p95=52.2ms, 15 false-complete (100% false-complete).
+  - Hesitation full turns (15 clips): 14/15 correct (93.3%), p50=46.0ms, p95=51.9ms, 0 false-complete, 1 false-incomplete.
+  - Synthetic 60% truncated (41 clips): 6/41 correct (14.6%), p50=48.1ms, p95=52.7ms, 35 false-complete.
+  - Decision: Status remains **UNDER REVISION** due to 100% false-complete rate on hesitation pauses; Smart Turn cannot be used without VAD hangover override.
+- **Test Verification**:
+  - `tests/unit/voice/test_smart_turn_fallback.py`: 6 passed (new tests for fallback, availability, lifecycle, barge-in).
+  - `tests/unit/voice/test_smart_turn_arbitration.py` & `real`: 2 passed (updated to run with or without pipecat).
+  - `tests/integration/voice/test_voice_pipeline.py`: 20 passed (fixed 2 stale dependency unavailability assertions).
+  - Voice unit suite: 358 passed, 0 failed, 0 skipped.
+  - Voice integration suite: 30 passed, 5 skipped (hardware/live offline), 0 failed.
+  - Ruff check and `git diff --check` clean.
+
+## Voice Pipeline Repair (2026-10-21)
+
+- **Root Cause 1 — TTS Model Path Misconfiguration**: `config/models.yaml` specified TTS model as HuggingFace repo ID (`hexgrad/Kokoro-82M`) instead of local ONNX file path. `KokoroTTSProvider` requires a local file path. Fixed by updating `models.yaml` to `C:/Users/vishnuu/Projects/TOM/models/kokoro-v0_19.onnx` and adding `voices_path` in `main.py`.
+- **Root Cause 2 — Audio Feedback Loop**: During TTS playback, the microphone remained active and picked up the assistant's own speech output. VAD detected this as new user speech, triggering immediate barge-in (`LISTENING → PROCESSING → INTERRUPTED → LISTENING` within tens of ms). Fixed by pausing `MicrophoneLoop` during playback (`_on_speaking` callback) and resuming after turn completion (`_on_turn_done`) or barge-in (`handle_barge_in`).
+- **Root Cause 3 — Smart Turn Dependency Confusion**: Verified that main `.venv` correctly runs without Pipecat (Smart Turn optional). `SmartTurnV3Arbiter.check_is_available()` returns `(False, 'Missing dependency: pipecat')` and `InteractionCore` falls back to pure VAD endpointing. No global Python child process spawned; `onnxruntime` spawns brief `ver` subprocesses (Windows version detection) during TTS model init, not persistent Python processes.
+- **Files Changed**:
+  - `config/models.yaml`: Fixed TTS `model_name` to local ONNX path.
+  - `python/tom/main.py`: Added `voices_path` to `TTSConfig` construction.
+  - `python/tom/voice/interaction_core.py`: Added `mic.pause()` in `_on_speaking`, `mic.resume()` in `_on_turn_done` and `handle_barge_in`.
+  - `python/tom/voice/microphone.py`: `resume()` documents buffer clear behavior.
+  - `tests/unit/voice/test_interaction_core.py`: Updated `interrupt()` helper to resume mic before simulating barge-in.
+  - `tests/integration/voice/test_interaction_session.py`: Updated barge-in simulation to resume mic.
+- **Verification**:
+  - Voice unit suite: **360 passed, 1 skipped** (Smart Turn unavailable).
+  - Voice integration suite: **31 passed, 4 skipped** (hardware/live offline).
+  - Total voice tests: **391 passed, 5 skipped**.
+  - Ruff check/format clean; `pip check` clean; `git diff --check` clean.

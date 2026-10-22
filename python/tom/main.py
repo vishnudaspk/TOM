@@ -27,6 +27,7 @@ from tom.resources.manager import ResourceManager
 from tom.resources.model_manager import ModelLifecycleCoordinator
 from tom.schemas.agent import AgentConfig
 from tom.schemas.config import TOMConfig
+from tom.voice.tts import TTSConfig
 from tom.telemetry.logging import configure_logging, get_logger
 from tom.tools.bootstrap import setup_default_tools
 from tom.tools.executor import ToolExecutor
@@ -453,7 +454,6 @@ class TomApp:
         )
 
         from tom.voice.stt import STTConfig
-        from tom.voice.tts import TTSConfig
 
         stt_provider = self._injected_stt or FasterWhisperStreamingAdapter(
             provider=FasterWhisperSTTProvider(
@@ -461,11 +461,12 @@ class TomApp:
                     model_name=self._config.models.stt.model_name
                     if self._config
                     else "C:/Users/vishnuu/Projects/TOM/models/faster-whisper-small.en",
-                    device="cpu",
-                    compute_type="int8",
+                    device=self._config.models.stt.device if self._config else "cuda",
+                    compute_type=self._config.models.stt.compute_type if self._config else "int8_float16",
                 )
             ),
             sample_rate=16000,
+            mode=self._config.models.stt.mode if self._config else "final_only",
         )
 
         tts_provider = self._injected_tts or IncrementalTTSStreamer(

@@ -77,6 +77,10 @@ class FasterWhisperStreamingAdapter(StreamingSTTProvider):
 
     Named for the production FasterWhisper path; tests inject ``MockSTTProvider``
     (or a growing fake) with no model download.
+
+    Supports two modes:
+    - rolling: rolling-window transcription with partials (legacy behavior)
+    - final_only: buffer all audio during speech, single decode at SpeechEnd
     """
 
     def __init__(
@@ -86,11 +90,14 @@ class FasterWhisperStreamingAdapter(StreamingSTTProvider):
         sample_rate: int = 16000,
         min_window_bytes: int = _DEFAULT_MIN_WINDOW_BYTES,
         hop_bytes: int = _DEFAULT_HOP_BYTES,
+        mode: Literal["final_only", "rolling"] = "final_only",
     ) -> None:
         self._provider = provider
         self._sample_rate = sample_rate
         self._min_window_bytes = min_window_bytes
         self._hop_bytes = hop_bytes
+        self._mode = mode
+        self._partial_decode_count = 0
 
     async def transcribe(self, request: TranscriptionRequest) -> TranscriptionResult:
         return await self._provider.transcribe(request)
@@ -107,12 +114,42 @@ class FasterWhisperStreamingAdapter(StreamingSTTProvider):
         self,
         audio_stream: AsyncGenerator[bytes, None] | AsyncIterator[bytes],
         token: CancellationToken | None = None,
+        *,
+        on_decode_start: Callable[[], None] | None = None,
+        on_decode_end: Callable[[], None] | None = None,
     ) -> AsyncGenerator[PartialTranscript, None]:
         buf = bytearray()
         since_last = 0
         last_emitted = ""
         first_partial_emitted = False
 
+        if self._mode == "final_only":
+            # Final-only mode: buffer all audio, single decode at end
+            async for chunk in audio_stream:
+                if token is not None and token.is_cancelled():
+                    buf.clear()
+                    return
+                if not chunk:
+                    continue
+                buf.extend(chunk)
+
+            if token is not None and token.is_cancelled():
+                buf.clear()
+                return
+
+            if on_decode_start is not None:
+                on_decode_start()
+            result = await self._transcribe_pcm(bytes(buf)) if buf else None
+            if on_decode_end is not None:
+                on_decode_end()
+            buf.clear()
+            candidate = result.text if result is not None else ""
+            confidence = result.confidence if result is not None else 1.0
+            final_text = candidate.strip()
+            yield PartialTranscript(text=final_text, is_final=True, confidence=confidence)
+            return
+
+        # Rolling mode (legacy behavior)
         async for chunk in audio_stream:
             if token is not None and token.is_cancelled():
                 buf.clear()
@@ -127,7 +164,11 @@ class FasterWhisperStreamingAdapter(StreamingSTTProvider):
             if token is not None and token.is_cancelled():
                 buf.clear()
                 return
+            if on_decode_start is not None:
+                on_decode_start()
             partial = await self._window_partial(buf, last_emitted)
+            if on_decode_end is not None:
+                on_decode_end()
             if partial is not None:
                 last_emitted = partial.text
                 if not first_partial_emitted and partial.text.strip():
@@ -140,7 +181,11 @@ class FasterWhisperStreamingAdapter(StreamingSTTProvider):
             buf.clear()
             return
 
+        if on_decode_start is not None:
+            on_decode_start()
         result = await self._transcribe_pcm(bytes(buf)) if buf else None
+        if on_decode_end is not None:
+            on_decode_end()
         buf.clear()
         candidate = result.text if result is not None else last_emitted
         confidence = result.confidence if result is not None else 1.0
@@ -196,7 +241,16 @@ class FasterWhisperStreamingAdapter(StreamingSTTProvider):
             sample_rate=self._sample_rate,
             channels=1,
         )
+        self._partial_decode_count += 1
         return await self._provider.transcribe(request)
+
+    def get_partial_decode_count(self) -> int:
+        """Return the number of partial decodes performed in the current turn."""
+        return self._partial_decode_count
+
+    def reset_partial_decode_count(self) -> None:
+        """Reset the partial decode counter for a new turn."""
+        self._partial_decode_count = 0
 
 
 __all__ = [

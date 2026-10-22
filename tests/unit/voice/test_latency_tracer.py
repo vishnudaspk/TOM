@@ -46,11 +46,19 @@ def full_turn_tracer(clock: FakeClock) -> InteractionLatencyTracer:
     tracer.mark(LatencyStage.STT_PARTIAL1)
     clock.advance_ms(150)
     tracer.mark(LatencyStage.STT_FINAL)
-    clock.advance_ms(400)  # LLM TTFT inside the 500 ms target
+    clock.advance_ms(50)  # STT queue wait
+    tracer.mark(LatencyStage.STT_DECODE_START)
+    clock.advance_ms(200)  # STT decode
+    tracer.mark(LatencyStage.STT_DECODE_END)
+    clock.advance_ms(400)  # LLM TTFT inside the 500 ms target (but slightly over)
     tracer.mark(LatencyStage.LLM_FIRST_TOKEN)
     clock.advance_ms(30)  # sentence chunking inside the 50 ms target
     tracer.mark(LatencyStage.SENTENCE1)
-    clock.advance_ms(300)  # Kokoro sentence 1 inside the 350 ms target
+    clock.advance_ms(250)  # TTS first synth
+    tracer.mark(LatencyStage.TTS_FIRST_SYNTH_START)
+    clock.advance_ms(50)
+    tracer.mark(LatencyStage.TTS_FIRST_SYNTH_END)
+    clock.advance_ms(50)  # TTS first audio
     tracer.mark(LatencyStage.FIRST_AUDIO)
     clock.advance_ms(40)  # engine accepted the buffer
     tracer.mark(LatencyStage.PLAYBACK_STARTED)
@@ -67,11 +75,15 @@ def test_sla_table_matches_phase9_plan_budgets() -> None:
     assert LATENCY_SLAS["endpointing_ms"] == (300.0, 600.0)
     assert LATENCY_SLAS["stt_first_partial_ms"] == (200.0, 350.0)
     assert LATENCY_SLAS["stt_finalization_ms"] == (350.0, 500.0)
+    assert LATENCY_SLAS["stt_queue_wait_ms"] == (50.0, 150.0)
+    assert LATENCY_SLAS["stt_decode_ms"] == (200.0, 400.0)
     assert LATENCY_SLAS["llm_ttft_ms"] == (500.0, 1000.0)
     assert LATENCY_SLAS["sentence1_ms"] == (50.0, 100.0)
     assert LATENCY_SLAS["tts_first_audio_ms"] == (350.0, 500.0)
-    assert LATENCY_SLAS["playback_latency_ms"] == (100.0, 250.0)
+    assert LATENCY_SLAS["tts_first_synth_ms"] == (200.0, 400.0)
+    assert LATENCY_SLAS["playback_latency_ms"] == (50.0, 150.0)
     assert LATENCY_SLAS["perceived_response_ms"] == (1500.0, 2200.0)
+    assert LATENCY_SLAS["user_stop_to_first_audio_ms"] == (1500.0, 2200.0)
     assert LATENCY_SLAS["barge_in_stop_ms"] == (BARGE_IN_STOP_TARGET_MS, BARGE_IN_STOP_CEILING_MS)
     for name, (target, ceiling) in LATENCY_SLAS.items():
         assert 0 < target < ceiling, name
@@ -90,15 +102,19 @@ def test_report_derives_every_stage_delta_exactly() -> None:
         "endpointing_ms": pytest.approx(280.0),
         "stt_first_partial_ms": pytest.approx(150.0),
         "stt_finalization_ms": pytest.approx(300.0),
-        "llm_ttft_ms": pytest.approx(400.0),
+        "stt_queue_wait_ms": pytest.approx(50.0),
+        "stt_decode_ms": pytest.approx(200.0),
+        "llm_ttft_ms": pytest.approx(650.0),
         "sentence1_ms": pytest.approx(30.0),
-        "tts_first_audio_ms": pytest.approx(300.0),
+        "tts_first_synth_ms": pytest.approx(50.0),
+        "tts_first_audio_ms": pytest.approx(350.0),
         "playback_latency_ms": pytest.approx(40.0),
-        "perceived_response_ms": pytest.approx(1070.0),
+        "perceived_response_ms": pytest.approx(1370.0),
+        "user_stop_to_first_audio_ms": pytest.approx(1330.0),
     }
     assert report.unmeasured == ["barge_in_stop_ms"]
     assert report.failures == []
-    assert report.all_passed is True
+    assert report.all_passed is False
 
 
 def test_perceived_response_spans_speech_end_to_playback_start() -> None:
@@ -167,11 +183,15 @@ def test_empty_transcript_turn_reports_stt_latency_and_nothing_further() -> None
     assert report.measured["stt_finalization_ms"] == pytest.approx(120.0)
     assert set(report.unmeasured) == {
         "stt_first_partial_ms",
+        "stt_queue_wait_ms",
+        "stt_decode_ms",
         "llm_ttft_ms",
         "sentence1_ms",
+        "tts_first_synth_ms",
         "tts_first_audio_ms",
         "playback_latency_ms",
         "perceived_response_ms",
+        "user_stop_to_first_audio_ms",
         "barge_in_stop_ms",
     }
     assert report.metrics["perceived_response_ms"].status == "not_measured"
@@ -294,14 +314,16 @@ def test_report_serializes_marks_metrics_and_verdicts() -> None:
     assert payload["marks_ns"]["speech_end"] == 280_000_000
     assert payload["metrics"]["llm_ttft_ms"] == {
         "metric": "llm_ttft_ms",
-        "value_ms": 400.0,
+        "value_ms": 650.0,
         "target_ms": 500.0,
         "ceiling_ms": 1000.0,
-        "status": "pass",
+        "status": "pass_ceiling_only",
     }
-    assert payload["all_passed"] is True
+    assert payload["all_passed"] is False
     assert payload["failures"] == []
-    assert payload["unmeasured"] == ["barge_in_stop_ms"]
+    assert payload["unmeasured"] == [
+        "barge_in_stop_ms",
+    ]
 
 
 def test_format_table_renders_every_metric_with_status() -> None:
@@ -340,3 +362,83 @@ def test_unknown_metric_name_returns_zero_budget_placeholder() -> None:
     metric = LatencyReport(marks_ns={}, metrics={}).metric("typo_metric")
     assert metric.measured is False
     assert metric.target_ms == 0.0
+
+
+def test_playback_latency_measures_engine_acceptance_time() -> None:
+    """PLAYBACK_STARTED should be marked after play_audio_buffer returns."""
+    clock = FakeClock()
+    tracer = InteractionLatencyTracer(clock=clock)
+    tracer.mark(LatencyStage.SPEECH_END)
+    clock.advance_ms(100)
+    tracer.mark(LatencyStage.STT_FINAL)
+    clock.advance_ms(50)
+    tracer.mark(LatencyStage.LLM_FIRST_TOKEN)
+    clock.advance_ms(30)
+    tracer.mark(LatencyStage.SENTENCE1)
+    clock.advance_ms(200)  # TTS synthesis
+    tracer.mark(LatencyStage.TTS_FIRST_SYNTH_START)
+    clock.advance_ms(50)
+    tracer.mark(LatencyStage.TTS_FIRST_SYNTH_END)
+    clock.advance_ms(30)  # Time to first audio chunk ready
+    tracer.mark(LatencyStage.FIRST_AUDIO)
+    clock.advance_ms(15)  # Engine accepted the buffer (play_audio_buffer returned)
+    tracer.mark(LatencyStage.PLAYBACK_STARTED)
+
+    report = tracer.get_report()
+    # playback_latency_ms = PLAYBACK_STARTED - FIRST_AUDIO = 15ms
+    assert report.measured["playback_latency_ms"] == pytest.approx(15.0)
+    assert report.metric("playback_latency_ms").status == "pass"
+
+
+def test_barge_in_stop_measures_engine_stop_latency() -> None:
+    """BARGE_IN_STOP should measure from onset to engine stop completion."""
+    clock = FakeClock()
+    tracer = InteractionLatencyTracer(clock=clock)
+    tracer.mark(LatencyStage.BARGE_IN_ONSET)
+    clock.advance_ms(25)  # Engine stop takes 25ms
+    tracer.mark(LatencyStage.BARGE_IN_STOP)
+
+    report = tracer.get_report()
+    # barge_in_stop_ms = 25ms
+    assert report.measured["barge_in_stop_ms"] == pytest.approx(25.0)
+    assert report.metric("barge_in_stop_ms").status == "pass"
+
+
+def test_barge_in_stop_exceeds_target_but_within_ceiling() -> None:
+    """Barge-in stop between target and ceiling should be pass_ceiling_only."""
+    clock = FakeClock()
+    tracer = InteractionLatencyTracer(clock=clock)
+    tracer.mark(LatencyStage.BARGE_IN_ONSET)
+    clock.advance_ms(200)  # Over 150ms target, under 250ms ceiling
+    tracer.mark(LatencyStage.BARGE_IN_STOP)
+
+    report = tracer.get_report()
+    metric = report.metric("barge_in_stop_ms")
+    assert metric.value_ms == pytest.approx(200.0)
+    assert metric.status == "pass_ceiling_only"
+
+
+def test_playback_latency_exceeds_target_but_within_ceiling() -> None:
+    """Playback latency between target and ceiling should be pass_ceiling_only."""
+    clock = FakeClock()
+    tracer = InteractionLatencyTracer(clock=clock)
+    tracer.mark(LatencyStage.SPEECH_END)
+    clock.advance_ms(100)
+    tracer.mark(LatencyStage.STT_FINAL)
+    clock.advance_ms(50)
+    tracer.mark(LatencyStage.LLM_FIRST_TOKEN)
+    clock.advance_ms(30)
+    tracer.mark(LatencyStage.SENTENCE1)
+    clock.advance_ms(200)
+    tracer.mark(LatencyStage.TTS_FIRST_SYNTH_START)
+    clock.advance_ms(50)
+    tracer.mark(LatencyStage.TTS_FIRST_SYNTH_END)
+    clock.advance_ms(30)
+    tracer.mark(LatencyStage.FIRST_AUDIO)
+    clock.advance_ms(100)  # Over 50ms target, under 150ms ceiling
+    tracer.mark(LatencyStage.PLAYBACK_STARTED)
+
+    report = tracer.get_report()
+    metric = report.metric("playback_latency_ms")
+    assert metric.value_ms == pytest.approx(100.0)
+    assert metric.status == "pass_ceiling_only"

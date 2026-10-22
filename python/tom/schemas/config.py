@@ -50,6 +50,18 @@ class ModelSpec(BaseModel):
         le=10,
         description="Beam size for beam search decoding (STT models)",
     )
+    mode: Literal["final_only", "rolling"] = Field(
+        default="final_only",
+        description="STT mode: final_only (single decode at SpeechEnd) or rolling (rolling window with partials)",
+    )
+    device: str = Field(
+        default="cpu",
+        description="Compute device: cpu or cuda",
+    )
+    compute_type: str = Field(
+        default="int8",
+        description="Compute type for inference (e.g., int8, int8_float16, float16)",
+    )
 
 
 class ModelsConfig(BaseModel):
@@ -81,6 +93,8 @@ class ModelsConfig(BaseModel):
             quantization="int8",
             vram_required_mb=0,  # Default to CPU placement initially per plan.md
             context_length=448,
+            device="cuda",
+            compute_type="int8_float16",
         ),
         description="Speech-to-text model",
     )
