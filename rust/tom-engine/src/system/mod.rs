@@ -1,7 +1,7 @@
 //! # System Telemetry Subsystem
 //!
 //! Provides hardware and OS-level telemetry probes for CPU, memory, GPU, battery,
-//! disk storage, and process metrics.
+//! disk storage, process metrics, and system time.
 //!
 //! Follows `skills/system-design/python-rust-boundary/SKILL.md`,
 //! `skills/rust/async-tokio/SKILL.md`, and `skills/rust/error-handling/SKILL.md`.
@@ -12,12 +12,16 @@ pub mod disk;
 pub mod gpu;
 pub mod memory;
 pub mod processes;
+pub mod time;
 
+use chrono::Local;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sysinfo::{ProcessesToUpdate, System};
 use tokio::sync::Mutex;
+
+use crate::system::time::TimeInfo;
 
 /// Minimum update interval for CPU usage queries to ensure meaningful delta sampling.
 const CPU_REFRESH_INTERVAL: Duration = Duration::from_millis(200);
@@ -135,6 +139,31 @@ impl SystemMonitor {
             battery,
             disk,
             processes: process_info.processes,
+        }
+    }
+
+    /// Retrieve the current local system time with timezone information.
+    pub async fn get_time(&self) -> TimeInfo {
+        // Use system time directly - sysinfo doesn't provide time, so use std::time
+        use std::time::{SystemTime, UNIX_EPOCH};
+        
+        let now = SystemTime::now();
+        let duration_since_epoch = now.duration_since(UNIX_EPOCH).unwrap_or_default();
+        let timestamp_secs = duration_since_epoch.as_secs();
+        let timestamp_nanos = duration_since_epoch.subsec_nanos();
+        
+        // Get local timezone offset
+        let now_dt = Local::now();
+        let offset = now_dt.offset();
+        let offset_seconds = offset.local_minus_utc();
+        let timezone_name = offset.to_string();
+        
+        TimeInfo {
+            timestamp_secs,
+            timestamp_nanos,
+            offset_seconds,
+            timezone_name,
+            iso8601: now_dt.to_rfc3339(),
         }
     }
 }

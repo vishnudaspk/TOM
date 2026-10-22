@@ -141,6 +141,77 @@ impl IpcDispatcher {
             }
         }
     }
+
+    /// Dispatch an `IpcRequest` with a custom timeout.
+    pub async fn dispatch_with_timeout(
+        &self,
+        request: IpcRequest,
+        timeout: std::time::Duration,
+    ) -> IpcResponse {
+        // Step 1: Protocol validation
+        if let Err(val_err) = request.validate() {
+            warn!(
+                id = %request.id,
+                code = %val_err.code,
+                "Request validation failed during dispatch"
+            );
+            return IpcResponse::error(request.id, val_err.code, val_err.message);
+        }
+
+        // Step 2: Method lookup
+        let handler = match self.handlers.get(&request.method) {
+            Some(h) => h,
+            None => {
+                debug!(
+                    id = %request.id,
+                    method = %request.method,
+                    "Requested method not found"
+                );
+                return IpcResponse::error(
+                    request.id,
+                    error_code::NOT_FOUND,
+                    format!("method '{}' not found", request.method),
+                );
+            }
+        };
+
+        // Step 3: Bounded execution under custom timeout
+        let fut = (handler)(request.params);
+        match tokio::time::timeout(timeout, fut).await {
+            Ok(handler_res) => match handler_res {
+                Ok(data) => {
+                    debug!(
+                        id = %request.id,
+                        method = %request.method,
+                        "Handler executed successfully"
+                    );
+                    IpcResponse::ok(request.id, data)
+                }
+                Err(ipc_err) => {
+                    warn!(
+                        id = %request.id,
+                        method = %request.method,
+                        code = %ipc_err.code,
+                        "Handler returned error"
+                    );
+                    IpcResponse::error(request.id, ipc_err.code, ipc_err.message)
+                }
+            },
+            Err(_) => {
+                warn!(
+                    id = %request.id,
+                    method = %request.method,
+                    timeout_ms = timeout.as_millis(),
+                    "Handler timed out"
+                );
+                IpcResponse::error(
+                    request.id,
+                    error_code::TIMEOUT,
+                    format!("handler timed out after {}ms", timeout.as_millis()),
+                )
+            }
+        }
+    }
 }
 
 #[cfg(test)]

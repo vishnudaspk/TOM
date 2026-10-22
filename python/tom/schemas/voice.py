@@ -155,6 +155,12 @@ class SynthesisResult(BaseModel):
         description="Provider-specific extra metadata",
     )
 
+    @property
+    def audio_data(self) -> bytes:
+        """Return PCM16 little-endian bytes for efficient IPC transport."""
+        from tom.voice.audio_utils import samples_to_pcm16_bytes
+        return samples_to_pcm16_bytes(self.samples)
+
 
 class VoicePipelineState(StrEnum):
     """Lifecycle states for VoicePipelineManager (Decision 044)."""

@@ -41,8 +41,8 @@ from tom.voice.response_policy import ResponsePolicy
 from tom.voice.sentence_streamer import SentenceStreamer
 from tom.voice.smart_turn import (
     SmartTurnV3Arbiter,
-    TurnArbitrationDecision,
     TurnArbiter,
+    TurnArbitrationDecision,
 )
 from tom.voice.streaming_stt import (
     FasterWhisperStreamingAdapter,

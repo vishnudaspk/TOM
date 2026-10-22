@@ -57,6 +57,7 @@ class NamedPipeIpcClient:
         self._config = config or IpcConfig()
         self._transport = transport or NamedPipeTransport(config=self._config)
         self._pending: dict[str, asyncio.Future[IpcResponse]] = {}
+        self._recently_done: set[str] = set()
         self._receive_task: asyncio.Task[None] | None = None
         self._reconnect_task: asyncio.Task[None] | None = None
         self._closed: bool = False
@@ -221,6 +222,11 @@ class NamedPipeIpcClient:
                     timeout=timeout_s,
                 )
             except TimeoutError:
+                # Cancel the future and track the request ID so late responses
+                # are handled as duplicate/late instead of unknown.
+                fut.cancel()
+                self._recently_done.add(req.id)
+                self._pending.pop(req.id, None)
                 duration_ms = round((time.perf_counter() - start_time) * 1000, 2)
                 logger.warning(
                     "ipc_request_timeout",
@@ -231,6 +237,10 @@ class NamedPipeIpcClient:
                 )
                 raise IpcTimeoutError(method, effective_timeout_ms) from None
             except asyncio.CancelledError:
+                # Track the request ID so late responses are handled as
+                # duplicate/late instead of unknown.
+                self._recently_done.add(req.id)
+                self._pending.pop(req.id, None)
                 duration_ms = round((time.perf_counter() - start_time) * 1000, 2)
                 logger.debug(
                     "ipc_request_cancelled",
@@ -253,6 +263,7 @@ class NamedPipeIpcClient:
                     error_code=err_code,
                     duration_ms=duration_ms,
                 )
+                self._pending.pop(req.id, None)
                 raise RemoteError(err_code, err_msg)
 
             logger.debug(
@@ -262,15 +273,19 @@ class NamedPipeIpcClient:
                 duration_ms=duration_ms,
                 success=True,
             )
+            self._pending.pop(req.id, None)
             return response.data or {}
 
-        finally:
+        except Exception:
+            # Ensure pending request is cleaned up on any other exception
             self._pending.pop(req.id, None)
+            raise
 
     async def _receive_loop(self) -> None:
         """Background task reading wire frames and resolving correlated Futures."""
         logger.debug("ipc_receive_loop_started")
         disconnected_by_error = False
+        loop_count = 0
         try:
             while self._transport.is_connected:
                 try:
@@ -292,10 +307,18 @@ class NamedPipeIpcClient:
 
                 fut = self._pending.get(response.id)
                 if fut is None:
-                    logger.warning(
-                        "ipc_response_unknown_id",
-                        request_id=response.id,
-                    )
+                    # Check if this is a late response for a timed-out/cancelled request
+                    if response.id in self._recently_done:
+                        logger.warning(
+                            "ipc_response_duplicate_or_late",
+                            request_id=response.id,
+                        )
+                        self._recently_done.discard(response.id)
+                    else:
+                        logger.warning(
+                            "ipc_response_unknown_id",
+                            request_id=response.id,
+                        )
                     continue
 
                 if fut.done():
@@ -312,6 +335,16 @@ class NamedPipeIpcClient:
                         "ipc_response_future_already_resolved",
                         request_id=response.id,
                     )
+
+                # Periodically clean up _recently_done to prevent unbounded growth
+                loop_count += 1
+                if loop_count >= 100:
+                    loop_count = 0
+                    # Remove entries for futures that are no longer in _pending
+                    # (they've either been cleaned up or never existed)
+                    stale = [rid for rid in self._recently_done if rid not in self._pending]
+                    for rid in stale:
+                        self._recently_done.discard(rid)
 
         except asyncio.CancelledError:
             logger.debug("ipc_receive_loop_cancelled")

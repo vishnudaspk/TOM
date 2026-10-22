@@ -18,9 +18,9 @@ use super::protocol::{error_code, IpcRequest, IpcResponse};
 /// Standard named pipe path on Windows.
 pub const PIPE_NAME: &str = r"\\.\pipe\tom-engine";
 
-/// Maximum allowed size for an inbound IPC frame (1 MB).
+/// Maximum allowed size for an inbound IPC frame (4 MB).
 /// Protects the engine from unbounded memory allocation.
-pub const MAX_FRAME_BYTES: usize = 1024 * 1024;
+pub const MAX_FRAME_BYTES: usize = 4 * 1024 * 1024;
 
 /// Transport-level errors.
 #[derive(Debug, thiserror::Error)]

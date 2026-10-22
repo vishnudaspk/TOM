@@ -33,8 +33,8 @@ from typing import TYPE_CHECKING, Any
 
 from tom.core.context import CancellationToken
 from tom.schemas.voice import SynthesisRequest, SynthesisResult
-from tom.telemetry.logging import get_logger
-from tom.voice.audio_utils import pcm16_bytes_to_samples, samples_to_pcm16_bytes
+from tom.telemetry.logging import get_logger, VoiceEventNames
+from tom.voice.audio_utils import samples_to_pcm16_bytes
 from tom.voice.tts import TTSProvider
 
 if TYPE_CHECKING:
@@ -135,6 +135,7 @@ class IncrementalTTSStreamer(StreamingTTSProvider):
         sample_rate: int = 24000,
         max_concurrent_synthesis: int = 2,
         playback_drain_timeout_s: float = _PLAYBACK_DRAIN_TIMEOUT_S,
+        playback_device: str | None = None,
     ) -> None:
         if max_concurrent_synthesis < 1:
             raise ValueError("max_concurrent_synthesis must be >= 1")
@@ -146,6 +147,7 @@ class IncrementalTTSStreamer(StreamingTTSProvider):
         self._sample_rate = sample_rate
         self._max_concurrent = max_concurrent_synthesis
         self._drain_timeout_s = playback_drain_timeout_s
+        self._playback_device = playback_device
         self._executor: ThreadPoolExecutor | None = None
 
     # ------------------------------------------------------------------
@@ -176,7 +178,11 @@ class IncrementalTTSStreamer(StreamingTTSProvider):
         try:
             await self._engine.stop_audio_playback()
         except Exception as exc:
-            logger.warning("streaming_tts_playback_stop_failed", error=str(exc))
+            logger.warning(
+                VoiceEventNames.TTS_FAILED,
+                stage="stop_playback",
+                error=str(exc),
+            )
 
     async def stream_synthesize(
         self,
@@ -324,7 +330,8 @@ class IncrementalTTSStreamer(StreamingTTSProvider):
             raise
         except Exception as exc:
             logger.warning(
-                "streaming_tts_synthesis_failed",
+                VoiceEventNames.TTS_FAILED,
+                stage="synthesis",
                 chunk_index=index,
                 error=str(exc),
             )
@@ -413,9 +420,10 @@ class IncrementalTTSStreamer(StreamingTTSProvider):
                 playback_observer()
             chunk = item.chunk
             await self._engine.play_audio_buffer(
-                samples=pcm16_bytes_to_samples(chunk.audio_data),
+                audio_data=chunk.audio_data,
                 sample_rate=item.sample_rate,
                 channels=item.channels,
+                device_name=self._playback_device,
             )
 
     async def _watch_cancellation(
@@ -434,7 +442,11 @@ class IncrementalTTSStreamer(StreamingTTSProvider):
         try:
             await asyncio.wait_for(asyncio.shield(player), timeout=self._drain_timeout_s)
         except Exception as exc:
-            logger.warning("streaming_tts_playback_drain_timeout", error=str(exc))
+            logger.warning(
+                VoiceEventNames.TTS_FAILED,
+                stage="playback_drain",
+                error=str(exc),
+            )
 
     @staticmethod
     async def _shutdown(*tasks: asyncio.Task[Any] | None) -> None:

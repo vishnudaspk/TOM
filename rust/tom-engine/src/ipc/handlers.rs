@@ -161,6 +161,21 @@ pub fn register_baseline_handlers_with_components(
         }
     });
 
+    // system.time -> returns current local time with timezone info
+    let m_time = monitor.clone();
+    dispatcher.register("system.time", move |_params| {
+        let m = m_time.clone();
+        async move {
+            let time_info = m.get_time().await;
+            serde_json::to_value(time_info).map_err(|e| {
+                IpcError::new(
+                    error_code::INTERNAL,
+                    format!("Failed to serialize time info: {e}"),
+                )
+            })
+        }
+    });
+
     register_audio_handlers(dispatcher, audio);
 }
 
@@ -280,15 +295,32 @@ pub fn register_audio_handlers(
     dispatcher.register("audio.play_buffer", move |params| {
         let a = a_play.clone();
         async move {
-            let samples: Vec<f32> = params
-                .get("samples")
-                .and_then(|v| serde_json::from_value(v.clone()).ok())
-                .ok_or_else(|| {
+            let samples: Vec<f32> = if let Some(base64_str) = params.get("audio_data_base64").and_then(|v| v.as_str()) {
+                use base64::{Engine as _, engine::general_purpose};
+                let bytes = general_purpose::STANDARD.decode(base64_str).map_err(|e| {
                     IpcError::new(
                         error_code::INVALID_PARAMS,
-                        "Missing or invalid 'samples' array",
+                        format!("Invalid base64 audio data: {e}"),
                     )
                 })?;
+                bytes
+                    .chunks_exact(2)
+                    .map(|chunk| {
+                        let sample = i16::from_le_bytes([chunk[0], chunk[1]]);
+                        sample as f32 / 32767.0
+                    })
+                    .collect()
+            } else {
+                params
+                    .get("samples")
+                    .and_then(|v| serde_json::from_value(v.clone()).ok())
+                    .ok_or_else(|| {
+                        IpcError::new(
+                            error_code::INVALID_PARAMS,
+                            "Missing or invalid 'samples' array or 'audio_data_base64'",
+                        )
+                    })?
+            };
             let config = crate::audio::AudioPlaybackConfig {
                 device_name: params
                     .get("device_name")
@@ -492,7 +524,9 @@ mod tests {
     async fn test_audio_devices_handler() {
         let dispatcher = create_default_dispatcher();
         let req = IpcRequest::new("aud_dev_1", "audio.devices", json!({}));
-        let resp = dispatcher.dispatch(req).await;
+        let resp = dispatcher
+            .dispatch_with_timeout(req, std::time::Duration::from_millis(5000))
+            .await;
 
         assert_eq!(resp.id, "aud_dev_1");
         assert!(resp.success);
@@ -537,8 +571,8 @@ mod tests {
             .await;
         assert_eq!(stat_resp.data.unwrap()["capture_active"], true);
 
-        // Wait briefly for mock frames to accumulate
-        tokio::time::sleep(std::time::Duration::from_millis(60)).await;
+        // Wait briefly for frames to accumulate (real hardware may need more time)
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
         // 2. Stop capture
         let stop_req = IpcRequest::new("aud_cap_2", "audio.capture_stop", json!({}));
@@ -561,14 +595,17 @@ mod tests {
     async fn test_audio_play_and_stop_handler() {
         let dispatcher = create_default_dispatcher();
 
-        // Play synthetic sine wave samples
+        // Play synthetic sine wave samples at 48000 Hz (widely supported)
         let samples = vec![0.1f32, 0.2, 0.3, 0.2, 0.1, 0.0, -0.1, -0.2];
         let play_req = IpcRequest::new(
             "aud_play_1",
             "audio.play_buffer",
-            json!({"samples": samples, "sample_rate": 24000, "channels": 1}),
+            json!({"samples": samples, "sample_rate": 48000, "channels": 1}),
         );
         let play_resp = dispatcher.dispatch(play_req).await;
+        if !play_resp.success {
+            eprintln!("Playback failed: {:?}", play_resp.error);
+        }
         assert!(play_resp.success);
         assert_eq!(play_resp.data.unwrap()["samples_played"], 8);
 

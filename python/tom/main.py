@@ -52,6 +52,19 @@ class TomAppArgs:
     verbose: bool = False
 
 
+# Sentinel for default turn_arbitrator injection in TomApp
+class _DefaultArbiterSentinel:
+    """Private sentinel marking the default turn arbitration injection."""
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return "<DEFAULT_ARBITER>"
+
+
+_DEFAULT_ARBITER: _DefaultArbiterSentinel = _DefaultArbiterSentinel()
+
+
 class TomApp:
     """Top-level application supervisor for TOM.
 
@@ -93,6 +106,7 @@ class TomApp:
         self._injected_transport: TransportProtocol | None = None
         self._injected_stt: StreamingSTTProvider | None = None
         self._injected_tts: StreamingTTSProvider | None = None
+        self._injected_turn_arbitrator: Any | _DefaultArbiterSentinel = _DEFAULT_ARBITER
 
     # ------------------------------------------------------------------
     # Configuration & Setup
@@ -427,7 +441,10 @@ class TomApp:
             sample_rate=16000,
             frame_duration_ms=20,
             silence_duration_ms=self._config.voice.silence_duration_ms if self._config else 600,
-            energy_threshold=0.015,
+            energy_threshold=getattr(self._config.voice, "energy_threshold", 0.003)
+            if self._config
+            else 0.003,
+            capture_device=self._config.voice.capture_device if self._config else None,
         )
 
         mic_loop = MicrophoneLoop(
@@ -456,17 +473,32 @@ class TomApp:
                 config=TTSConfig(
                     model_path=self._config.models.tts.model_name
                     if self._config
-                    else "kokoro-v0_19.onnx",
+                    else "C:/Users/vishnuu/Projects/TOM/models/kokoro-v0_19.onnx",
+                    voices_path="C:/Users/vishnuu/Projects/TOM/models/voices.bin"
+                    if self._config
+                    else "voices.bin",
                 )
             ),
             engine_client=self._engine_client,
             sample_rate=24000,
             max_concurrent_synthesis=2,
+            playback_device=self._config.voice.playback_device if self._config else None,
         )
 
         turn_manager = ConversationTurnManager()
         policy = ResponsePolicy()
-        turn_arbitrator = SmartTurnV3Arbiter()
+        if self._injected_turn_arbitrator is not _DEFAULT_ARBITER:
+            turn_arbitrator = self._injected_turn_arbitrator
+        else:
+            arbiter = SmartTurnV3Arbiter()
+            if arbiter.is_available:
+                turn_arbitrator = arbiter
+            else:
+                logger.info(
+                    "smart_turn_unavailable_using_vad_endpointing",
+                    reason=arbiter.unavailable_reason,
+                )
+                turn_arbitrator = None
 
         pipeline = VoicePipelineManager(
             stt_provider=stt_provider,

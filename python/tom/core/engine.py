@@ -43,6 +43,7 @@ from tom.ipc.protocol import (
     ProcessInfo,
     StatusResponse,
     SystemSnapshot,
+    TimeInfo,
 )
 
 # Default process limit mirrors Rust DEFAULT_PROCESS_LIMIT
@@ -166,6 +167,15 @@ class EngineClient:
         data = await self._ipc.request("system.all")
         return SystemSnapshot.model_validate(data)
 
+    async def get_system_time(self) -> TimeInfo:
+        """Retrieve the current local system time with timezone information.
+
+        IPC method: system.time
+        Returns: TimeInfo(timestamp_secs, timestamp_nanos, offset_seconds, timezone_name, iso8601)
+        """
+        data = await self._ipc.request("system.time")
+        return TimeInfo.model_validate(data)
+
     # ------------------------------------------------------------------
     # Audio subsystem endpoints (Phase 6 Iteration 0)
     # ------------------------------------------------------------------
@@ -224,12 +234,17 @@ class EngineClient:
         Args:
             clear: Whether to clear the buffer after reading (default True).
         """
-        data = await self._ipc.request("audio.get_speech", {"clear": clear})
+        data = await self._ipc.request(
+            "audio.get_speech",
+            {"clear": clear},
+            timeout_ms=60000,
+        )
         return AudioSpeechResponse.model_validate(data)
 
     async def play_audio_buffer(
         self,
-        samples: list[float],
+        samples: list[float] | None = None,
+        audio_data: bytes | None = None,
         device_name: str | None = None,
         sample_rate: int = 24000,
         channels: int = 1,
@@ -237,14 +252,30 @@ class EngineClient:
         """Enqueue PCM audio samples for asynchronous playback.
 
         IPC method: audio.play_buffer
+
+        Args:
+            samples: Float samples (-1.0 to 1.0). Deprecated; use audio_data instead.
+            audio_data: Raw PCM16 little-endian bytes (preferred, more efficient).
+            device_name: Optional output device name.
+            sample_rate: Sample rate in Hz.
+            channels: Number of channels.
         """
+        import base64
+
         params: dict[str, object] = {
-            "samples": samples,
             "sample_rate": sample_rate,
             "channels": channels,
         }
         if device_name is not None:
             params["device_name"] = device_name
+
+        if audio_data is not None:
+            params["audio_data_base64"] = base64.b64encode(audio_data).decode("ascii")
+        elif samples is not None:
+            params["samples"] = samples
+        else:
+            raise ValueError("Either samples or audio_data must be provided")
+
         data = await self._ipc.request("audio.play_buffer", params)
         return AudioOperationResponse.model_validate(data)
 

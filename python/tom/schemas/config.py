@@ -115,6 +115,12 @@ class VoiceConfig(BaseModel):
     sample_rate: int = Field(default=16000, description="Audio sample rate in Hz")
     playback_device: str | None = Field(default=None, description="Audio output device")
     capture_device: str | None = Field(default=None, description="Microphone input device")
+    energy_threshold: float = Field(
+        default=0.003,
+        ge=0.0001,
+        le=1.0,
+        description="Microphone energy VAD threshold",
+    )
 
 
 class ToolsConfig(BaseModel):

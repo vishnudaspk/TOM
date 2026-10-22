@@ -21,7 +21,7 @@ from tom.schemas.voice import (
     VoicePipelineState,
     VoiceTurnResult,
 )
-from tom.telemetry.logging import get_logger
+from tom.telemetry.logging import get_logger, VoiceEventNames
 from tom.voice.formatter import SpeechFormatter
 
 if TYPE_CHECKING:
@@ -363,10 +363,21 @@ class VoicePipelineManager:
 
             # 3. PROCESSING — STT + Agent/LLM + Formatting
             self.transition_to(VoicePipelineState.PROCESSING)
+            logger.info(
+                VoiceEventNames.STT_STARTED,
+                turn_id=turn_id,
+            )
 
             trans_req = TranscriptionRequest(samples=samples, sample_rate=sr)
             trans_res = await self._stt.transcribe(trans_req)
             transcript = trans_res.text.strip()
+
+            logger.info(
+                VoiceEventNames.STT_COMPLETED,
+                turn_id=turn_id,
+                transcript_length=len(transcript),
+                transcript_empty=not transcript,
+            )
 
             if self._interrupted or self._current_turn_id != turn_id:
                 return VoiceTurnResult(
@@ -377,6 +388,10 @@ class VoicePipelineManager:
 
             # Empty transcription text
             if not transcript:
+                logger.info(
+                    VoiceEventNames.STT_EMPTY,
+                    turn_id=turn_id,
+                )
                 self.transition_to(VoicePipelineState.IDLE)
                 return VoiceTurnResult(
                     transcript="",
@@ -384,8 +399,19 @@ class VoicePipelineManager:
                 )
 
             # Agent / LLM invocation
+            logger.info(
+                VoiceEventNames.LLM_STARTED,
+                turn_id=turn_id,
+                transcript=transcript,
+            )
             response_text = await self._execute_agent(transcript)
             raw_response = response_text.strip()
+
+            logger.info(
+                VoiceEventNames.LLM_COMPLETED,
+                turn_id=turn_id,
+                response_length=len(raw_response),
+            )
 
             if self._interrupted or self._current_turn_id != turn_id:
                 return VoiceTurnResult(
@@ -396,6 +422,10 @@ class VoicePipelineManager:
                 )
 
             if not raw_response:
+                logger.info(
+                    VoiceEventNames.LLM_EMPTY,
+                    turn_id=turn_id,
+                )
                 self.transition_to(VoicePipelineState.IDLE)
                 return VoiceTurnResult(
                     transcript=transcript,
@@ -417,9 +447,22 @@ class VoicePipelineManager:
 
             # 4. SPEAKING — TTS Synthesis + Audio Playback
             self.transition_to(VoicePipelineState.SPEAKING)
+            logger.info(
+                VoiceEventNames.TTS_STARTED,
+                turn_id=turn_id,
+                formatted_text=formatted_text[:100],  # truncate for logging
+            )
 
             synth_req = SynthesisRequest(text=formatted_text)
             synth_res = await self._tts.synthesize(synth_req)
+
+            logger.info(
+                VoiceEventNames.TTS_COMPLETED,
+                turn_id=turn_id,
+                sample_count=len(synth_res.samples) if synth_res.samples else 0,
+                sample_rate=synth_res.sample_rate,
+                channels=synth_res.channels,
+            )
 
             # Stale task / barge-in check before playback
             if self._interrupted or self._current_turn_id != turn_id:
@@ -432,10 +475,19 @@ class VoicePipelineManager:
                 )
 
             # Playback through EngineClient
+            logger.info(
+                VoiceEventNames.PLAYBACK_SUBMITTED,
+                turn_id=turn_id,
+                sample_count=len(synth_res.samples) if synth_res.samples else 0,
+            )
             await self._engine.play_audio_buffer(
-                samples=synth_res.samples,
+                audio_data=synth_res.audio_data,
                 sample_rate=synth_res.sample_rate,
                 channels=synth_res.channels,
+            )
+            logger.info(
+                VoiceEventNames.PLAYBACK_COMPLETED,
+                turn_id=turn_id,
             )
 
             # Stale task / barge-in check after playback

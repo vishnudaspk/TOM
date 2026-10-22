@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info};
 
 use crate::audio::{
     get_audio_devices, AudioBuffer, AudioCaptureConfig, AudioCaptureController, AudioError,
@@ -11,6 +12,17 @@ use crate::audio::{
 
 /// Default capacity for the capture speech ring buffer (30 seconds @ 16 kHz mono).
 pub const DEFAULT_CAPTURE_BUFFER_CAPACITY: usize = 16_000 * 30;
+
+/// Sanitize a slice of f32 audio samples by replacing non-finite values (NaN, infinity)
+/// with 0.0. This prevents JSON serialization from producing `null` values that would
+/// break downstream Pydantic validation.
+fn sanitize_samples(samples: &mut [f32]) {
+    for sample in samples.iter_mut() {
+        if !sample.is_finite() {
+            *sample = 0.0;
+        }
+    }
+}
 
 /// High-level status of the engine's audio subsystem.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -28,6 +40,7 @@ pub struct AudioManager {
     capture_cancel: Mutex<Option<CancellationToken>>,
     capture_buffer: Arc<Mutex<AudioBuffer>>,
     capture_config: Mutex<AudioCaptureConfig>,
+    total_captured_samples: Arc<AtomicUsize>,
 
     playback_controller: Mutex<Option<AudioPlaybackController>>,
     playback_sender: Mutex<Option<mpsc::Sender<Vec<f32>>>>,
@@ -53,6 +66,7 @@ impl AudioManager {
                 DEFAULT_CAPTURE_BUFFER_CAPACITY,
             ))),
             capture_config: Mutex::new(AudioCaptureConfig::default()),
+            total_captured_samples: Arc::new(AtomicUsize::new(0)),
 
             playback_controller: Mutex::new(None),
             playback_sender: Mutex::new(None),
@@ -99,47 +113,51 @@ impl AudioManager {
             .unwrap_or(false);
 
         let cap_cfg = self.capture_config.lock().unwrap();
-        let samples_count = self.capture_buffer.lock().unwrap().len();
+        let total_samples = self.total_captured_samples.load(Ordering::Relaxed);
 
         AudioStatus {
             capture_active: is_capturing,
             playback_active: is_playing,
             capture_sample_rate: cap_cfg.sample_rate,
             capture_channels: cap_cfg.channels,
-            captured_samples: samples_count,
+            captured_samples: total_samples,
         }
     }
 
     /// Starts audio capture into the internal ring buffer.
-    /// Falls back to mock capture if no hardware device is available.
+    ///
+    /// **No silent fallback to mock.** If the hardware device cannot be opened
+    /// with a supported configuration, the error is returned to the caller.
+    /// Mock capture is only used when explicitly requested via
+    /// `AudioCaptureController::create_mock_capture()` (tests / CI).
     pub fn start_capture(&self, config: AudioCaptureConfig) -> Result<(), AudioError> {
         // Stop any currently running capture session first
         let _ = self.stop_capture();
 
-        // Clear existing audio buffer for fresh utterance
+        // Clear existing audio buffer and reset cumulative sample counter for fresh session
         self.capture_buffer.lock().unwrap().clear();
+        self.total_captured_samples.store(0, Ordering::Relaxed);
 
         let cancel = CancellationToken::new();
 
-        // Attempt live hardware capture first, fall back to mock stream if device unavailable
+        // Attempt live hardware capture. On failure, return the error — NO silent fallback.
         let (controller, mut rx) =
-            match AudioCaptureController::start_live(config.clone(), cancel.clone()) {
-                Ok(res) => {
-                    info!("Live hardware audio capture started successfully");
-                    res
-                }
-                Err(e) => {
-                    warn!(
-                    "Physical audio input device unavailable ({e}); falling back to mock capture"
+            AudioCaptureController::start_live(config.clone(), cancel.clone()).map_err(|e| {
+                error!(
+                    "Failed to start live audio capture: {e}. Device: {:?}, requested: {}Hz {}ch",
+                    config.device_name, config.sample_rate, config.channels
                 );
-                    AudioCaptureController::create_mock_capture(config.clone(), cancel.clone())
-                }
-            };
+                e
+            })?;
+
+        info!("Live hardware audio capture started successfully");
 
         // Spawn background worker to drain incoming PCM frames into the ring buffer
         let buf_clone = Arc::clone(&self.capture_buffer);
+        let total_samples = Arc::clone(&self.total_captured_samples);
         tokio::spawn(async move {
             while let Some(chunk) = rx.recv().await {
+                total_samples.fetch_add(chunk.len(), Ordering::Relaxed);
                 let mut buf = buf_clone.lock().unwrap();
                 buf.push_samples(&chunk);
             }
@@ -153,16 +171,21 @@ impl AudioManager {
         Ok(())
     }
 
-    /// Stops any active audio capture session and returns the count of buffered samples.
+    /// Stops any active audio capture session and returns the total count of captured samples.
     pub fn stop_capture(&self) -> Result<usize, AudioError> {
         if let Some(cancel) = self.capture_cancel.lock().unwrap().take() {
             cancel.cancel();
         }
         *self.capture_controller.lock().unwrap() = None;
 
-        let samples_count = self.capture_buffer.lock().unwrap().len();
-        debug!(captured_samples = samples_count, "Audio capture stopped");
-        Ok(samples_count)
+        let total_samples = self.total_captured_samples.load(Ordering::Relaxed);
+        let buffered_remaining = self.capture_buffer.lock().unwrap().len();
+        debug!(
+            captured_samples = total_samples,
+            buffered_remaining = buffered_remaining,
+            "Audio capture stopped"
+        );
+        Ok(total_samples)
     }
 
     /// Retrieves captured speech samples from the buffer.
@@ -172,7 +195,7 @@ impl AudioManager {
         let channels = self.capture_config.lock().unwrap().channels;
 
         let mut buf = self.capture_buffer.lock().unwrap();
-        let samples = if clear {
+        let mut samples = if clear {
             let len = buf.len();
             buf.pop_samples(len)
         } else {
@@ -180,11 +203,15 @@ impl AudioManager {
             buf.peek_samples(len)
         };
 
+        // Sanitize samples to prevent NaN/infinity from becoming JSON null
+        sanitize_samples(&mut samples);
+
         (samples, sample_rate, channels)
     }
 
     /// Enqueues PCM samples for asynchronous audio playback.
-    /// Spawns or reuses playback controller; falls back to mock playback if no device is found.
+    /// Spawns or reuses playback controller; returns error if physical device cannot be initialized.
+    /// Mock playback is only available via explicit test paths.
     pub async fn play_buffer(
         &self,
         samples: Vec<f32>,
@@ -207,21 +234,16 @@ impl AudioManager {
 
             if needs_init {
                 let cancel = CancellationToken::new();
-                let (controller, tx) = match AudioPlaybackController::start_live(
-                    config.clone(),
-                    cancel.clone(),
-                ) {
-                    Ok(res) => {
-                        info!("Live hardware audio playback stream started");
-                        res
-                    }
-                    Err(e) => {
-                        warn!("Physical audio output device unavailable ({e}); falling back to mock playback sink");
-                        let (ctrl, tx, _count) =
-                            AudioPlaybackController::create_mock_playback(cancel.clone());
-                        (ctrl, tx)
-                    }
-                };
+                let (controller, tx) = AudioPlaybackController::start_live(config.clone(), cancel.clone())
+                    .map_err(|e| {
+                        error!(
+                            "Failed to start live audio playback: {e}. Device: {:?}, requested: {}Hz {}ch",
+                            config.device_name, config.sample_rate, config.channels
+                        );
+                        e
+                    })?;
+
+                info!("Live hardware audio playback stream started");
 
                 *self.playback_config.lock().unwrap() = config;
                 *self.playback_cancel.lock().unwrap() = Some(cancel);
@@ -252,5 +274,39 @@ impl AudioManager {
         *self.playback_controller.lock().unwrap() = None;
         debug!("Audio playback stopped immediately (barge-in)");
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sanitize_samples_replaces_nan() {
+        let mut samples = vec![1.0, f32::NAN, 3.0];
+        sanitize_samples(&mut samples);
+        assert_eq!(samples, vec![1.0, 0.0, 3.0]);
+    }
+
+    #[test]
+    fn test_sanitize_samples_replaces_infinity() {
+        let mut samples = vec![1.0, f32::INFINITY, -f32::INFINITY, 4.0];
+        sanitize_samples(&mut samples);
+        assert_eq!(samples, vec![1.0, 0.0, 0.0, 4.0]);
+    }
+
+    #[test]
+    fn test_sanitize_samples_preserves_valid() {
+        let mut samples = vec![-1.0, 0.0, 0.5, -0.5];
+        let original = samples.clone();
+        sanitize_samples(&mut samples);
+        assert_eq!(samples, original);
+    }
+
+    #[test]
+    fn test_sanitize_samples_empty() {
+        let mut samples: Vec<f32> = vec![];
+        sanitize_samples(&mut samples);
+        assert!(samples.is_empty());
     }
 }

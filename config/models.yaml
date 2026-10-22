@@ -24,7 +24,7 @@ stt:
 
 tts:
   provider: "local"
-  model_name: "hexgrad/Kokoro-82M"
+  model_name: "C:/Users/vishnuu/Projects/TOM/models/kokoro-v0_19.onnx"
   quantization: "fp32"
   vram_required_mb: 0
   context_length: 512

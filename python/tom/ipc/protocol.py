@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 PROTOCOL_VERSION: int = 1
 PIPE_NAME: str = r"\\.\pipe\tom-engine"
-MAX_FRAME_BYTES: int = 1_048_576  # 1 MB
+MAX_FRAME_BYTES: int = 4_194_304  # 4 MB
 
 
 class ErrorCode(StrEnum):
@@ -365,3 +365,36 @@ class AudioOperationResponse(BaseModel):
     message: str | None = None
     captured_samples: int | None = None
     samples_played: int | None = None
+
+
+# ----------------------------------------------------------------------
+# System Time Wire Schema
+# ----------------------------------------------------------------------
+
+
+class TimeInfo(BaseModel):
+    """System time information with timezone details.
+
+    Wire: {"timestamp_secs": u64, "timestamp_nanos": u32, "offset_seconds": i32,
+           "timezone_name": str, "iso8601": str}
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    timestamp_secs: int
+    timestamp_nanos: int
+    offset_seconds: int
+    timezone_name: str
+    iso8601: str
+
+    @property
+    def local_time_str(self) -> str:
+        """Format local time as 'H:MM AM/PM' (e.g., '10:24 PM')."""
+        try:
+            from datetime import datetime, timezone, timedelta
+            dt = datetime.fromtimestamp(self.timestamp_secs, tz=timezone.utc)
+            if self.offset_seconds != 0:
+                dt = dt.astimezone(timezone(timedelta(seconds=self.offset_seconds)))
+            return dt.strftime("%I:%M %p").lstrip("0")
+        except Exception:
+            return "unknown time"

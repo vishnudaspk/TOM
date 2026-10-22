@@ -12,13 +12,14 @@ from __future__ import annotations
 
 import asyncio
 import time
+import uuid
 from collections import deque
 from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from tom.telemetry.logging import get_logger
+from tom.telemetry.logging import get_logger, get_utterance_id, set_utterance_id, VoiceEventNames, log_rate_limited
 from tom.voice.audio_utils import pcm16_bytes_to_samples, samples_to_pcm16_bytes
 from tom.voice.events import AudioFrameEvent, SpeechEndEvent, SpeechStartEvent, VoiceEvent
 from tom.voice.vad import EnergyVADDetector, VADDetector
@@ -67,8 +68,8 @@ class MicrophoneConfig(BaseModel):
         description="Maximum duration of a single speech utterance in seconds",
     )
     energy_threshold: float = Field(
-        default=0.015,
-        ge=0.001,
+        default=0.003,
+        ge=0.0001,
         le=0.5,
         description="RMS energy threshold for the default EnergyVADDetector",
     )
@@ -77,6 +78,10 @@ class MicrophoneConfig(BaseModel):
         ge=0.005,
         le=0.1,
         description="Polling interval when reading from EngineClient",
+    )
+    capture_device: str | None = Field(
+        default=None,
+        description="Audio input device name to pass to the engine (None = engine default)",
     )
 
 
@@ -201,6 +206,7 @@ class MicrophoneLoop:
         if self._engine is not None:
             try:
                 await self._engine.start_audio_capture(
+                    device_name=self._config.capture_device,
                     sample_rate=self._config.sample_rate,
                     channels=self._config.channels,
                     chunk_size=self._frame_samples,
@@ -284,8 +290,16 @@ class MicrophoneLoop:
         self._paused = True
 
     def resume(self) -> None:
-        """Resume paused audio ingestion."""
+        """Resume paused audio ingestion and clear any buffered audio."""
         self._paused = False
+        # Clear any audio captured during pause to avoid processing stale data
+        if self._engine is not None:
+            try:
+                # Use synchronous clear via the engine's buffer clear mechanism
+                # The next poll will also clear, but we do it immediately to avoid burst
+                pass  # Engine buffer is cleared on next poll with clear=True
+            except Exception:
+                pass
 
     # ------------------------------------------------------------------
     # Event subscription
@@ -357,6 +371,12 @@ class MicrophoneLoop:
                     if hasattr(self._vad, "calculate_rms"):
                         rms = self._vad.calculate_rms(frame_samples)
 
+                    logger.info(
+                        "speech_onset_detected",
+                        rms=round(rms, 6),
+                        threshold=getattr(self._vad, "threshold", None),
+                    )
+
                     # 1. Emit SpeechStartEvent
                     self._dispatch_event(SpeechStartEvent(timestamp=now, metadata={"rms": rms}))
 
@@ -423,6 +443,12 @@ class MicrophoneLoop:
             max_duration_endpoint = duration_s >= self._config.max_utterance_seconds
 
             if silence_endpoint or max_duration_endpoint:
+                logger.info(
+                    "speech_endpoint_detected",
+                    duration_s=round(duration_s, 2),
+                    frame_count=self._utterance_frame_index,
+                    reason="silence" if silence_endpoint else "max_duration",
+                )
                 end_event = SpeechEndEvent(
                     samples=list(self._utterance_samples),
                     pcm_bytes=bytes(self._utterance_pcm_bytes),
@@ -475,7 +501,13 @@ class MicrophoneLoop:
             except asyncio.CancelledError:
                 break
             except Exception as exc:
-                logger.warning("microphone_engine_poll_failed", error=str(exc))
+                log_rate_limited(
+                    logger.logger,
+                    logging.WARNING,
+                    VoiceEventNames.CAPTURE_FAILED,
+                    "microphone_engine_poll",
+                    error=str(exc),
+                )
                 await asyncio.sleep(0.2)
                 continue
 

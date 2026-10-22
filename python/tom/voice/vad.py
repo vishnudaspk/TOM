@@ -28,18 +28,18 @@ class EnergyVADDetector(VADDetector):
 
     def __init__(
         self,
-        threshold: float = 0.015,
+        threshold: float = 0.003,
         adaptive: bool = True,
     ) -> None:
         """Initialize the energy VAD detector.
 
         Args:
-            threshold: RMS energy threshold for speech (0.015 ≈ -36 dBFS).
+            threshold: RMS energy threshold for speech (0.003 ≈ -50 dBFS).
             adaptive: Whether to track the noise floor dynamically during quiet periods.
         """
         self._threshold = threshold
         self._adaptive = adaptive
-        self._noise_floor = 0.005
+        self._noise_floor = min(0.001, threshold * 0.5)
 
     @property
     def threshold(self) -> float:
@@ -63,13 +63,15 @@ class EnergyVADDetector(VADDetector):
         is_active = rms > limit
 
         if not is_active and self._adaptive:
-            # Smoothly adapt noise floor during non-speech periods
-            self._noise_floor = max(0.0001, min(0.05, 0.95 * self._noise_floor + 0.05 * rms))
+            # Smoothly adapt noise floor during non-speech periods,
+            # but cap noise floor so that limit (noise_floor * 2.0) can never exceed threshold
+            max_floor = max(0.0005, self._threshold * 0.5)
+            self._noise_floor = max(0.0001, min(max_floor, 0.95 * self._noise_floor + 0.05 * rms))
 
         return is_active
 
     def reset(self) -> None:
-        self._noise_floor = 0.005
+        self._noise_floor = min(0.001, self._threshold * 0.5)
 
 
 class MockVADDetector(VADDetector):

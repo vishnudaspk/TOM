@@ -59,6 +59,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+import uuid
 from collections import deque
 from collections.abc import AsyncGenerator, Callable
 from contextlib import aclosing, suppress
@@ -67,7 +68,7 @@ from typing import TYPE_CHECKING, Any
 
 from tom.core.context import CancellationToken
 from tom.schemas.turn import ResponseAction, ResponseDecision, TurnContext, TurnStatus
-from tom.schemas.voice import VoicePipelineState
+from tom.schemas.voice import SynthesisRequest, VoicePipelineState
 from tom.telemetry.logging import get_logger
 from tom.voice.latency import (
     InteractionLatencyTracer,
@@ -94,6 +95,9 @@ if TYPE_CHECKING:
     from tom.voice.streaming_tts import StreamingTTSProvider
 
 logger = get_logger(__name__)
+
+# Import voice event names for structured logging
+from tom.telemetry.logging import VoiceEventNames, set_utterance_id, get_utterance_id
 
 # Sentence backpressure between the LLM producer and the 9.3 streamer. Bounded
 # so a fast model cannot outrun synthesis and grow memory without limit.
@@ -604,6 +608,16 @@ class TurnExecutor:
 # ---------------------------------------------------------------------------
 
 
+# Sentinel for default turn_arbitrator behavior (probe availability, fallback to VAD)
+class _DefaultArbiterSentinel:
+    """Private sentinel marking the default turn arbitration strategy."""
+    __slots__ = ()
+    def __repr__(self) -> str:
+        return "<DEFAULT_ARBITER>"
+
+_DEFAULT_ARBITER: _DefaultArbiterSentinel = _DefaultArbiterSentinel()
+
+
 class InteractionCore:
     """Persistent event-driven coordinator for the whole voice interaction.
 
@@ -628,7 +642,7 @@ class InteractionCore:
         include_context_in_prompt: bool = True,
         tracer_factory: Callable[[int | None], InteractionLatencyTracer] | None = None,
         latency_history: int = 8,
-        turn_arbitrator: TurnArbiter | None = None,
+        turn_arbitrator: TurnArbiter | None | _DefaultArbiterSentinel = _DEFAULT_ARBITER,
     ) -> None:
         self._mic = mic_loop
         self._engine = engine
@@ -636,11 +650,13 @@ class InteractionCore:
         self._policy = policy
         self._epochs = epochs or TurnEpochGuard()
         self._stops = PlaybackStopGuard(engine)
-        self._turn_arbitrator = (
-            turn_arbitrator
-            if turn_arbitrator is not None
-            else SmartTurnV3Arbiter()
-        )
+        self._orchestrator = orchestrator
+        self._tts = tts
+        if turn_arbitrator is _DEFAULT_ARBITER:
+            arbiter = SmartTurnV3Arbiter()
+            self._turn_arbitrator = arbiter if arbiter.is_available else None
+        else:
+            self._turn_arbitrator = turn_arbitrator
 
         # Decision 044: the closed Phase 6 manager stays the single state
         # machine. Reuse the caller's instance when one exists.
@@ -773,6 +789,10 @@ class InteractionCore:
             if not self._mic.is_running:
                 await self._mic.start()
             self._transition(VoicePipelineState.LISTENING)
+
+            # Run startup greeting once per voice session
+            await self._run_startup_greeting()
+
             async for event in subscription:
                 if self._stopping:
                     break
@@ -828,6 +848,70 @@ class InteractionCore:
         self._running = False
         self._stopping = False
 
+    async def _run_startup_greeting(self) -> None:
+        """Run the proactive startup greeting: get time, generate greeting via LLM, synthesize and play."""
+        logger.info(VoiceEventNames.STARTUP_GREETING_STARTED)
+
+        try:
+            # 1. Get current time from Rust engine
+            logger.info(VoiceEventNames.STARTUP_GREETING_TIME_RECEIVED)
+            time_info = await self._engine.get_system_time()
+            time_str = time_info.local_time_str
+
+            # 2. Generate greeting via LLM
+            logger.info(VoiceEventNames.STARTUP_GREETING_LLM_STARTED)
+            greeting_prompt = (
+                f"The current local time is {time_str}. "
+                f"Generate a brief, friendly spoken greeting for a voice assistant startup. "
+                f"Include the exact time naturally in the greeting. "
+                f"Keep it under 20 words. Be conversational and warm."
+            )
+            greeting_chunks = []
+            async for chunk in self._orchestrator.stream(greeting_prompt):
+                greeting_chunks.append(chunk)
+            greeting_text = "".join(greeting_chunks)
+
+            if not greeting_text or not greeting_text.strip():
+                logger.warning("startup_greeting_empty_llm_response")
+                return
+
+            logger.info(
+                VoiceEventNames.STARTUP_GREETING_LLM_COMPLETED,
+                greeting_length=len(greeting_text),
+            )
+
+            # 3. Synthesize and play via TTS
+            logger.info(VoiceEventNames.STARTUP_GREETING_TTS_STARTED)
+            synth_req = SynthesisRequest(text=greeting_text.strip())
+            synth_res = await self._tts.synthesize(synth_req)
+
+            if not synth_res.samples:
+                logger.warning("startup_greeting_empty_tts_output")
+                return
+
+            logger.info(
+                VoiceEventNames.STARTUP_GREETING_TTS_COMPLETED,
+                sample_count=len(synth_res.samples),
+                sample_rate=synth_res.sample_rate,
+                channels=synth_res.channels,
+            )
+
+            # 4. Play through engine
+            logger.info(VoiceEventNames.STARTUP_GREETING_PLAYBACK_STARTED)
+            await self._engine.play_audio_buffer(
+                audio_data=synth_res.audio_data,
+                sample_rate=synth_res.sample_rate,
+                channels=synth_res.channels,
+            )
+            logger.info(VoiceEventNames.STARTUP_GREETING_PLAYBACK_COMPLETED)
+
+        except Exception as exc:
+            logger.error(
+                VoiceEventNames.STARTUP_GREETING_FAILED,
+                error=str(exc),
+            )
+            # Don't re-raise - startup greeting failure shouldn't block the voice session
+
     async def handle_barge_in(self) -> None:
         """Halt playback, invalidate the epoch, and hand control back to LISTENING.
 
@@ -870,6 +954,14 @@ class InteractionCore:
             self._active_turn = None
             self._active_token = None
             self._active_progress = None
+            self._smart_turn_candidate = None
+
+            logger.warning(
+                VoiceEventNames.PIPELINE_CANCELLED,
+                reason="barge_in",
+                epoch=epoch,
+                barge_in_count=self._barge_in_count,
+            )
 
             # 5. Partial assistant content is already retained by TurnExecutor;
             #    this closes any turn that never reached it.
@@ -878,6 +970,8 @@ class InteractionCore:
             # 6. Back to LISTENING for the new speech stream.
             self._transition(VoicePipelineState.INTERRUPTED, epoch)
             self._transition(VoicePipelineState.LISTENING, epoch)
+            # Resume microphone after barge-in
+            self._mic.resume()
         finally:
             self._barging_in = False
 
@@ -919,17 +1013,21 @@ class InteractionCore:
         try:
             decision = await self._turn_arbitrator.analyze(candidate)
             logger.info(
-                "smart_turn_arbitration",
+                VoiceEventNames.TURN_DECISION,
                 epoch=self._epochs.current,
                 decision=decision.value,
+                candidate_duration_s=len(candidate) / 16000 / 2,  # 16-bit mono
             )
         except Exception as exc:
             logger.warning(
-                "smart_turn_arbitration_failed",
+                "smart_turn_arbitration_failed_fallback_to_vad",
                 epoch=self._epochs.current,
                 error=str(exc),
+                fallback="vad_speech_end",
             )
-            decision = TurnArbitrationDecision.COMPLETE
+            self._smart_turn_candidate = None
+            await self._begin_turn(candidate)
+            return
 
         if decision is TurnArbitrationDecision.CONTINUING:
             self._smart_turn_candidate = candidate
@@ -956,6 +1054,16 @@ class InteractionCore:
         self._tracer.mark(LatencyStage.SPEECH_END)
         self._transition(VoicePipelineState.PROCESSING, epoch)
 
+        # Generate utterance ID for correlation
+        utterance_id = f"turn-{epoch}-{uuid.uuid4().hex[:8]}"
+        set_utterance_id(utterance_id)
+
+        logger.info(
+            VoiceEventNames.SESSION_STARTED,
+            epoch=epoch,
+            utterance_id=utterance_id,
+        )
+
         task = asyncio.create_task(
             self._run_turn(audio, epoch, token, progress, self._tracer),
             name=f"tom.interaction.turn.{epoch}",
@@ -974,6 +1082,9 @@ class InteractionCore:
         def _on_speaking(active_epoch: int) -> None:
             self._playback_active = True
             self._transition(VoicePipelineState.SPEAKING, active_epoch)
+            # Pause microphone during playback to avoid audio feedback loop
+            if self._epochs.is_current(active_epoch):
+                self._mic.pause()
 
         return await self._executor.execute(
             audio,
@@ -989,7 +1100,11 @@ class InteractionCore:
         if not task.cancelled():
             exc = task.exception()
             if exc is not None:
-                logger.warning("interaction_turn_task_failed", error=str(exc))
+                logger.warning(
+                    VoiceEventNames.PIPELINE_CANCELLED,
+                    error=str(exc),
+                    epoch=self._epochs.current,
+                )
         if self._active_turn is task:
             self._active_turn = None
             self._active_token = None
@@ -1005,6 +1120,8 @@ class InteractionCore:
             return
         self._transition(VoicePipelineState.IDLE)
         self._transition(VoicePipelineState.LISTENING)
+        # Resume microphone after turn completes
+        self._mic.resume()
 
     # ------------------------------------------------------------------
     # Internals
@@ -1024,12 +1141,19 @@ class InteractionCore:
             return
         if self._pipeline.state is target:
             return
+        old_state = self._pipeline.state
         try:
             self._pipeline.transition_to(target)
+            logger.info(
+                "voice.pipeline.state_changed",
+                old_state=str(old_state),
+                new_state=str(target),
+                epoch=epoch,
+            )
         except InvalidStateTransitionError as exc:
             logger.debug(
                 "interaction_transition_skipped",
-                current=str(self._pipeline.state),
+                current=str(old_state),
                 target=str(target),
                 reason=str(exc),
             )
