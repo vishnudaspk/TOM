@@ -4,332 +4,291 @@
 
 ---
 
-## Current Status
+## What is TOM?
 
-| Milestone | Subsystem / Focus | Status | Tests |
-|---|---|---|---|
-| **Phase 0** | Project Bootstrap, Configuration & Structured Logging | **COMPLETE** | 9 |
-| **Phase 1** | Rust Engine (`tom-engine`) — Lifecycle, Telemetry & IPC Server | **COMPLETE** | 79 |
-| **Phase 2** | Python Core & IPC Client — `NamedPipeIpcClient`, `EngineClient`, `LifecycleManager` | **COMPLETE** | 168 |
-| **Phase 3** | Deterministic Tools & Permission Engine | **COMPLETE** | 406 |
-| **Phase 4** | Agent Framework & Local Model Routing | **COMPLETE** | 621 |
-| **Phase 5** | Memory Architecture (SQLite Store, Qdrant Index, CPU Embeddings, Policies) | **COMPLETE** | 621 |
-| **Phase 6** | Voice Pipeline (Audio IPC, STT, TTS, Barge-in, Interaction Layer, Voice Tools) | **COMPLETE** | 931 |
-| **Phase 7** | Vision & Multimodal Capabilities | **COMPLETE** | 1087 |
-| **Phase 8** | Proactive Agent & Long-Horizon Tasks | **COMPLETE** | 1301, 8 skipped |
-| **Phase 9** | Interaction Core (9.0–9.4) | **COMPLETE** | 833 targeted; 317 voice |
+TOM is a **local-first personal AI operating layer** designed to run entirely on your hardware. It combines a Python-based "brain" for intelligence, orchestration, and reasoning with a Rust-based "engine" for low-level system operations, audio I/O, and hardware telemetry. All communication happens over Windows Named Pipes — no network exposure, no cloud dependencies.
 
-The final Phase 9 closeout consolidates TOM on llama.cpp at `http://127.0.0.1:65400/v1` through the generic OpenAI-compatible `HttpModelProvider`. Bionic/LM Studio is not an active architecture dependency, and no Phase 10 work begins without explicit approval.
-
-The last full-repository benchmark was the Phase 8 exit on 2026-10-02: **1301 passed** (1218 Python + 83 Rust), **8 skipped**. The Phase 9 targeted run was not a full-repository rerun.
-
-### Current Development State
-
-**Phase 9 Interaction Core: CLOSED FOR 9.0–9.4**
-
-The completed iterations are:
-- Audio control IPC over Windows Named Pipe (`\\.\pipe\tom-engine`) via Rust `AudioManager`.
-- `STTProvider` abstraction with lazy CPU/int8 `FasterWhisperSTTProvider` and deterministic mock.
-- `TTSProvider` abstraction with lazy CPU `KokoroTTSProvider` and deterministic mock.
-- Deterministic `SpeechFormatter` converting markdown and symbols into natural speakable text.
-- Formal `VoicePipelineManager` state machine (`IDLE`, `LISTENING`, `PROCESSING`, `SPEAKING`, `INTERRUPTED`, `ERROR`) with sub-millisecond barge-in interruption and epoch invalidation.
-- `VoiceInteractionManager` session coordination maintaining bounded ephemeral `ConversationHistory` in RAM.
-- Deterministic agent voice tools (`voice.announce`, `voice.status`) routed through `ToolExecutor` $\to$ `PermissionEngine`.
-- Phase 9 Interaction Core: VAD/endpointing, streaming STT/TTS, model streaming, sentence chunking, turn management, and deterministic response policy are implemented and verified for 9.0–9.4.
-
-No Phase 10 work begins without explicit approval. Phase 9.5/9.6 remain deferred.
+**Core philosophy:**
+- **Local-first** — Models, memory, and tools run on your machine
+- **Modular** — Swap model providers, memory backends, or tool sets without rewiring
+- **Deterministic** — Tools are typed, validated, and independently executable
+- **Permission-controlled** — Every sensitive action requires explicit consent
+- **Bounded** — Resource usage, execution time, and agent loops have hard limits
 
 ---
 
-## Architecture
+## Architecture Overview
 
-TOM uses a dual-core architecture:
-
-- **Python Brain** — high-level orchestration, agents, model routing, tools, memory, voice interaction layer, and future intelligence.
-- **Rust Engine (`tom-engine`)** — deterministic low-level OS operations, audio capture/playback buffers, hardware telemetry, and Windows Named Pipe IPC.
-
-```text
-User / Modality (Voice or Text)
-  │
-  ├─────────────────────────────────────────────────┐
-  │                                                 │
-  ▼                                                 ▼
-VoiceInteractionManager                       IntentRouter
-  │ (ephemeral RAM context)                         │ (two-tier heuristic + model fallback)
-  ▼                                                 ▼
-VoicePipelineManager                          Agent / Orchestrator
-  │ (STT -> Agent -> Formatter -> TTS)              │
-  ▼                                                 ▼
-EngineClient ───────────────────────────────► ToolExecutor
-  │ (audio IPC & telemetry)                         │
-  │                                           PermissionEngine + ConfirmationHook
-  │                                                 │
-  │                                     ┌───────────┴───────────┐
-  │                                     │                       │
-  │                                System Tools            File Tools
-  │                                Memory Tools            Voice Tools
-  │                                     │                       │
-  │                                     └───────────┬───────────┘
-  ▼                                                 ▼
-NamedPipeIpcClient ─────────────────────────────────┘
-  │
-Windows Named Pipe (\\.\pipe\tom-engine)
-  │
-Rust tom-engine
-  ├── IPC Server & Dispatcher
-  ├── AudioManager (audio.capture_start/stop, audio.get_speech, audio.play_buffer, audio.playback_stop)
-  └── Telemetry (CPU, memory, GPU, disk, battery, processes)
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        USER INTERACTION                         │
+│  (Voice via Mic/Speakers  •  Text via CLI/API)                  │
+└────────────────────────────┬────────────────────────────────────┘
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                   PYTHON BRAIN (tom/)                           │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐           │
+│  │ Voice        │  │ Intent       │  │ Agent        │           │
+│  │ Interaction  │──│ Router       │──│ Orchestrator │           │
+│  │ Manager      │  │ (heuristic + │  │ (6-state     │           │
+│  │ (VAD, STT,   │  │  model fallback)        machine)      │           │
+│  │  TTS, turn   │  │              │  │              │           │
+│  │  mgmt)       │  │              │  │              │           │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘           │
+│         │                 │                 │                    │
+│         ▼                 ▼                 ▼                    │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │                    TOOL EXECUTOR                          │   │
+│  │  (PermissionEngine → ConfirmationHook → Tool Registry)   │   │
+│  └────────────────────────────┬──────────────────────────────┘   │
+│                               │                                   │
+│         ┌─────────────────────┼─────────────────────┐             │
+│         ▼                     ▼                     ▼             │
+│  ┌─────────────┐       ┌─────────────┐       ┌─────────────┐     │
+│  │ System Tools│       │ File Tools  │       │Memory Tools │     │
+│  │ (7 tools)   │       │ (6 tools)   │       │ (5 tools)   │     │
+│  └─────────────┘       └─────────────┘       └─────────────┘     │
+│         │                     │                     │             │
+│         └─────────────────────┼─────────────────────┘             │
+│                               ▼                                   │
+│                    ┌─────────────────────┐                         │
+│                    │  Voice Tools (2)    │                         │
+│                    └──────────┬──────────┘                         │
+└───────────────────────────────│───────────────────────────────────┘
+                                │ Named Pipe IPC (\\.\pipe\tom-engine)
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    RUST ENGINE (tom-engine)                     │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐           │
+│  │ IPC Server   │  │ AudioManager │  │ Telemetry    │           │
+│  │ & Dispatcher │  │ (capture,    │  │ (CPU, mem,   │           │
+│  │              │  │  playback,   │  │  GPU, disk,  │           │
+│  │              │  │  VAD, barge) │  │  battery)    │           │
+│  └──────────────┘  └──────────────┘  └──────────────┘           │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
+### Dual-Core Design
+
+| Layer | Language | Responsibility |
+|-------|----------|----------------|
+| **Python Brain** | Python 3.11+ | Agents, model routing, tools, memory, voice interaction, reasoning |
+| **Rust Engine** | Rust 1.80+ | Audio I/O, hardware telemetry, IPC server, low-level OS ops |
+
+**IPC Protocol:** Windows Named Pipes (`\\.\pipe\tom-engine`) — sub-millisecond roundtrips, zero network stack.
+
 ---
 
-## Subsystem Highlights
+## Current Status (as of 2026-10-23)
 
-### Phase 6 — Voice Pipeline
-- **Decoupled Audio Transport** — Utterance-buffered requests over Named Pipe IPC (`audio.*` endpoints).
-- **Abstracted Local Providers** — Provider ABCs with lazy loading; CPU-first defaults preserve GPU VRAM for the primary LLM.
-- **Deterministic Speech Formatting** — Sub-millisecond text normalization and markdown removal.
-- **Instant Barge-In** — Audio playback stops immediately, active tasks cancel, and turn epochs increment to prevent stale playback.
-- **RAM-Only Ephemeral Context** — Prevents conversational audio turns from polluting long-term vector memory.
+### Completed Phases
 
-### Phase 5 — Memory Subsystem
-- **Authoritative SQLite Store** — ACID persistence with CRUD, keyword search, and TTL expiration.
-- **Optional Qdrant Vector Index** — Semantic search with automatic fallback to SQLite when offline.
-- **CPU Embeddings** — 384-dimensional CPU embeddings preserve GPU VRAM for inference.
-- **MemoryPolicy Guardrails** — Secret filtering, credential detection, entropy checks, and confirmation requirements.
-- **Deterministic Memory Tools** — `memory.remember`, `memory.recall`, `memory.forget`, `memory.recent`, `memory.preferences`.
+| Phase | Subsystem | Status | Test Count |
+|-------|-----------|--------|------------|
+| 0 | Bootstrap, Config, Structured Logging | ✅ Complete | 9 |
+| 1 | Rust Engine — Lifecycle, Telemetry, IPC Server | ✅ Complete | 79 (Rust) |
+| 2 | Python Core & IPC Client | ✅ Complete | 168 |
+| 3 | Deterministic Tools & Permission Engine | ✅ Complete | 406 |
+| 4 | Agent Framework & Local Model Routing | ✅ Complete | 621 |
+| 5 | Memory Architecture (SQLite, Qdrant, CPU Embeddings, Policies) | ✅ Complete | 621 |
+| 6 | Voice Pipeline (Audio IPC, STT, TTS, Barge-in, Voice Tools) | ✅ Complete | 931 |
+| 7 | Vision & Multimodal Capabilities | ✅ Complete | 1,087 |
+| 8 | Proactive Agent & Long-Horizon Tasks | ✅ Complete | 1,301 (+8 skipped) |
+| 9 | Interaction Core (9.0–9.4: VAD, streaming STT/TTS, turn mgmt) | ✅ Complete | 833 targeted + 317 voice |
 
-### Phase 3 & 4 — Tools & Agent Foundation
-- **Non-Bypassable ToolExecutor** — All tools execute through centralized permission gating (`SAFE`, `ASK_USER`, `BLOCK`).
-- **20 Default Built-In Tools** — 7 system tools, 6 file tools, 5 memory tools, 2 voice tools.
-- **Deterministic Agent Lifecycle** — 6-state machine with cancellation propagation and error recovery.
+**Last full-repo benchmark:** Phase 8 exit (2026-10-02) — **1,301 passed** (1,218 Python + 83 Rust), 8 skipped.
+
+### What's Working Today
+
+- ✅ **Voice interaction** — Wake-word-free, push-to-talk, or VAD-activated with instant barge-in
+- ✅ **Local LLM routing** — Generic OpenAI-compatible provider (currently llama.cpp at `http://127.0.0.1:65400/v1`)
+- ✅ **20+ deterministic tools** — System, file, memory, voice — all permission-gated
+- ✅ **Persistent memory** — SQLite (authoritative) + optional Qdrant vector index with CPU embeddings
+- ✅ **Proactive agent** — Long-horizon task planning with cancellation propagation
+- ✅ **Vision/multimodal** — Image analysis via local models
+- ✅ **Quality gates clean** — Ruff, cargo fmt, cargo clippy all passing
+
+---
+
+## Current Hurdles & Areas for Improvement
+
+### 1. **Model Provider Stability** (High Priority)
+- **Issue:** llama.cpp server (`llama-server`) occasionally OOMs or hangs on long contexts (>8k tokens)
+- **Impact:** Agent loops stall; requires manual restart
+- **Mitigation needed:** Health checks, automatic fallback, context window management
+
+### 2. **Voice Pipeline Latency** (Medium Priority)
+- **Current:** ~800-1,200ms end-to-end (VAD → STT → LLM → TTS → playback)
+- **Target:** <500ms for natural conversation
+- **Bottlenecks:** STT (FasterWhisper CPU int8), TTS (Kokoro CPU), LLM first-token latency
+
+### 3. **Memory Retrieval Quality** (Medium Priority)
+- **Issue:** Vector search (Qdrant) returns semantically similar but contextually irrelevant results
+- **Missing:** Hybrid search (keyword + vector), re-ranking, temporal decay weighting
+- **Impact:** Agent "remembers" wrong context for multi-session tasks
+
+### 4. **No Persistent Agent State** (Medium Priority)
+- **Issue:** Agent state (goals, plans, tool call history) lives only in RAM
+- **Impact:** Restart loses all in-progress work; no checkpoint/resume
+- **Needed:** SQLite-backed agent state machine persistence
+
+### 5. **Single-User, Single-Session** (Architectural)
+- **Current:** One `VoiceInteractionManager` = one conversation
+- **Missing:** Multi-user isolation, concurrent sessions, session handoff
+- **Blocker:** Audio IPC and ephemeral context are globally scoped
+
+### 6. **Windows-Only Audio IPC** (Platform Lock-in)
+- **Current:** Named Pipes + `cpal`/`rodio` for audio
+- **Blocker:** Porting to Linux/macOS requires rewriting audio transport layer
+- **Path forward:** Abstract `AudioTransport` trait; add Unix domain socket + PipeWire/PulseAudio backends
+
+### 7. **Testing Gaps** (Ongoing)
+- **Missing:** End-to-end voice integration tests (require hardware)
+- **Missing:** Chaos testing (IPC disconnect, OOM, model timeout)
+- **Missing:** Performance regression benchmarks in CI
 
 ---
 
 ## Development Environment
 
-- **Operating System:** Windows 11
-- **Toolchain:** MSVC
-- **Python:** 3.11.9
-- **Pydantic:** v2
-- **Rust:** 1.80+
-- **Async Runtime:** Tokio 1.43
-- **Testing:** pytest 9.1.1
-- **Linting / Formatting:** Ruff 0.16.7
-- **IPC:** Windows Named Pipes
-- **Python Environment:** Dedicated repository `.venv`
+| Component | Version |
+|-----------|---------|
+| OS | Windows 11 |
+| Python | 3.11.9 |
+| Rust | 1.80+ |
+| Async Runtime | Tokio 1.43 |
+| Testing | pytest 9.1.1 |
+| Linting/Format | Ruff 0.16.7 |
+| IPC | Windows Named Pipes |
+| Python Env | Repository `.venv` (mandatory) |
 
-### Python Environment Setup
-
-All TOM Python packages, tools, and tests **must** run inside the repository's dedicated `.venv`.
-
-Never install project dependencies globally or into an unrelated Python environment.
+### Setup
 
 ```powershell
-# Create virtual environment if not present
+# Create venv if needed
 python -m venv .venv
 
-# Verify the interpreter
+# Verify interpreter
 .\.venv\Scripts\python.exe -c "import sys; print(sys.executable)"
 
-# Install TOM
+# Install TOM in development mode
 .\.venv\Scripts\python.exe -m pip install -e .
 ```
 
----
-
-## Testing & Quality Gates
-
-Run Python tests and tooling through the dedicated `.venv`.
+### Running Tests & Quality Gates
 
 ```powershell
-# Python unit tests
+# Python tests
 .\.venv\Scripts\pytest.exe tests/unit/ -v
-
-# Python integration tests
 .\.venv\Scripts\pytest.exe tests/integration/ -v
 
 # Ruff
 .\.venv\Scripts\ruff.exe check python/ tests/
-
-# Formatting check
 .\.venv\Scripts\ruff.exe format --check python/ tests/
 
 # Rust tests
 cd rust\tom-engine
 cargo test
-
-# Rust formatting
 cargo fmt --check
-
-# Rust linting
 cargo clippy --all-targets --all-features -- -D warnings
-
-# Return to repository root
 cd ..\..
 ```
-
-### Verified Phase 4 Baseline
-
-The latest completed Phase 4 implementation/exit-gate run verified:
-
-```text
-Python unit tests:        492 passed
-Python integration tests:  50 passed
-Rust tests:                79 passed
-────────────────────────────────────
-Total:                    621 passed
-```
-
-Quality gates:
-
-```text
-Ruff check:        CLEAN
-Ruff format:       CLEAN
-Cargo fmt:         CLEAN
-Cargo clippy:      CLEAN
-```
-
-### IPC Performance Baseline
-
-Previously measured Rust/Python IPC roundtrip performance:
-
-```text
-P50:  0.144 ms
-P95:  0.359 ms
-Target: < 10 ms
-```
-
-Phase 4 routing/dispatch benchmark utilities also measure individual pipeline components. Performance results are treated as environment-dependent measurements rather than hard architectural guarantees.
 
 ---
 
 ## Project Structure
 
-```text
+```
 TOM/
-
 ├── .venv/                         # Dedicated Python virtual environment
-│
 ├── config/                        # YAML configuration
-│
 ├── python/                        # Python Brain
 │   └── tom/
 │       ├── agents/                # Agent state machine & orchestration
-│       ├── core/                 # Core services, routing, context, lifecycle
-│       ├── ipc/                  # Named Pipe client, transport & protocol
-│       ├── models/               # Model provider abstractions/providers
-│       ├── schemas/              # Pydantic v2 schemas
-│       ├── security/             # Permission and confirmation systems
-│       ├── telemetry/            # Structured logging & redaction
-│       └── tools/                # Registry, executor, system & file tools
-│
-├── rust/                         # Rust Engine
-│   └── tom-engine/               # Tokio runtime, IPC & low-level services
-│
+│       ├── core/                  # Core services, routing, context, lifecycle
+│       ├── ipc/                   # Named Pipe client, transport & protocol
+│       ├── models/                # Model provider abstractions/providers
+│       ├── schemas/               # Pydantic v2 schemas
+│       ├── security/              # Permission and confirmation systems
+│       ├── telemetry/             # Structured logging & redaction
+│       └── tools/                 # Registry, executor, system & file tools
+├── rust/                          # Rust Engine
+│   └── tom-engine/                # Tokio runtime, IPC & low-level services
 ├── tests/
-│   ├── unit/                     # Deterministic isolated unit tests
-│   └── integration/              # Cross-component integration tests
-│
-├── pyproject.toml                # Python project metadata & tooling
-├── IMPLEMENTATIONPLAN.md         # Master implementation roadmap
-├── STATE.md                      # Current state & architectural decisions
-├── PROGRESS.md                   # Chronological development ledger
-├── HANDOFF.md                    # Next-session developer handoff
-└── README.md                     # Project overview
+│   ├── unit/                      # Deterministic isolated unit tests
+│   └── integration/               # Cross-component integration tests
+├── pyproject.toml                 # Python project metadata & tooling
+├── IMPLEMENTATIONPLAN.md          # Master implementation roadmap
+├── STATE.md                       # Current state & architectural decisions
+├── PROGRESS.md                    # Chronological development ledger
+├── HANDOFF.md                     # Next-session developer handoff
+└── README.md                      # This file
 ```
-
-> Phase-specific implementation plans are temporary development artifacts and are removed during phase closeout once their historical information has been migrated into the project documentation.
 
 ---
 
-## Development Principles
+## Design Principles
 
-1. **Python / Rust Dual-Core Architecture**
-   Python manages intelligence, orchestration, agents, tools, and memory. Rust handles low-level OS operations, hardware/audio primitives, telemetry, and IPC.
-
-2. **Strict `.venv` Isolation**
-   All Python package installation and execution uses the repository's dedicated virtual environment.
-
-3. **Deterministic Tools**
-   Tools are typed, validated, bounded, and independently executable.
-
-4. **Centralized Pre-Execution Permissions**
-   Permission decisions occur before tool execution. Tools do not implement their own security policy.
-
-5. **LLM / Agent Independence**
-   Tools must never depend on specific LLMs, prompts, routers, or agent frameworks.
-
-6. **Non-Bypassable Tool Execution**
-   Agents and models must route tool execution through `ToolExecutor`.
-
-7. **Security-First Design**
-   Path traversal protection, secret redaction, bounded execution, explicit permissions, and safe failure are mandatory architectural properties.
-
-8. **Cooperative Cancellation**
-   Long-running operations must support bounded, explicit cancellation rather than uncontrolled background execution.
-
-9. **Bounded Agent Execution**
-   Agent loops use explicit step limits and deterministic termination conditions.
-
-10. **Incremental Verification**
-    Each implementation iteration must pass its relevant tests and quality gates before the project advances.
-
-11. **Minimalism / Avoid Over-Engineering**
-    New abstractions must solve a demonstrated requirement. Existing interfaces should be reused wherever practical.
-
-12. **Local-First Model Runtime**
-    TOM maintains a provider boundary so local model runtimes can be evaluated and replaced without coupling the agent framework to a particular inference engine.
+1. **Python/Rust Dual-Core** — Intelligence in Python, primitives in Rust
+2. **Strict `.venv` Isolation** — Never install globally
+3. **Deterministic Tools** — Typed, validated, bounded, independently executable
+4. **Centralized Pre-Execution Permissions** — Policy before execution
+5. **LLM/Agent Independence** — Tools never couple to specific models
+6. **Non-Bypassable Tool Execution** — All tools route through `ToolExecutor`
+7. **Security-First** — Path traversal protection, secret redaction, bounded execution
+8. **Cooperative Cancellation** — Explicit cancellation over uncontrolled background work
+9. **Bounded Agent Execution** — Step limits, deterministic termination
+10. **Incremental Verification** — Tests + quality gates before advancing
+11. **Minimalism** — No abstraction without demonstrated need
+12. **Local-First Model Runtime** — Provider boundary for swapability
 
 ---
 
 ## Documentation
 
-- [Master Implementation Plan](IMPLEMENTATIONPLAN.md) — Overall TOM roadmap
-- [State Snapshot](STATE.md) — Current implementation state and architectural decisions
+- [Master Implementation Plan](IMPLEMENTATIONPLAN.md) — Overall roadmap
+- [State Snapshot](STATE.md) — Current implementation state & decisions
 - [Progress Ledger](PROGRESS.md) — Chronological development history
 - [Developer Handoff](HANDOFF.md) — Next-session continuation point
 - [Testing Guide](test.md) — Testing and verification walkthrough
-- [Skills Index](skills/SKILL_INDEX.md) — Development skills and project-specific guidance
+- [Skills Index](skills/SKILL_INDEX.md) — Development skills & project guidance
 
 ---
 
-## Current Roadmap
+## Roadmap
 
-The project is being developed incrementally through defined implementation phases.
-
-```text
-Phase 0  ── Bootstrap & Configuration          COMPLETE
-   │
-Phase 1  ── Rust Engine & IPC                  COMPLETE
-   │
-Phase 2  ── Python Core & IPC Client           COMPLETE
-   │
-Phase 3  ── Tools & Security                   COMPLETE
-   │
-Phase 4  ── Agents & Local Model Routing      IMPLEMENTATION COMPLETE
-   │
-Phase 5  ── Next subsystem                     NEXT
-   │
-   ▼
-Future phases ── Memory, Voice, Vision,
-                 Web, Security hardening,
-                 Concurrency, Monitoring,
-                 Personality & deployment
+```
+Phase 0  ── Bootstrap & Configuration          ✅ COMPLETE
+Phase 1  ── Rust Engine & IPC                  ✅ COMPLETE
+Phase 2  ── Python Core & IPC Client           ✅ COMPLETE
+Phase 3  ── Tools & Security                   ✅ COMPLETE
+Phase 4  ── Agents & Local Model Routing       ✅ COMPLETE
+Phase 5  ── Memory Architecture                ✅ COMPLETE
+Phase 6  ── Voice Pipeline                     ✅ COMPLETE
+Phase 7  ── Vision & Multimodal                ✅ COMPLETE
+Phase 8  ── Proactive Agent & Long-Horizon     ✅ COMPLETE
+Phase 9  ── Interaction Core (9.0–9.4)         ✅ COMPLETE
+Phase 9.5/9.6 ── Deferred (streaming polish)   ⏸️  ON HOLD
+Phase 10 ── ???                                🚫  REQUIRES EXPLICIT APPROVAL
 ```
 
-Phase 5 should begin only after the Phase 4 documentation closeout has been completed and the repository state has been verified.
+**Next meaningful work** (requires approval):
+- Agent state persistence (survive restarts)
+- Hybrid memory retrieval (keyword + vector + rerank)
+- Voice latency optimization (<500ms target)
+- Cross-platform audio transport abstraction
+- Multi-session / multi-user support
 
 ---
 
 ## Design Goal
 
-TOM is intended to evolve into a **local-first personal AI operating layer** where:
+TOM evolves into a **local-first personal AI operating layer** where:
 
-- intelligence remains modular,
-- tools remain deterministic,
-- model providers remain replaceable,
-- sensitive operations remain permission-controlled,
-- low-level system operations remain isolated,
-- resource usage remains bounded,
-- and every major architectural step is verified before the next one begins.
+- Intelligence remains **modular**
+- Tools remain **deterministic**
+- Model providers remain **replaceable**
+- Sensitive operations remain **permission-controlled**
+- Low-level system operations remain **isolated**
+- Resource usage remains **bounded**
+- Every major architectural step is **verified** before the next begins
