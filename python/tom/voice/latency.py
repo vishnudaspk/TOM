@@ -93,6 +93,7 @@ class LatencyStage(StrEnum):
     STT_DECODE_END = "stt_decode_end"
     TTS_FIRST_SYNTH_START = "tts_first_synth_start"
     TTS_FIRST_SYNTH_END = "tts_first_synth_end"
+    USER_SPEECH_STOP = "user_speech_stop"
 
 
 @dataclass(frozen=True)
@@ -153,6 +154,7 @@ LATENCY_SLAS: dict[str, tuple[float, float]] = {
     "playback_latency_ms": (50.0, 150.0),
     "perceived_response_ms": (1500.0, 2200.0),
     "user_stop_to_first_audio_ms": (1500.0, 2200.0),
+    "user_felt_latency_ms": (2100.0, 3000.0),
     "barge_in_stop_ms": (150.0, 250.0),
 }
 
@@ -396,5 +398,6 @@ _METRIC_STAGES: dict[str, tuple[LatencyStage, LatencyStage]] = {
     "playback_latency_ms": (LatencyStage.FIRST_AUDIO, LatencyStage.PLAYBACK_STARTED),
     "perceived_response_ms": (LatencyStage.SPEECH_END, LatencyStage.PLAYBACK_STARTED),
     "user_stop_to_first_audio_ms": (LatencyStage.SPEECH_END, LatencyStage.FIRST_AUDIO),
+    "user_felt_latency_ms": (LatencyStage.USER_SPEECH_STOP, LatencyStage.FIRST_AUDIO),
     "barge_in_stop_ms": (LatencyStage.BARGE_IN_ONSET, LatencyStage.BARGE_IN_STOP),
 }

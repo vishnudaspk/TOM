@@ -40,6 +40,7 @@ class FakeClock:
 def full_turn_tracer(clock: FakeClock) -> InteractionLatencyTracer:
     """Tracer marked with a healthy end-to-end turn (all targets met)."""
     tracer = InteractionLatencyTracer(clock=clock, turn_start_ns=0)
+    tracer.mark(LatencyStage.USER_SPEECH_STOP)
     clock.advance_ms(280)  # VAD hangover just inside the 300 ms target
     tracer.mark(LatencyStage.SPEECH_END)
     clock.advance_ms(50)  # STT queue wait (SPEECH_END -> STT_DECODE_START)
@@ -111,6 +112,7 @@ def test_report_derives_every_stage_delta_exactly() -> None:
         "playback_latency_ms": pytest.approx(40.0),
         "perceived_response_ms": pytest.approx(1370.0),
         "user_stop_to_first_audio_ms": pytest.approx(1330.0),
+        "user_felt_latency_ms": pytest.approx(1610.0),
     }
     assert report.unmeasured == ["barge_in_stop_ms"]
     assert report.failures == []
@@ -193,6 +195,7 @@ def test_empty_transcript_turn_reports_stt_latency_and_nothing_further() -> None
         "playback_latency_ms",
         "perceived_response_ms",
         "user_stop_to_first_audio_ms",
+        "user_felt_latency_ms",
         "barge_in_stop_ms",
     }
     assert report.metrics["perceived_response_ms"].status == "not_measured"

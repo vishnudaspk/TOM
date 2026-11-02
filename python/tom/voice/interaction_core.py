@@ -776,6 +776,7 @@ class InteractionCore:
         self._latency_history = max(1, latency_history)
         self._tracer: InteractionLatencyTracer | None = None
         self._turn_start_ns: int | None = None
+        self._last_speech_frame_ns: int | None = None
         self._reports: deque[LatencyReport] = deque(maxlen=self._latency_history)
 
     # ------------------------------------------------------------------
@@ -1131,10 +1132,13 @@ class InteractionCore:
             self._frames.clear()
             # Turn start anchor for the 9.6 VAD endpointing metric.
             self._turn_start_ns = time.monotonic_ns()
+            self._last_speech_frame_ns = None
             self._transition(VoicePipelineState.LISTENING)
         elif isinstance(event, AudioFrameEvent):
             if not self._stopping:
                 self._frames.extend(event.pcm_bytes)
+                if event.is_speech:
+                    self._last_speech_frame_ns = time.monotonic_ns()
         elif isinstance(event, SpeechEndEvent):
             audio = bytes(self._frames) or event.pcm_bytes
             self._frames.clear()
@@ -1221,6 +1225,8 @@ class InteractionCore:
         self._playback_active = False
         # 9.6: stamp VAD commit immediately, before any turn work can start.
         self._tracer = self._tracer_factory(self._turn_start_ns)
+        if self._last_speech_frame_ns is not None:
+            self._tracer.mark(LatencyStage.USER_SPEECH_STOP, at_ns=self._last_speech_frame_ns)
         self._tracer.mark(LatencyStage.SPEECH_END)
         self._transition(VoicePipelineState.PROCESSING, epoch)
 
