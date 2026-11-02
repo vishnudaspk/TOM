@@ -709,6 +709,7 @@ class InteractionCore:
         turn_arbitrator: TurnArbiter | None | _DefaultArbiterSentinel = _DEFAULT_ARBITER,
         startup_greeting: bool = True,
         debug_trace: DebugTraceSession | None = None,
+        smart_turn_max_incomplete_wait_ms: int | None = None,
     ) -> None:
         self._mic = mic_loop
         self._engine = engine
@@ -756,6 +757,13 @@ class InteractionCore:
 
         self._frames = bytearray()
         self._smart_turn_candidate: bytes | None = None
+        if smart_turn_max_incomplete_wait_ms is not None:
+            self._smart_turn_max_incomplete_wait_ms = smart_turn_max_incomplete_wait_ms
+        elif hasattr(mic_loop, "_config") and hasattr(mic_loop._config, "smart_turn_max_incomplete_wait_ms"):
+            self._smart_turn_max_incomplete_wait_ms = mic_loop._config.smart_turn_max_incomplete_wait_ms
+        else:
+            self._smart_turn_max_incomplete_wait_ms = 1800
+        self._smart_turn_timeout_handle: asyncio.TimerHandle | None = None
         self._active_turn: asyncio.Task[TurnExecutionResult] | None = None
         self._active_token: CancellationToken | None = None
         self._active_progress: TurnProgress | None = None
@@ -915,6 +923,7 @@ class InteractionCore:
 
         self._close_open_turn(progress)
         self._frames.clear()
+        self._cancel_smart_turn_timeout()
         self._smart_turn_candidate = None
 
         # Stops the mic and ends the run() event stream.
@@ -1089,6 +1098,25 @@ class InteractionCore:
         finally:
             self._barging_in = False
 
+    def _cancel_smart_turn_timeout(self) -> None:
+        """Cancel any pending incomplete turn timeout."""
+        if self._smart_turn_timeout_handle is not None:
+            self._smart_turn_timeout_handle.cancel()
+            self._smart_turn_timeout_handle = None
+
+    def _on_smart_turn_timeout(self) -> None:
+        """Force-complete the candidate turn when user remains silent past timeout (Item 5)."""
+        self._smart_turn_timeout_handle = None
+        candidate = self._smart_turn_candidate
+        if candidate is not None and not (self._stopping or self._stopped):
+            logger.info(
+                "smart_turn_incomplete_timeout_force_complete",
+                epoch=self._epochs.current,
+                candidate_bytes=len(candidate),
+            )
+            self._smart_turn_candidate = None
+            asyncio.create_task(self._begin_turn(candidate))
+
     # ------------------------------------------------------------------
     # Event handling
     # ------------------------------------------------------------------
@@ -1097,6 +1125,7 @@ class InteractionCore:
         from tom.voice.events import AudioFrameEvent, SpeechEndEvent, SpeechStartEvent
 
         if isinstance(event, SpeechStartEvent):
+            self._cancel_smart_turn_timeout()
             if self._active_turn is not None and not self._active_turn.done():
                 await self.handle_barge_in()
             self._frames.clear()
@@ -1115,6 +1144,8 @@ class InteractionCore:
         """Arbitrate a VAD-delimited candidate before committing a turn."""
         if not audio:
             return
+
+        self._cancel_smart_turn_timeout()
 
         candidate = audio
         if self._smart_turn_candidate is not None:
@@ -1145,6 +1176,11 @@ class InteractionCore:
 
         if decision is TurnArbitrationDecision.CONTINUING:
             self._smart_turn_candidate = candidate
+            loop = asyncio.get_running_loop()
+            self._smart_turn_timeout_handle = loop.call_later(
+                self._smart_turn_max_incomplete_wait_ms / 1000.0,
+                self._on_smart_turn_timeout,
+            )
             return
 
         self._smart_turn_candidate = None
