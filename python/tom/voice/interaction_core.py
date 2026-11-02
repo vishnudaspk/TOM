@@ -86,6 +86,7 @@ from tom.voice.response_policy import ResponsePolicy
 from tom.voice.sentence_streamer import SentenceStreamer
 from tom.voice.smart_turn import SmartTurnV3Arbiter, TurnArbitrationDecision
 from tom.voice.turn_manager import ConversationTurnManager
+from tom.voice.formatter import SpeechFormatter
 
 if TYPE_CHECKING:
     from tom.agents.orchestrator import AgentOrchestrator
@@ -244,6 +245,7 @@ class TurnExecutor:
         min_sentence_chars: int = 20,
         include_context_in_prompt: bool = True,
         debug_trace: DebugTraceSession | None = None,
+        formatter: SpeechFormatter | None = None,
     ) -> None:
         self._stt = stt
         self._tts = tts
@@ -254,6 +256,7 @@ class TurnExecutor:
         self._min_sentence_chars = min_sentence_chars
         self._include_context = include_context_in_prompt
         self._debug_trace = debug_trace
+        self._formatter = formatter or SpeechFormatter()
 
     # ------------------------------------------------------------------
     # Pipeline
@@ -507,6 +510,12 @@ class TurnExecutor:
                     return
                 if not self._alive(epoch, token):
                     return
+                # Strip markdown before it reaches TTS (Item 3).
+                item = self._formatter.format(item)
+                if not item:
+                    # Formatter reduced chunk to empty (e.g. a bare URL or code block);
+                    # skip rather than synthesising silence.
+                    continue
                 # Debug trace: log sanitized text sent to TTS
                 if self._debug_trace:
                     self._debug_trace.log_text("text_sanitized", turn_id=epoch, text=item)
@@ -733,6 +742,7 @@ class InteractionCore:
             min_sentence_chars=min_sentence_chars,
             include_context_in_prompt=include_context_in_prompt,
             debug_trace=debug_trace,
+            formatter=SpeechFormatter(),
         )
 
         self._running = False

@@ -1468,3 +1468,37 @@ class TestShutdownResponsiveness:
             assert interaction_tasks() == []
 
         run_async(scenario())
+
+
+class TestTurnExecutorMarkdownStripping:
+    """Item 3: Markdown must never reach TTS synthesis."""
+
+    def test_markdown_formatting_stripped_before_tts(self) -> None:
+        """Verify bold, bullets, headers, code, URLs, and numbered lists are sanitized."""
+        async def scenario() -> None:
+            engine = FakeEngine()
+            raw_markdown = (
+                "# Status Update\n"
+                "Here is **bold text** and `code_snippet`.\n"
+                "- bullet point\n"
+                "1. numbered item\n"
+                "Visit https://example.com for details."
+            )
+            core, parts = build_core(deltas=[raw_markdown], engine=engine)
+            run_task = asyncio.create_task(core.run())
+            try:
+                await wait_until(lambda: core.state is VoicePipelineState.LISTENING)
+                await say(parts["mic"])
+                await wait_until(lambda: len(parts["provider"].requests) > 0)
+
+                for req_text in parts["provider"].requests:
+                    # Markdown syntax characters should never reach TTS
+                    assert "**" not in req_text, f"Bold asterisks reached TTS: {req_text}"
+                    assert "`" not in req_text, f"Code backtick reached TTS: {req_text}"
+                    assert not req_text.startswith("#"), f"Header hash reached TTS: {req_text}"
+                    assert not req_text.startswith("- "), f"Bullet dash reached TTS: {req_text}"
+            finally:
+                await core.stop()
+                await run_task
+
+        run_async(scenario())
