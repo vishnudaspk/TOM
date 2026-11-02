@@ -845,3 +845,61 @@ class TestFasterWhisperCUDAFallback:
                 sys.modules.pop("numpy", None)
 
         run_async(_test())
+
+
+class TestSTTHallucinationFilter:
+    """Item 4: Hallucination filter tests with fake segments."""
+
+    def test_high_no_speech_prob_drops_utterance(self) -> None:
+        provider = FasterWhisperSTTProvider()
+        fake_seg = MagicMock()
+        fake_seg.no_speech_prob = 0.85
+        fake_seg.avg_logprob = -0.2
+        fake_seg.compression_ratio = 1.2
+        fake_seg.text = "Hello world"
+        is_hal, reason = provider._is_hallucination([fake_seg], audio_duration_s=2.0)
+        assert is_hal is True
+        assert "no_speech_prob" in reason
+
+    def test_low_avg_logprob_drops_utterance(self) -> None:
+        provider = FasterWhisperSTTProvider()
+        fake_seg = MagicMock()
+        fake_seg.no_speech_prob = 0.1
+        fake_seg.avg_logprob = -1.5
+        fake_seg.compression_ratio = 1.2
+        fake_seg.text = "Uncertain text"
+        is_hal, reason = provider._is_hallucination([fake_seg], audio_duration_s=2.0)
+        assert is_hal is True
+        assert "avg_logprob" in reason
+
+    def test_high_compression_ratio_drops_utterance(self) -> None:
+        provider = FasterWhisperSTTProvider()
+        fake_seg = MagicMock()
+        fake_seg.no_speech_prob = 0.1
+        fake_seg.avg_logprob = -0.3
+        fake_seg.compression_ratio = 3.1
+        fake_seg.text = "Repetitive phrase Repetitive phrase"
+        is_hal, reason = provider._is_hallucination([fake_seg], audio_duration_s=2.0)
+        assert is_hal is True
+        assert "compression_ratio" in reason
+
+    def test_blocklist_phrase_on_short_audio_drops_utterance(self) -> None:
+        provider = FasterWhisperSTTProvider()
+        fake_seg = MagicMock()
+        fake_seg.no_speech_prob = 0.2
+        fake_seg.avg_logprob = -0.3
+        fake_seg.compression_ratio = 1.1
+        fake_seg.text = "Thank you for watching"
+        is_hal, reason = provider._is_hallucination([fake_seg], audio_duration_s=2.0)
+        assert is_hal is True
+        assert "blocklist_match" in reason
+
+    def test_normal_segment_passes(self) -> None:
+        provider = FasterWhisperSTTProvider()
+        fake_seg = MagicMock()
+        fake_seg.no_speech_prob = 0.05
+        fake_seg.avg_logprob = -0.25
+        fake_seg.compression_ratio = 1.3
+        fake_seg.text = "What is the current time?"
+        is_hal, reason = provider._is_hallucination([fake_seg], audio_duration_s=2.0)
+        assert is_hal is False
