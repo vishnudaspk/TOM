@@ -14,6 +14,16 @@ Invariants, hardware, and architecture: **`STATE.md`**. Phase ledger and ADRs 04
 - **Done:** Phase 14 **Tray Mode & Desktop Integration** (System tray daemon with pystray, engine connection status monitoring, mute toggle, CLI/voice mode support).
 - **Done:** **Voice Pipeline Robustness Fix (2026-10-23)** — CUDA fallback memoization, STT error recovery, IPC disconnect handling, Ctrl+C responsiveness, timeouts on blocking ops.
 - **Done:** **Full Repository Audit & Root Directory Cleanup (2026-11-02)** — Comprehensive audit across 15 subsystems, root files consolidated into `logs/`, `docs/audits/`, `docs/environment/`, `tests/manual/`, and `scripts/`. Exact voice pipeline defect targets isolated and documented in `docs/audits/TOM_COMPREHENSIVE_AUDIT_2026-11-02.md`.
+- **Done:** **Phase V1 Voice Repair (Items 0–6) (2026-11-02)**:
+  - Item 0 (`bac0a41`): Hermetic test baseline recorded (1760 passed Python, 100 passed Rust).
+  - Item 1 (`b440392`): `--bench-voice <wav>` CLI replay mode implemented, baseline measurements saved to `docs/perf/bench_voice_baseline_1793627372.json`.
+  - Item 2 (`41d3d5e`): STT on GPU via Windows nvidia DLL directory registration, warm-up decode, VRAM residency registration. Measured: STT decode median drops from ~5s to 110ms (RTF=0.030), VRAM delta=452 MiB.
+  - Item 3 (`e3ae93a`): `SpeechFormatter.format()` integrated before TTS synthesis in `interaction_core.py` to strip markdown bold, bullets, headers, backticks, URLs, and numbered lists.
+  - Item 4 (`14ad8a6`): STT hallucination filter using segment stats (`no_speech_prob`, `avg_logprob`, `compression_ratio`), secondary phrase blocklist, `condition_on_previous_text=False`, and dropped counter.
+  - Item 5 (`7c798c7`): Smart Turn force-complete timeout on `CONTINUING` decision scheduled via `smart_turn_max_incomplete_wait_ms`, cancelled on new speech.
+  - Item 6 (`c014fc2`): Telemetry honesty fixes: `stt_queue_wait_ms` spans `SPEECH_END -> STT_DECODE_START`; identical marks report `not_measured` (never 0 = pass); `playback_completed` tracks elapsed playback time against engine buffer drain.
+  - Item 7: DESIGN ONLY (pending user review & approval).
+  - Current verification exit: 1771 passed Python unit tests (`pytest tests/unit -q --timeout=30`), 93 passed Rust engine tests.
 - **Runtime:** Generic HTTP provider with llama.cpp as the production endpoint; no backend-specific alias remains.
 - **Phase 12 Closeout Validation:**
   - Focused test suite: **488 passed, 8 skipped** (uninstalled optional deps `opencv-python`/`winocr`), zero failed across `tests/unit/resources/`, `tests/unit/agents/`, `tests/unit/vision/`, `tests/integration/tools/test_tool_pipeline.py`.
