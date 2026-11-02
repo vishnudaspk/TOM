@@ -1,0 +1,53 @@
+........................................................................ [  4%]
+........................................................................ [  8%]
+........................................................................ [ 12%]
+........................................................................ [ 16%]
+........................................................................ [ 20%]
+........................................................................ [ 24%]
+........................................................................ [ 28%]
+........................................................................ [ 32%]
+........................................................................ [ 36%]
+........................................................................ [ 40%]
+........................................................................ [ 44%]
+........................................................................ [ 48%]
+........................................................................ [ 52%]
+........................................................................ [ 57%]
+........................................................................ [ 61%]
+........................................................................ [ 65%]
+........................................................................ [ 69%]
+........................................................................ [ 73%]
+....................ss....s......................sss.s.................. [ 77%]
+........................................................................ [ 81%]
+........................................................................ [ 85%]
+........................................................................ [ 89%]
+........................................................................ [ 93%]
+........................................................................ [ 97%]
+.......................................                                  [100%]
+============================== warnings summary ===============================
+tests/unit/resources/test_governor_integration.py::TestGovernorVisionIntegration::test_vision_manager_tier3_acquires_vlm_lease[asyncio]
+tests/unit/resources/test_governor_integration.py::TestGovernorVisionIntegration::test_vision_manager_insufficient_vram_raises_vlm_error[asyncio]
+tests/unit/resources/test_governor_integration.py::TestGovernorCancellationAndCleanup::test_vlm_cancellation_follows_same_policy[asyncio]
+tests/unit/vision/test_manager.py::TestVisionManagerRouting::test_classify_capability
+tests/unit/vision/test_manager.py::TestVisionManagerResourceManagement::test_vram_within_budget_allows_vlm
+tests/unit/vision/test_manager.py::TestVisionManagerResourceManagement::test_vram_threshold_tripped_rejects_vlm
+tests/unit/vision/test_manager.py::TestVisionManagerConvenienceAPIs::test_extract_text
+tests/unit/vision/test_manager.py::TestVisionManagerConvenienceAPIs::test_ask
+tests/unit/vision/test_manager.py::TestVisionManagerConvenienceAPIs::test_unconfigured_vlm_graceful_degradation
+  C:\Users\vishnuu\Projects\TOM\python\tom\vision\capture.py:70: DeprecationWarning: mss.mss is deprecated and will be removed in a future release; use mss.MSS instead
+    self._sct = mss.mss()
+
+tests/unit/voice/test_smart_turn_arbitration_real.py::test_smart_turn_real_onnx_inference
+  C:\Users\vishnuu\Projects\TOM\.venv\Lib\site-packages\pipecat\audio\turn\smart_turn\local_smart_turn_v3.py:61: DeprecationWarning: path is deprecated. Use files() instead. Refer to https://importlib-resources.readthedocs.io/en/latest/using.html#migrating-from-legacy for migration advice.
+    with impresources.path(package_path, model_name) as f:
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+SKIPPED [1] tests\unit\vision\test_cv.py:18: opencv-python optional dep not installed
+SKIPPED [1] tests\unit\vision\test_manager.py:145: opencv-python optional dep not installed
+SKIPPED [1] tests\unit\vision\test_manager.py:166: opencv-python optional dep not installed
+SKIPPED [1] tests\unit\vision\test_manager.py:256: opencv-python optional dep not installed
+SKIPPED [1] tests\unit\vision\test_ocr.py:250: winocr optional dep not installed
+SKIPPED [1] tests\unit\vision\test_ocr.py:257: winocr optional dep not installed
+SKIPPED [1] tests\unit\vision\test_ocr.py:268: winocr optional dep not installed
+SKIPPED [1] tests\unit\vision\test_ocr.py:299: winocr optional dep not installed
+1760 passed, 8 skipped, 10 warnings in 29.91s
