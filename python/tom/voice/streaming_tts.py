@@ -23,6 +23,7 @@ Phase 9 Iteration 9.3:
 from __future__ import annotations
 
 import asyncio
+import time
 import functools
 import inspect
 from abc import ABC, abstractmethod
@@ -460,22 +461,18 @@ class IncrementalTTSStreamer(StreamingTTSProvider):
             return
         observed = False
         first_chunk = True
-        # Track total duration of audio submitted for playback
         total_audio_duration_s = 0.0
-        # Track duration of audio already submitted (for calculating remaining)
-        submitted_duration_s = 0.0
-        # List to store pending chunk durations for drain calculation
-        pending_durations: list[float] = []
+        playback_start_time: float | None = None
 
         while True:
             item = await play_queue.get()
             if item is _EOF:
-                # All chunks submitted. Now wait for remaining audio to drain + tail.
-                remaining_duration_s = sum(pending_durations)
-                if remaining_duration_s > 0:
-                    # Wait for remaining audio to play plus configurable tail
+                # All chunks submitted. Wait for audio to drain from engine buffer + tail (Item 6).
+                if playback_start_time is not None:
+                    elapsed = time.monotonic() - playback_start_time
+                    remaining = max(0.0, total_audio_duration_s - elapsed)
                     tail_s = self._playback_tail_ms / 1000.0
-                    await asyncio.sleep(remaining_duration_s + tail_s)
+                    await asyncio.sleep(remaining + tail_s)
                 if self._on_playback_completed is not None:
                     self._on_playback_completed()
                 return
@@ -484,7 +481,6 @@ class IncrementalTTSStreamer(StreamingTTSProvider):
             chunk = item.chunk
             # Calculate chunk duration: audio_data is PCM16 (2 bytes/sample), mono
             chunk_duration_s = len(chunk.audio_data) / 2 / item.sample_rate
-            pending_durations.append(chunk_duration_s)
             total_audio_duration_s += chunk_duration_s
             try:
                 await self._engine.play_audio_buffer(
@@ -508,12 +504,10 @@ class IncrementalTTSStreamer(StreamingTTSProvider):
                     error=str(exc),
                 )
                 # Continue with next chunk on other errors
-                pending_durations.pop()  # Remove failed chunk from pending
                 continue
-            # Chunk submitted successfully, move its duration from pending to submitted
-            submitted_duration_s += pending_durations.pop(0)
             if first_chunk:
                 first_chunk = False
+                playback_start_time = time.monotonic()
                 if not observed and playback_observer is not None:
                     observed = True
                     playback_observer()

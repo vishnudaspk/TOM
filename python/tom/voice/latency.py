@@ -364,13 +364,21 @@ class InteractionLatencyTracer:
         last = self._marks_ns.get(end)
         if first is None or last is None:
             return None
+        # Identical marks for playback_latency and barge_in_stop produce fake passes;
+        # report not_measured instead. Never 0 = pass (Item 6).
+        if first == last and (start, end) in (
+            (LatencyStage.FIRST_AUDIO, LatencyStage.PLAYBACK_STARTED),
+            (LatencyStage.BARGE_IN_ONSET, LatencyStage.BARGE_IN_STOP),
+        ):
+            return None
         return (last - first) / 1_000_000.0
 
     def _endpointing_ms(self) -> float | None:
         if self._turn_start_ns is None:
             return None
         end = self._marks_ns.get(LatencyStage.SPEECH_END)
-        if end is None:
+        if end is None or end == self._turn_start_ns:
+            # Identical mark (0 ms) is a fake pass; report not_measured (Item 6).
             return None
         return (end - self._turn_start_ns) / 1_000_000.0
 
@@ -379,7 +387,7 @@ class InteractionLatencyTracer:
 _METRIC_STAGES: dict[str, tuple[LatencyStage, LatencyStage]] = {
     "stt_first_partial_ms": (LatencyStage.SPEECH_END, LatencyStage.STT_PARTIAL1),
     "stt_finalization_ms": (LatencyStage.SPEECH_END, LatencyStage.STT_FINAL),
-    "stt_queue_wait_ms": (LatencyStage.STT_FINAL, LatencyStage.STT_DECODE_START),
+    "stt_queue_wait_ms": (LatencyStage.SPEECH_END, LatencyStage.STT_DECODE_START),
     "stt_decode_ms": (LatencyStage.STT_DECODE_START, LatencyStage.STT_DECODE_END),
     "llm_ttft_ms": (LatencyStage.STT_FINAL, LatencyStage.LLM_FIRST_TOKEN),
     "sentence1_ms": (LatencyStage.LLM_FIRST_TOKEN, LatencyStage.SENTENCE1),
