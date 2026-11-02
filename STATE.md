@@ -7,18 +7,19 @@ Last updated: 2026-11-02 (Full Repository Audit & Root Cleanup Complete)
 | Item | Value |
 |---|---|
 | **Phases 0–8** | CLOSED & COMPLETE |
-| **Phase 9 core** | **9.0–9.4 COMPLETE & VERIFIED**; **9.5/9.6 VOICE PIPELINE REPAIR & AUDIT COMPLETE** (Mic pause/resume during TTS, TTS config fix, VAD fallback verified; CUDA fallback memoization, STT error recovery, IPC disconnect handling, Ctrl+C responsiveness). **Live voice pipeline has 3 identified defect targets**: (1) `push_samples` mic gating bug blocking barge-in during playback, (2) streaming markdown leakage into TTS without `SpeechFormatter`, (3) inverted `stt_queue_wait_ms` telemetry metric. |
+| **Phase 9 core** | **9.0–9.4 COMPLETE & VERIFIED**; **9.5/9.6 VOICE PIPELINE REPAIR & AUDIT COMPLETE** (Mic pause/resume during TTS, TTS config fix, VAD fallback verified; CUDA fallback memoization, STT error recovery, IPC disconnect handling, Ctrl+C responsiveness). Phase V1 resolved markdown leakage (`SpeechFormatter`) and inverted `stt_queue_wait_ms`. Active defect for Phase V2 Step 5: `push_samples` mic gating bug blocking barge-in during playback. |
 | **Phase 10** | **CLOSED — Iterations 1–7 COMPLETE & VERIFIED** (34 canonical tools registered, schema export, data-driven permissions, configuration defaults, security/verification exit gate) |
 | **Phase 11** | **CLOSED — Iterations 11.1–11.6 COMPLETE & VERIFIED** (Secret scrubbing via regex catalog + Shannon entropy heuristic, centralized `PathPolicy` jail & sensitive file blacklist, stdin-safe confirmation hook & anti-flooding rate limits, structured `SecurityAuditLogger`, `ToolExecutor` input/output/error scrubbing with `BaseModel` preservation, and 101 concrete adversarial tests) |
 | **Phase 12** | **CLOSED & COMPLETE — Iterations 12.1–12.5 COMPLETE & VERIFIED** (Resource governor safety gate, model lifecycle coordinator, priority arbitration & cooperative preemption fully integrated with real resource admission, 19 adversarial concurrency/stress tests including 100+ repeated cycles with zero drift, and full focused validation suite passed) |
 | **Phase 12 closeout** | Completed 2026-10-19. ADRs 059–062 documented. Ephemeral implementation plan removed. |
 | **Phase 13 (IPC Stabilization & Tool Grounding)** | **COMPLETE — Targeted stabilization** (IPC idle/reconnect reliability, engine health accuracy, tool grounding/anti-fabrication, startup constructor fix) |
 | **Phase 14 (Tray Mode & Desktop Integration)** | **COMPLETE — System tray daemon** (pystray integration, engine connection status, mute toggle, CLI/voice mode support, 33 unit tests) |
-| **Phase V1 (Voice Repair)** | **ITEMS 0–6 COMPLETE & VERIFIED** (Commits: `bac0a41`, `b440392`, `41d3d5e`, `e3ae93a`, `14ad8a6`, `7c798c7`, `c014fc2`). Test baseline: 1771 passed, 8 skipped Python; 93 passed Rust. Item 7: DESIGN ONLY (pending approval). |
+| **Phase V1 (Voice Repair)** | **ITEMS 0–6 COMPLETE & VERIFIED** (Commits: `bac0a41`..`c014fc2`). Test baseline: 1771 passed, 8 skipped Python; 93 passed Rust. |
+| **Phase V2 (Response Time & Experience)** | **IN PROGRESS** (Step 0 Reconcile complete; next: Step 1 Live Baseline). |
 | **Full Repo Audit & Root Cleanup** | **COMPLETE — 2026-11-02** (Full codebase review across 15 subsystems, root directory consolidated into `logs/`, `docs/audits/`, `docs/environment/`, `tests/manual/`, and `scripts/`. Detailed report at `docs/audits/TOM_COMPREHENSIVE_AUDIT_2026-11-02.md`). |
 | **Model runtime** | llama.cpp at `http://127.0.0.1:65400/v1`; generic OpenAI-compatible HTTP provider is the active abstraction |
 | **Backend migration** | Bionic/LM Studio is removed from active architecture; no active backend-specific alias remains |
-| **Next Immediate Task** | Review Item 7 Barge-in proposal. Do NOT implement barge-in code until explicit user approval. |
+| **Next Immediate Task** | Phase V2 Step 1: Live Baseline measurement with user_felt_latency_ms. |
 | **Full-repo baseline** | 2026-11-02 Phase V1 exit: **1771 passed, 8 skipped** Python unit tests (`pytest tests/unit -q --timeout=30`), **93 passed** Rust engine tests (86 unit + 7 integration). Ruff/Cargo fmt/clippy clean. |
 | **Voice suite baseline** | **377 passed, 1 warning** across voice unit tests; **100 passed** Rust engine tests. |
 | **9.0–9.4 incremental** | Targeted verification **833 passed** across voice, agents, core, and IPC tests. Voice alone: **317**. Full repo **not** re-run. |

@@ -22,8 +22,12 @@ Invariants, hardware, and architecture: **`STATE.md`**. Phase ledger and ADRs 04
   - Item 4 (`14ad8a6`): STT hallucination filter using segment stats (`no_speech_prob`, `avg_logprob`, `compression_ratio`), secondary phrase blocklist, `condition_on_previous_text=False`, and dropped counter.
   - Item 5 (`7c798c7`): Smart Turn force-complete timeout on `CONTINUING` decision scheduled via `smart_turn_max_incomplete_wait_ms`, cancelled on new speech.
   - Item 6 (`c014fc2`): Telemetry honesty fixes: `stt_queue_wait_ms` spans `SPEECH_END -> STT_DECODE_START`; identical marks report `not_measured` (never 0 = pass); `playback_completed` tracks elapsed playback time against engine buffer drain.
-  - Item 7: DESIGN ONLY (pending user review & approval).
+  - Item 7: DESIGN ONLY (transitioned to Phase V2 Step 5 with approved design).
   - Current verification exit: 1771 passed Python unit tests (`pytest tests/unit -q --timeout=30`), 93 passed Rust engine tests.
+- **Done:** **Phase V2 Step 0 (Reconcile & Audit Alignment) (2026-11-02)**:
+  - Reconciled `docs/audits/TOM_COMPREHENSIVE_AUDIT_2026-11-02.md` against live code: marked CUDA STT, markdown stripping, hallucination filter, queue wait latency, and Smart Turn force-complete as RESOLVED with file:line references.
+  - Cleaned redundant `tests/docs/perf/00-baseline.md`.
+  - Next: Step 1 (Live Baseline).
 - **Runtime:** Generic HTTP provider with llama.cpp as the production endpoint; no backend-specific alias remains.
 - **Phase 12 Closeout Validation:**
   - Focused test suite: **488 passed, 8 skipped** (uninstalled optional deps `opencv-python`/`winocr`), zero failed across `tests/unit/resources/`, `tests/unit/agents/`, `tests/unit/vision/`, `tests/integration/tools/test_tool_pipeline.py`.

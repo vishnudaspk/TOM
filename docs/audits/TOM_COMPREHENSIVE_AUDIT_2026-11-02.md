@@ -24,14 +24,14 @@ However, **TOM is NOT yet production-ready for live, hands-free conversational v
 - **Streaming Pipeline Architecture:** Token delta streaming from llama.cpp, `SentenceStreamer` boundary detection, `IncrementalTTSStreamer` sentence-pipelined synthesis with Kokoro-82M ONNX, and utterance-buffered audio IPC.
 - **Desktop Integration:** System tray daemon (`TrayDaemon`) with connection status monitoring, microphone mute toggle, and CLI text console.
 
-### 3. What Remains Unfinished & Broken
-1. **Barge-in Blocked During SPEAKING (Critical Bug):** In `python/tom/voice/microphone.py`, `push_samples()` drops all incoming samples when `self._gated == True` (`if self._stopped or self._muted or self._gated: return`). Because `_on_speaking` sets `_mic.gate()`, the RMS threshold logic in `_process_frame` is dead code during playback. Barge-in during speech is impossible.
-2. **Streaming Markdown Leakage into TTS:** `TurnExecutor._stream_response` feeds raw LLM token stream chunks directly into Kokoro TTS without passing them through `SpeechFormatter`. Asterisks, headers, bullets, and markdown symbols leak into synthesized voice output.
-3. **Missing Whisper Hallucination Filtering:** Ambient noise, trailing audio, or silence fed to FasterWhisper causes characteristic Whisper hallucinations ("Thank you for watching!", "Subtitles by..."), with zero heuristic or pattern filtering in place.
-4. **CUDA STT DLL Discovery Failure:** On Windows, `FasterWhisperSTTProvider` cannot discover `cublas64_12.dll` installed in `.venv` site-packages because `os.add_dll_directory` is never invoked. It fails with `cublas64_12.dll not found`, memoizes the failure, and permanently falls back to CPU.
-5. **Inverted Latency Stage Calculation:** In `python/tom/voice/latency.py`, `_METRIC_STAGES["stt_queue_wait_ms"]` is defined as `(LatencyStage.STT_FINAL, LatencyStage.STT_DECODE_START)`. Because decode start precedes finalization, `stt_queue_wait_ms` evaluates to a negative number.
-6. **Smart Turn Incomplete Utterance Hang:** `smart_turn_max_incomplete_wait_ms` is declared in configuration but never scheduled in `InteractionCore`. If Smart Turn returns `CONTINUING` and the user stops speaking, the turn hangs indefinitely.
-7. **Severe Real-World Latency:** Live hardware benchmarks (13 turns) show warm median `perceived_response_ms` at **6469 ms** (target: 1500 ms, ceiling: 2200 ms). STT decode on CPU alone accounts for ~1734–3484 ms.
+### 3. What Remains Unfinished & Broken (Reconciled Post-Phase V1)
+1. **Barge-in Blocked During SPEAKING (Critical Bug — ACTIVE in Phase V2 Step 5):** In `python/tom/voice/microphone.py:382`, `push_samples()` drops all incoming samples when `self._gated == True` (`if self._stopped or self._muted or self._gated: return`). Because `_on_speaking` sets `_mic.gate()`, the RMS threshold logic in `_process_frame` is dead code during playback. Barge-in during speech is impossible.
+2. **Streaming Markdown Leakage into TTS — [RESOLVED in Phase V1, Commit `e3ae93a`]:** `TurnExecutor._stream_response` in `python/tom/voice/interaction_core.py:513-518` now pipes each chunk through `self._formatter.format(item)` before synthesis, stripping bold, bullets, headers, URLs, and backticks.
+3. **Missing Whisper Hallucination Filtering — [RESOLVED in Phase V1, Commit `14ad8a6`]:** In `python/tom/voice/stt.py:380-496`, segment stats filtering (`no_speech_prob`, `avg_logprob`, `compression_ratio`), secondary phrase blocklist, `_dropped_utterance_count`, and `condition_on_previous_text=False` are active.
+4. **CUDA STT DLL Discovery Failure — [RESOLVED in Phase V1, Commit `41d3d5e`]:** `FasterWhisperSTTProvider._register_nvidia_dll_dirs()` in `python/tom/voice/stt.py:225-270` registers Windows CUDA DLL directories (`cublas`, `cudnn`, `cuda_runtime`) via `os.add_dll_directory` and `PATH`, with loud fallback to CPU and warm-up decode (`stt.py:348-360`). Median STT latency dropped from ~5s to 110ms.
+5. **Inverted Latency Stage Calculation — [RESOLVED in Phase V1, Commit `c014fc2`]:** In `python/tom/voice/latency.py:390`, `_METRIC_STAGES["stt_queue_wait_ms"]` is corrected to `(LatencyStage.SPEECH_END, LatencyStage.STT_DECODE_START)`.
+6. **Smart Turn Incomplete Utterance Hang — [RESOLVED in Phase V1, Commit `7c798c7`]:** In `python/tom/voice/interaction_core.py:1085-1088, 1107-1135`, `_schedule_force_complete_timeout` attaches a timer for `smart_turn_max_incomplete_wait_ms` on `CONTINUING` decisions, cancelled on new speech.
+7. **Severe Real-World Latency — [ACTIVE FOCUS in Phase V2]:** Baseline median perceived response is ~6.5-7.1s. STT GPU acceleration (Phase V1) dropped STT to 110ms; Phase V2 targets first-chunk TTS, Kokoro on GPU, router fast-path, and endpointing hangover tuning.
 
 ---
 
@@ -128,12 +128,12 @@ However, **TOM is NOT yet production-ready for live, hands-free conversational v
 | **6** | Routing & Task Lifecycle | **Verified Complete** | `python/tom/core/router.py`, `python/tom/schemas/routing.py`, `python/tom/schemas/tasks.py` | Routing unit tests pass; `TaskState` machine validated | Intent classification relies on LLM heuristics when offline | Maintain fallback to main model |
 | **7** | Agent & Planning System | **Verified Complete** | `python/tom/agents/`, `python/tom/agents/planner.py`, `executor.py` | 36 e2e agent integration tests passed | Context compression across long multi-step DAGs is basic | Add structured history summarization |
 | **8** | Memory (SQLite & Qdrant) | **Verified Complete** | `python/tom/memory/` | 39 SQLite tests; hybrid search rank tests; Qdrant optional fallback verified | Qdrant is uninstalled in primary `.venv`; SQLite serves as ground truth | SQLite remains single source of truth |
-| **9** | Voice Pipeline & Turn Taking | **Implemented but Incomplete / Bugs Present** | `python/tom/voice/` | 377 voice unit tests pass; real live sessions show 6469 ms latency | Mic gating blocks barge-in during playback; markdown leaks into TTS; negative wait metric; missing hallucination filter | Fix gating, wire `SpeechFormatter`, fix latency formula |
+| **9** | Voice Pipeline & Turn Taking | **Hybrid State (Phase V1 Fixed Defects 2–6)** | `python/tom/voice/` | 1771 unit tests pass; Phase V1 benchmarks show STT decode 110ms on GPU | Barge-in blocked during playback (mic gating); Phase V2 Step 5 resolves gating | Implement Phase V2 Step 5 guarded barge-in |
 | **10** | Vision & OCR | **Implemented & Tested** | `python/tom/vision/`, `python/tom/tools/vision.py` | 26 unit tests; graceful skip for uninstalled `opencv-python`/`winocr` | `winocr` and `opencv-python` optional deps skipped | Maintain CPU-first and ephemeral RAM invariants |
 | **11** | Web & Personal Productivity | **Verified Complete** | `python/tom/tools/web.py`, `personal.py`, `python/tom/personal/` | 8 web search, 27 web fetch, 71 personal unit tests pass | Web fetch relies on `httpcore` `sni_hostname` for DNS-pinning | Keep SSRF and IP pinning protections |
 | **12** | Security Hardening & Isolation | **Verified Complete** | `python/tom/security/` | 101 adversarial security tests (traversal, secrets, injection) pass | Regex scanner throughput is ~19.8 MB/s; large payloads capped at 1 MiB | Keep strict fail-safe `***REDACTION_ERROR***` |
 | **13** | GPU/RAM Resource Governor | **Verified Complete** | `python/tom/resources/` | 105 resource tests (19 adversarial stress tests, 100 cycles zero drift) | Software reservation limit does not enforce external physical VRAM | Retain 500 MB safety headroom margin |
-| **14** | Telemetry, Tracing & Debug | **Implemented with Metric Bugs** | `python/tom/telemetry/`, `python/tom/voice/latency.py`, `debug_trace.py` | `InteractionLatencyTracer` tests pass; debug trace WAVs recorded | `stt_queue_wait_ms` formula inverted; tracer has no hallucination flag | Correct `_METRIC_STAGES` derivation |
+| **14** | Telemetry, Tracing & Debug | **Verified & Honest (Fixed in Phase V1)** | `python/tom/telemetry/`, `python/tom/voice/latency.py`, `debug_trace.py` | `InteractionLatencyTracer` tests pass; fake passes eliminated | None (queue wait and metric honesty resolved in commit `c014fc2`) | Maintain metric honesty invariants |
 | **15** | Desktop Tray & CLI Operation | **Verified Complete** | `python/tom/desktop/`, `python/tom/main.py` | 33 tray unit tests pass; text console verified | Headless environments must explicitly skip tray via `--headless` | Retain graceful degradation when pystray missing |
 
 ---
@@ -305,15 +305,15 @@ Ranked findings (largest cuts first) for simplifying over-engineering, removing 
 
 ## H. Technical Debt & Risk Register
 
-### P0 — Critical (Voice Experience Broken)
-- **RISK-01 (Barge-In Gating):** `push_samples` dropping frames when `_gated == True` prevents speech detection during playback. Fix: remove `or self._gated` check from sample ingestion; allow `_process_frame` to evaluate barge-in RMS threshold.
-- **RISK-02 (Markdown TTS Leakage):** TTS synthesizer receives raw markdown syntax. Fix: pipe sentence streamer output through `SpeechFormatter.format()`.
-- **RISK-03 (STT CUDA Discovery):** CTranslate2 missing DLL path on Windows causes silent fallback to slow CPU STT. Fix: add `os.add_dll_directory` for Python CUDA package directories during initialization.
+### P0 — Critical (Voice Experience)
+- **RISK-01 (Barge-In Gating — ACTIVE):** `push_samples` dropping frames when `_gated == True` prevents speech detection during playback. Assigned to Phase V2 Step 5.
+- **RISK-02 (Markdown TTS Leakage — RESOLVED):** Resolved in Commit `e3ae93a` (`SpeechFormatter.format()` in `interaction_core.py:513-518`).
+- **RISK-03 (STT CUDA Discovery — RESOLVED):** Resolved in Commit `41d3d5e` (`os.add_dll_directory` and PATH prepend in `stt.py:225-270`).
 
 ### P1 — High (Reliability & Metrics)
-- **RISK-04 (Whisper Hallucinations):** Autoregressive repetitions on silence pollute agent context. Fix: add regex/repetition filter on committed transcripts before orchestrator dispatch.
-- **RISK-05 (Negative Queue Latency):** Inverted stage tuple in `latency.py` corrupts telemetry logs. Fix: update `_METRIC_STAGES["stt_queue_wait_ms"]`.
-- **RISK-06 (Smart Turn Incomplete Hang):** Missing timer for `smart_turn_max_incomplete_wait_ms` can leave candidate speech in limbo. Fix: attach scheduled timeout callback on `CONTINUING` decision.
+- **RISK-04 (Whisper Hallucinations — RESOLVED):** Resolved in Commit `14ad8a6` (segment stats + blocklist in `stt.py:380-496`).
+- **RISK-05 (Negative Queue Latency — RESOLVED):** Resolved in Commit `c014fc2` (`SPEECH_END -> STT_DECODE_START` in `latency.py:390`).
+- **RISK-06 (Smart Turn Incomplete Hang — RESOLVED):** Resolved in Commit `7c798c7` (force-complete timer in `interaction_core.py:1085-1135`).
 
 ### P2 — Medium (Architecture & Code Health)
 - **RISK-07 (Dual Voice Pipelines):** Both `VoicePipelineManager` and `InteractionCore` exist, creating confusion. Fix: deprecate `VoicePipelineManager` in favor of `InteractionCore`.
@@ -346,15 +346,14 @@ Ranked findings (largest cuts first) for simplifying over-engineering, removing 
 
 ---
 
-## J. Immediate Handoff
+## J. Phase V2 Handoff
 
-The exact task to execute when development resumes is:
+Phase V1 (Commits `bac0a41` through `c014fc2`) resolved defects 2 through 6. Development has progressed to **Phase V2 — Response Time and Experience**:
 
-**Task:** Fix the 3 critical voice pipeline bugs in `python/tom/voice/`:
-1. In `python/tom/voice/microphone.py`: in `push_samples()`, allow audio to reach `_process_frame` when gated so barge-in RMS threshold detection can function during `SPEAKING`.
-2. In `python/tom/voice/stt.py`: add Windows CUDA DLL directory discovery via `os.add_dll_directory` pointing to `.venv/Lib/site-packages/nvidia/cublas/bin` and `cudnn/bin`.
-3. In `python/tom/voice/interaction_core.py`: wrap sentence streamer output with `SpeechFormatter.format()` before yielding to TTS.
-4. In `python/tom/voice/latency.py`: fix `_METRIC_STAGES["stt_queue_wait_ms"] = (LatencyStage.SPEECH_END, LatencyStage.STT_DECODE_START)`.
-
-These fixes are self-contained, targeted, and restore both GPU STT acceleration and voice conversational integrity without altering external contracts.
+- **Step 0 (Reconcile):** Audit report synchronized with Phase V1 fixes; repo cleanup committed.
+- **Step 1 (Live Baseline):** Live 10-turn baseline recording with `user_felt_latency_ms`.
+- **Step 2 (TTS Optimization):** First-clause boundary chunking (8-12 chars), Kokoro on GPU evaluation, warm-up decode/synth.
+- **Step 3 (LLM Optimization):** Router fast-path proposal, prefix caching stability.
+- **Step 4 (Endpointing Tuning):** Smart Turn silence threshold (>=150ms), hangover tuning (600->450->350ms).
+- **Step 5 (Barge-In Implementation):** Ungated frame flow to barge-in detector, 3 modes (`off`, `headphones`, `guarded`), stop-speaking hotkey.
 
