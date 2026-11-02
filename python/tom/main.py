@@ -501,6 +501,10 @@ class TomApp:
             mode=self._config.models.stt.mode if self._config else "final_only",
         )
 
+        if self._resource_manager is not None and (self._config is None or self._config.models.stt.device == "cuda"):
+            from tom.resources.types import ModelRole
+            self._resource_manager.register_resident_model(ModelRole.STT, 452)
+
         tts_provider = self._injected_tts or IncrementalTTSStreamer(
             provider=KokoroTTSProvider(
                 config=TTSConfig(

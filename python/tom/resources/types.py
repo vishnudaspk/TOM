@@ -12,3 +12,4 @@ class ModelRole(StrEnum):
     REASONING = "reasoning"
     VLM = "vlm"
     GENERAL = "general"
+    STT = "stt"

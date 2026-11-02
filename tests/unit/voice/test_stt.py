@@ -816,3 +816,32 @@ class TestFasterWhisperCUDAFallback:
                 sys.modules.pop("numpy", None)
 
         run_async(_test())
+
+    def test_register_nvidia_dll_dirs_does_not_crash(self) -> None:
+        """Nvidia DLL dir registration should find existing dirs safely."""
+        dirs = FasterWhisperSTTProvider._register_nvidia_dll_dirs()
+        assert isinstance(dirs, list)
+
+    def test_cuda_failure_logs_error_loudly(self, caplog: Any) -> None:
+        """When CUDA fails, it must log at ERROR level loudly."""
+        import logging
+
+        async def _test() -> None:
+            mock_fw = _make_mock_whisper_module_cuda_fail()
+            mock_np = _make_mock_numpy()
+
+            provider = FasterWhisperSTTProvider(config=STTConfig(device="cuda"))
+            sys.modules["faster_whisper"] = mock_fw
+            sys.modules["numpy"] = mock_np
+            try:
+                with caplog.at_level(logging.ERROR):
+                    await provider.transcribe(_make_request())
+
+                # Verify loud ERROR log
+                error_records = [r for r in caplog.records if r.levelno >= logging.ERROR]
+                assert any("CUDA initialization FAILED" in r.message for r in error_records)
+            finally:
+                sys.modules.pop("faster_whisper", None)
+                sys.modules.pop("numpy", None)
+
+        run_async(_test())
