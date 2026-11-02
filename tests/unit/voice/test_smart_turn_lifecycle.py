@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Sequence
-from typing import Any
 
 from tom.voice.events import AudioFrameEvent, SpeechEndEvent, SpeechStartEvent
-from tom.voice.interaction_core import InteractionCore
-from tom.voice.smart_turn import TurnArbitrationDecision, TurnArbiter
+from tom.voice.smart_turn import TurnArbiter, TurnArbitrationDecision
+
 from tests.unit.voice.test_interaction_core import (
     build_core,
     wait_for_turns,

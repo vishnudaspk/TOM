@@ -196,11 +196,19 @@ class FasterWhisperSTTProvider(STTProvider):
       blocking the event loop.
     - Raises STTUnavailableError if faster-whisper is not installed or if
       the model cannot be loaded.
+    - CUDA initialization failure is memoized to prevent repeated failing
+      attempts on every utterance; falls back to CPU once and stays on CPU.
+    - Serialization lock prevents concurrent model access when timeouts
+      leave worker threads running (asyncio.wait_for() doesn't terminate them).
     """
 
     def __init__(self, config: STTConfig | None = None) -> None:
         self._config = config or STTConfig()
         self._model: Any = None  # WhisperModel, typed as Any to avoid import
+        self._cuda_attempted: bool = False
+        self._cuda_failed: bool = False
+        self._cuda_failure_reason: str | None = None
+        self._serialization_lock = asyncio.Lock()
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -221,10 +229,21 @@ class FasterWhisperSTTProvider(STTProvider):
                 "faster-whisper is not installed. Install it with: pip install faster-whisper"
             ) from exc
 
-        # Try CUDA first if device is cuda, fall back to CPU
+        import logging
+        logger = logging.getLogger(__name__)
+
         device = self._config.device
         compute_type = self._config.compute_type
         cpu_threads = self._config.cpu_threads
+
+        # If CUDA was previously attempted and failed, skip CUDA and go straight to CPU
+        if self._cuda_failed:
+            logger.info(
+                "Skipping CUDA initialization (previous failure: %s); using CPU",
+                self._cuda_failure_reason,
+            )
+            device = "cpu"
+            compute_type = "int8"
 
         if device == "cuda":
             # Try CUDA with int8_float16 for better performance
@@ -240,19 +259,24 @@ class FasterWhisperSTTProvider(STTProvider):
                 import numpy as np
                 dummy_audio = np.zeros(16000, dtype=np.float32)  # 1 second of silence
                 self._model.transcribe(dummy_audio, beam_size=1, language="en")
-                import logging
-                logging.getLogger(__name__).info(
+                logger.info(
                     "faster-whisper loaded on CUDA with compute_type=%s", compute_type
                 )
+                self._cuda_attempted = True
+                self._cuda_failed = False
+                self._cuda_failure_reason = None
                 return
             except Exception as cuda_exc:
-                import logging
-                logging.getLogger(__name__).warning(
-                    "CUDA initialization failed (%s), falling back to CPU", cuda_exc
+                self._cuda_attempted = True
+                self._cuda_failed = True
+                self._cuda_failure_reason = f"{type(cuda_exc).__name__}: {cuda_exc}"
+                logger.warning(
+                    "CUDA initialization failed (%s), falling back to CPU",
+                    self._cuda_failure_reason,
                 )
                 # Fall through to CPU
 
-        # CPU fallback
+        # CPU fallback (or primary if CUDA failed/was skipped)
         try:
             self._model = WhisperModel(
                 self._config.model_name,
@@ -260,8 +284,7 @@ class FasterWhisperSTTProvider(STTProvider):
                 compute_type="int8",
                 cpu_threads=cpu_threads,
             )
-            import logging
-            logging.getLogger(__name__).info(
+            logger.info(
                 "faster-whisper loaded on CPU with compute_type=int8, cpu_threads=%d",
                 cpu_threads,
             )
@@ -314,12 +337,22 @@ class FasterWhisperSTTProvider(STTProvider):
 
     async def transcribe(self, request: TranscriptionRequest) -> TranscriptionResult:
         t0 = time.monotonic()
-        try:
-            text, lang, segments = await asyncio.to_thread(self._transcribe_sync, request)
-        except STTError:
-            raise
-        except Exception as exc:
-            raise STTTranscriptionError(f"Transcription failed: {exc}") from exc
+        # Serialize calls to prevent concurrent model access when timeouts
+        # leave worker threads running (asyncio.wait_for() doesn't terminate them).
+        async with self._serialization_lock:
+            try:
+                # Add timeout to prevent indefinite blocking in thread pool (CPU inference)
+                # 30s max utterance duration + 10s buffer = 40s timeout
+                text, lang, segments = await asyncio.wait_for(
+                    asyncio.to_thread(self._transcribe_sync, request),
+                    timeout=40.0,
+                )
+            except STTError:
+                raise
+            except TimeoutError as exc:
+                raise STTTranscriptionError(f"Transcription timed out after 40s: {exc}") from exc
+            except Exception as exc:
+                raise STTTranscriptionError(f"Transcription failed: {exc}") from exc
 
         latency_ms = int((time.monotonic() - t0) * 1000)
         sample_count = (
@@ -347,13 +380,19 @@ class FasterWhisperSTTProvider(STTProvider):
             return False
 
     def get_model_info(self) -> dict[str, Any]:
-        return {
+        info = {
             "provider": "FasterWhisperSTTProvider",
             "model": self._config.model_name,
             "device": self._config.device,
             "compute_type": self._config.compute_type,
             "loaded": self._model is not None,
         }
+        if self._cuda_attempted:
+            info["cuda_attempted"] = True
+            info["cuda_failed"] = self._cuda_failed
+            if self._cuda_failed:
+                info["cuda_failure_reason"] = self._cuda_failure_reason
+        return info
 
 
 __all__ = [

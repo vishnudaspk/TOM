@@ -210,11 +210,14 @@ class KokoroTTSProvider(TTSProvider):
       blocking the event loop.
     - Raises TTSUnavailableError if kokoro-onnx is not installed or if
       the model files cannot be loaded.
+    - Serialization lock prevents concurrent model access when timeouts
+      leave worker threads running (asyncio.wait_for() doesn't terminate them).
     """
 
     def __init__(self, config: TTSConfig | None = None) -> None:
         self._config = config or TTSConfig()
         self._model: Any = None  # Kokoro instance, typed as Any to avoid import
+        self._serialization_lock = asyncio.Lock()
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -281,14 +284,24 @@ class KokoroTTSProvider(TTSProvider):
 
     async def synthesize(self, request: SynthesisRequest) -> SynthesisResult:
         t0 = time.monotonic()
-        try:
-            samples, sr, duration_s = await asyncio.to_thread(self._synthesize_sync, request)
-        except TTSError:
-            raise
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            raise TTSSynthesisError(f"TTS synthesis failed: {exc}") from exc
+        # Serialize calls to prevent concurrent model access when timeouts
+        # leave worker threads running (asyncio.wait_for() doesn't terminate them).
+        async with self._serialization_lock:
+            try:
+                # Add timeout to prevent indefinite blocking in thread pool (CPU inference)
+                # Typical synthesis is fast, but cap at 30s for safety
+                samples, sr, duration_s = await asyncio.wait_for(
+                    asyncio.to_thread(self._synthesize_sync, request),
+                    timeout=30.0,
+                )
+            except TTSError:
+                raise
+            except asyncio.CancelledError:
+                raise
+            except TimeoutError as exc:
+                raise TTSSynthesisError(f"TTS synthesis timed out after 30s: {exc}") from exc
+            except Exception as exc:
+                raise TTSSynthesisError(f"TTS synthesis failed: {exc}") from exc
 
         latency_ms = int((time.monotonic() - t0) * 1000)
 

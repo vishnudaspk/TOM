@@ -27,14 +27,16 @@ from tom.resources.manager import ResourceManager
 from tom.resources.model_manager import ModelLifecycleCoordinator
 from tom.schemas.agent import AgentConfig
 from tom.schemas.config import TOMConfig
-from tom.voice.tts import TTSConfig
 from tom.telemetry.logging import configure_logging, get_logger
 from tom.tools.bootstrap import setup_default_tools
 from tom.tools.executor import ToolExecutor
 from tom.tools.registry import default_registry
+from tom.voice.debug_trace import create_debug_trace_manager
+from tom.voice.tts import TTSConfig
 
 if TYPE_CHECKING:
     from tom.ipc.transport import TransportProtocol
+    from tom.voice.debug_trace import DebugTraceManager
     from tom.voice.streaming_stt import StreamingSTTProvider
     from tom.voice.streaming_tts import StreamingTTSProvider
 
@@ -108,6 +110,9 @@ class TomApp:
         self._injected_stt: StreamingSTTProvider | None = None
         self._injected_tts: StreamingTTSProvider | None = None
         self._injected_turn_arbitrator: Any | _DefaultArbiterSentinel = _DEFAULT_ARBITER
+
+        # Debug trace manager (voice mode)
+        self._debug_trace: DebugTraceManager | None = None
 
     # ------------------------------------------------------------------
     # Configuration & Setup
@@ -453,6 +458,20 @@ class TomApp:
             config=mic_config,
         )
 
+        # Debug trace manager (if enabled)
+        debug_trace = None
+        session = None
+        if self._config and self._config.voice.debug_trace:
+            debug_trace = create_debug_trace_manager(self._config.voice)
+            if debug_trace:
+                session = debug_trace.start_session()
+                if session:
+                    # Log audio environment info
+                    session.log_audio_env(
+                        input_device=mic_config.capture_device,
+                        output_device=self._config.voice.playback_device,
+                    )
+
         from tom.voice.stt import STTConfig
 
         stt_provider = self._injected_stt or FasterWhisperStreamingAdapter(
@@ -484,6 +503,7 @@ class TomApp:
             sample_rate=24000,
             max_concurrent_synthesis=2,
             playback_device=self._config.voice.playback_device if self._config else None,
+            playback_tail_ms=self._config.voice.playback_tail_ms if self._config else 400,
         )
 
         turn_manager = ConversationTurnManager()
@@ -517,6 +537,7 @@ class TomApp:
             engine=self._engine_client,
             pipeline=pipeline,
             turn_arbitrator=turn_arbitrator,
+            debug_trace=session if debug_trace else None,
         )
 
         # Tray daemon integration (optional desktop UX)
@@ -575,6 +596,15 @@ class TomApp:
             except Exception as exc:
                 logger.warning("tray_daemon_stop_error", error=str(exc))
             self._tray = None
+
+        # Close debug trace manager
+        if self._debug_trace:
+            try:
+                self._debug_trace.close()
+                logger.info("debug_trace_closed")
+            except Exception as exc:
+                logger.warning("debug_trace_close_error", error=str(exc))
+            self._debug_trace = None
 
         # 1. Stop voice interaction core
         if self._interaction_core is not None:

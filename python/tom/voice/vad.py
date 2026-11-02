@@ -45,6 +45,10 @@ class EnergyVADDetector(VADDetector):
     def threshold(self) -> float:
         return self._threshold
 
+    def set_threshold(self, threshold: float) -> None:
+        """Set the speech energy threshold."""
+        self._threshold = threshold
+
     @property
     def noise_floor(self) -> float:
         return self._noise_floor

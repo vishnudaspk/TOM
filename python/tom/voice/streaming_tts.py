@@ -32,8 +32,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from tom.core.context import CancellationToken
+from tom.ipc.errors import ConnectionLostError, NotConnectedError
 from tom.schemas.voice import SynthesisRequest, SynthesisResult
-from tom.telemetry.logging import get_logger, VoiceEventNames
+from tom.telemetry.logging import VoiceEventNames, get_logger
 from tom.voice.audio_utils import samples_to_pcm16_bytes
 from tom.voice.tts import TTSProvider
 
@@ -116,12 +117,16 @@ class IncrementalTTSStreamer(StreamingTTSProvider):
         * ``stream_synthesize`` (the sequencer) awaits those tasks strictly in
           index order, so PCM is queued in sentence order regardless of which
           synthesis finishes first.
-    * ``_play_pending`` consumes the ordered queue concurrently and issues
+        * ``_play_pending`` consumes the ordered queue concurrently and issues
           ``EngineClient.play_audio_buffer()`` per chunk. It runs as a separate
           task, so a slow playback call never blocks the next synthesis.
         * ``playback_observer`` (Phase 9.6) is an optional zero-cost hook invoked
           immediately before the first ``play_audio_buffer()`` call, used for
           latency instrumentation. It changes no timing or ordering when unset.
+        * ``playback_tail_ms`` (Phase 9.6 correctness): time to wait after the
+          last chunk is submitted to the engine before considering playback
+          complete. This ensures SPEAKING state persists until audio actually
+          drains.
     """
 
     def __init__(
@@ -136,6 +141,7 @@ class IncrementalTTSStreamer(StreamingTTSProvider):
         max_concurrent_synthesis: int = 2,
         playback_drain_timeout_s: float = _PLAYBACK_DRAIN_TIMEOUT_S,
         playback_device: str | None = None,
+        playback_tail_ms: int = 400,
         # Latency callbacks (optional, for instrumentation)
         on_first_synth_start: Callable[[], None] | None = None,
         on_first_synth_end: Callable[[], None] | None = None,
@@ -153,6 +159,7 @@ class IncrementalTTSStreamer(StreamingTTSProvider):
         self._max_concurrent = max_concurrent_synthesis
         self._drain_timeout_s = playback_drain_timeout_s
         self._playback_device = playback_device
+        self._playback_tail_ms = playback_tail_ms
         self._executor: ThreadPoolExecutor | None = None
         # Latency callbacks
         self._on_first_synth_start = on_first_synth_start
@@ -188,6 +195,12 @@ class IncrementalTTSStreamer(StreamingTTSProvider):
             return
         try:
             await self._engine.stop_audio_playback()
+        except (ConnectionLostError, NotConnectedError) as exc:
+            logger.warning(
+                VoiceEventNames.TTS_FAILED,
+                stage="stop_playback_ipc_disconnected",
+                error=str(exc),
+            )
         except Exception as exc:
             logger.warning(
                 VoiceEventNames.TTS_FAILED,
@@ -437,26 +450,68 @@ class IncrementalTTSStreamer(StreamingTTSProvider):
         token: CancellationToken | None,
         playback_observer: Callable[[], None] | None = None,
     ) -> None:
-        """Play ordered PCM through EngineClient, one chunk at a time."""
+        """Play ordered PCM through EngineClient, one chunk at a time.
+
+        Tracks total audio duration and waits for playback to drain plus
+        a configurable tail before signaling completion. This ensures the
+        SPEAKING state persists until audio actually finishes playing.
+        """
         if self._engine is None:
             return
         observed = False
         first_chunk = True
+        # Track total duration of audio submitted for playback
+        total_audio_duration_s = 0.0
+        # Track duration of audio already submitted (for calculating remaining)
+        submitted_duration_s = 0.0
+        # List to store pending chunk durations for drain calculation
+        pending_durations: list[float] = []
+
         while True:
             item = await play_queue.get()
             if item is _EOF:
+                # All chunks submitted. Now wait for remaining audio to drain + tail.
+                remaining_duration_s = sum(pending_durations)
+                if remaining_duration_s > 0:
+                    # Wait for remaining audio to play plus configurable tail
+                    tail_s = self._playback_tail_ms / 1000.0
+                    await asyncio.sleep(remaining_duration_s + tail_s)
                 if self._on_playback_completed is not None:
                     self._on_playback_completed()
                 return
             if token is not None and token.is_cancelled():
                 return
             chunk = item.chunk
-            await self._engine.play_audio_buffer(
-                audio_data=chunk.audio_data,
-                sample_rate=item.sample_rate,
-                channels=item.channels,
-                device_name=self._playback_device,
-            )
+            # Calculate chunk duration: audio_data is PCM16 (2 bytes/sample), mono
+            chunk_duration_s = len(chunk.audio_data) / 2 / item.sample_rate
+            pending_durations.append(chunk_duration_s)
+            total_audio_duration_s += chunk_duration_s
+            try:
+                await self._engine.play_audio_buffer(
+                    audio_data=chunk.audio_data,
+                    sample_rate=item.sample_rate,
+                    channels=item.channels,
+                    device_name=self._playback_device,
+                )
+            except (ConnectionLostError, NotConnectedError) as exc:
+                logger.warning(
+                    VoiceEventNames.TTS_FAILED,
+                    stage="playback_ipc_disconnected",
+                    error=str(exc),
+                )
+                # Engine disconnected - stop trying to play remaining chunks
+                return
+            except Exception as exc:
+                logger.warning(
+                    VoiceEventNames.TTS_FAILED,
+                    stage="playback",
+                    error=str(exc),
+                )
+                # Continue with next chunk on other errors
+                pending_durations.pop()  # Remove failed chunk from pending
+                continue
+            # Chunk submitted successfully, move its duration from pending to submitted
+            submitted_duration_s += pending_durations.pop(0)
             if first_chunk:
                 first_chunk = False
                 if not observed and playback_observer is not None:

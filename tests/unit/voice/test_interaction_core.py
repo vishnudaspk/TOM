@@ -9,10 +9,11 @@ microphone, model, TTS engine, GPU, or network is touched.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncGenerator, Coroutine, Sequence
+from collections.abc import AsyncGenerator, Callable, Coroutine, Sequence
 from typing import Any
 
 from tom.core.context import CancellationToken
+from tom.ipc.errors import ConnectionLostError
 from tom.schemas.task import Task, TaskState
 from tom.schemas.turn import ResponseAction, TurnStatus
 from tom.schemas.voice import SynthesisRequest, SynthesisResult, VoicePipelineState
@@ -31,6 +32,7 @@ from tom.voice.response_policy import ResponsePolicy
 from tom.voice.smart_turn import TurnArbitrationDecision
 from tom.voice.streaming_stt import PartialTranscript, StreamingSTTProvider
 from tom.voice.streaming_tts import IncrementalTTSStreamer
+from tom.voice.stt import STTTranscriptionError, STTUnavailableError
 from tom.voice.tts import MockTTSProvider
 from tom.voice.turn_manager import ConversationTurnManager
 from tom.voice.vad import VADDetector
@@ -93,14 +95,16 @@ class FakeEngine:
     async def get_captured_speech(self, clear: bool = True) -> Any:
         raise AssertionError("InteractionCore must not poll the engine directly")
 
-    async def get_system_time(self) -> dict:
-        return {
-            "timestamp_secs": 1700000000,
-            "timestamp_nanos": 0,
-            "offset_seconds": -28800,
-            "timezone_name": "PST",
-            "iso8601": "2023-11-14T12:00:00-08:00",
-        }
+    async def get_system_time(self) -> Any:
+        class TimeInfo:
+            def __init__(self) -> None:
+                self.timestamp_secs = 1700000000
+                self.timestamp_nanos = 0
+                self.offset_seconds = -28800
+                self.timezone_name = "PST"
+                self.iso8601 = "2023-11-14T12:00:00-08:00"
+                self.local_time_str = "2:00 PM"
+        return TimeInfo()
 
     async def play_audio_buffer(
         self,
@@ -240,6 +244,8 @@ def build_core(
     task_manager: Any = None,
     reuse_pipeline: bool = False,
     turn_arbitrator: Any = ...,
+    stt: StreamingSTTProvider | None = None,
+    orchestrator: Any | None = None,
 ) -> tuple[InteractionCore, dict[str, Any]]:
     """Wire a complete 9.0-9.5 stack from deterministic fakes.
 
@@ -247,6 +253,8 @@ def build_core(
         turn_arbitrator: Arbitration strategy. Defaults to CompleteArbiter().
                          Pass None explicitly for VAD-only mode (no Smart Turn).
                          Pass Ellipsis (...) to use the default CompleteArbiter().
+        stt: Optional custom STT provider (defaults to ScriptedSTT).
+        orchestrator: Optional custom orchestrator (defaults to ScriptedOrchestrator).
     """
     engine = engine or FakeEngine()
     mic = MicrophoneLoop(
@@ -254,11 +262,13 @@ def build_core(
             silence_duration_ms=50,
             min_speech_frames=2,
             frame_duration_ms=20,
+            min_speech_ms=50,  # Lower for testing (default 400ms)
+            barge_in_min_duration_ms=50,  # Lower for testing
         ),
         vad=ThresholdVAD(),
     )
-    stt = ScriptedSTT(transcripts)
-    orchestrator = ScriptedOrchestrator(deltas)
+    stt = stt or ScriptedSTT(transcripts)
+    orchestrator = orchestrator or ScriptedOrchestrator(deltas)
     provider = RecordingTTS(gate_text=gate_text)
     tts = IncrementalTTSStreamer(provider, engine)  # type: ignore[arg-type]
     turn_manager = ConversationTurnManager(task_manager=task_manager)
@@ -284,6 +294,7 @@ def build_core(
         engine=engine,  # type: ignore[arg-type]
         pipeline=pipeline,
         turn_arbitrator=turn_arbitrator,
+        startup_greeting=False,
     )
     return core, {
         "mic": mic,
@@ -1129,3 +1140,331 @@ def test_turn_executor_survives_a_cancelled_token() -> None:
         assert executor._turn_manager.history == []  # type: ignore[reportPrivateUsage]
 
     run_async(scenario())
+
+
+# ===========================================================================
+# STT Error Recovery Tests
+# ===========================================================================
+
+
+class FailingSTT(StreamingSTTProvider):
+    """Streaming STT that fails with a specific error."""
+
+    def __init__(self, error: Exception) -> None:
+        self._error = error
+
+    async def transcribe(self, request: Any) -> Any:
+        raise AssertionError("TurnExecutor must use the 9.1 streaming STT contract")
+
+    async def check_health(self) -> bool:
+        return False
+
+    def get_model_info(self) -> dict[str, Any]:
+        return {"provider": "FailingSTT"}
+
+    async def stream_transcribe(
+        self,
+        audio_stream: AsyncGenerator[bytes, None],
+        token: CancellationToken | None = None,
+        *,
+        on_decode_start: Callable[[], None] | None = None,
+        on_decode_end: Callable[[], None] | None = None,
+    ) -> AsyncGenerator[PartialTranscript, None]:
+        if token is not None and token.is_cancelled():
+            return
+        if on_decode_start is not None:
+            on_decode_start()
+        raise self._error
+        yield  # Make this an async generator
+
+
+class TestSTTErrorRecovery:
+    """Tests for STT error handling and state machine recovery."""
+
+    def test_stt_unavailable_error_recovers_to_listening(self) -> None:
+        """When STT is unavailable, turn should complete cleanly and return to LISTENING."""
+        async def scenario() -> None:
+            engine = FakeEngine()
+            core, parts = build_core(
+                stt=FailingSTT(STTUnavailableError("model not loaded")),
+                engine=engine,
+            )
+            run_task = asyncio.create_task(core.run())
+            await wait_until(lambda: core.state is VoicePipelineState.LISTENING)
+
+            await say(parts["mic"])
+            # Wait for turn to complete and pipeline to return to LISTENING
+            await wait_until(lambda: core.state is VoicePipelineState.LISTENING)
+
+            # Pipeline should be back to LISTENING (no history entry for empty transcript)
+            assert core.state is VoicePipelineState.LISTENING
+
+            await core.stop()
+            await asyncio.wait_for(run_task, timeout=2.0)
+
+        run_async(scenario())
+
+    def test_stt_transcription_error_recovers_to_listening(self) -> None:
+        """When STT transcription fails, turn should complete cleanly and return to LISTENING."""
+        async def scenario() -> None:
+            engine = FakeEngine()
+            core, parts = build_core(
+                stt=FailingSTT(STTTranscriptionError("audio corrupt")),
+                engine=engine,
+            )
+            run_task = asyncio.create_task(core.run())
+            await wait_until(lambda: core.state is VoicePipelineState.LISTENING)
+
+            await say(parts["mic"])
+            await wait_until(lambda: core.state is VoicePipelineState.LISTENING)
+
+            assert core.state is VoicePipelineState.LISTENING
+
+            await core.stop()
+            await asyncio.wait_for(run_task, timeout=2.0)
+
+        run_async(scenario())
+
+    def test_multiple_stt_failures_do_not_stick_in_processing(self) -> None:
+        """Multiple consecutive STT failures should not leave pipeline in PROCESSING."""
+        async def scenario() -> None:
+            engine = FakeEngine()
+            core, parts = build_core(
+                stt=FailingSTT(STTUnavailableError("model not loaded")),
+                engine=engine,
+            )
+            run_task = asyncio.create_task(core.run())
+            await wait_until(lambda: core.state is VoicePipelineState.LISTENING)
+
+            # First failure
+            await say(parts["mic"])
+            await wait_until(lambda: core.state is VoicePipelineState.LISTENING)
+            assert core.state is VoicePipelineState.LISTENING
+
+            # Second failure
+            await say(parts["mic"])
+            await wait_until(lambda: core.state is VoicePipelineState.LISTENING)
+            assert core.state is VoicePipelineState.LISTENING
+
+            # Third failure
+            await say(parts["mic"])
+            await wait_until(lambda: core.state is VoicePipelineState.LISTENING)
+            assert core.state is VoicePipelineState.LISTENING
+
+            await core.stop()
+            await asyncio.wait_for(run_task, timeout=2.0)
+
+        run_async(scenario())
+
+
+# ===========================================================================
+# IPC Disconnection Handling Tests
+# ===========================================================================
+
+
+class DisconnectingEngine(FakeEngine):
+    """Engine that simulates IPC disconnection on specific calls."""
+
+    def __init__(self, fail_on_playback: bool = False, fail_on_stop: bool = False) -> None:
+        super().__init__()
+        self._fail_on_playback = fail_on_playback
+        self._fail_on_stop = fail_on_stop
+
+    async def play_audio_buffer(self, **kwargs: Any) -> None:
+        if self._fail_on_playback:
+            raise ConnectionLostError("Simulated IPC disconnect during playback")
+        await super().play_audio_buffer(**kwargs)
+
+    async def stop_audio_playback(self) -> None:
+        if self._fail_on_stop:
+            raise ConnectionLostError("Simulated IPC disconnect during stop")
+        await super().stop_audio_playback()
+
+
+class TestIPCDisconnectionHandling:
+    """Tests for graceful handling of IPC disconnection during voice pipeline."""
+
+    def test_playback_ipc_disconnect_does_not_crash(self) -> None:
+        """IPC disconnect during playback should be handled gracefully."""
+        async def scenario() -> None:
+            engine = DisconnectingEngine(fail_on_playback=True)
+            core, parts = build_core(engine=engine)
+            run_task = asyncio.create_task(core.run())
+            await wait_until(lambda: core.state is VoicePipelineState.LISTENING)
+
+            await say(parts["mic"])
+            await wait_for_turns(core, parts, 1)
+
+            # Turn should complete (INTERRUPTED because playback failed)
+            record = parts["turn_manager"].history[0]
+            assert record.status in (TurnStatus.COMPLETED, TurnStatus.INTERRUPTED)
+            # Pipeline should recover to LISTENING
+            assert core.state is VoicePipelineState.LISTENING
+
+            await core.stop()
+            await asyncio.wait_for(run_task, timeout=2.0)
+
+        run_async(scenario())
+
+    def test_stop_playback_ipc_disconnect_handled_gracefully(self) -> None:
+        """IPC disconnect during stop_audio_playback should not crash shutdown."""
+        async def scenario() -> None:
+            engine = DisconnectingEngine(fail_on_stop=True)
+            core, parts = build_core(engine=engine)
+            run_task = asyncio.create_task(core.run())
+            await wait_until(lambda: core.state is VoicePipelineState.LISTENING)
+
+            await say(parts["mic"])
+            await wait_until(lambda: engine.play_calls)
+
+            # Stop while speaking - should handle disconnect gracefully
+            await core.stop()
+            await asyncio.wait_for(run_task, timeout=2.0)
+
+            assert core.is_stopped
+            assert core.state is VoicePipelineState.IDLE
+
+        run_async(scenario())
+
+    def test_barge_in_ipc_disconnect_handled_gracefully(self) -> None:
+        """IPC disconnect during barge-in stop should not crash."""
+        async def scenario() -> None:
+            engine = DisconnectingEngine(fail_on_stop=True)
+            core, parts = build_core(engine=engine)
+            run_task = asyncio.create_task(core.run())
+            await wait_until(lambda: core.state is VoicePipelineState.LISTENING)
+
+            await say(parts["mic"])
+            await wait_until(lambda: engine.play_calls)
+
+            # Barge in - should handle disconnect gracefully
+            await core.handle_barge_in()
+            await wait_until(lambda: core.state is VoicePipelineState.LISTENING)
+
+            assert core.state is VoicePipelineState.LISTENING
+
+            await core.stop()
+            await asyncio.wait_for(run_task, timeout=2.0)
+
+        run_async(scenario())
+
+
+# ===========================================================================
+# Ctrl+C / Shutdown Responsiveness Tests
+# ===========================================================================
+
+
+class SlowSTT(StreamingSTTProvider):
+    """Streaming STT that simulates a slow/blocking transcription."""
+
+    def __init__(self, delay_s: float = 0.5) -> None:
+        self._delay_s = delay_s
+
+    async def transcribe(self, request: Any) -> Any:
+        raise AssertionError("TurnExecutor must use the 9.1 streaming STT contract")
+
+    async def check_health(self) -> bool:
+        return True
+
+    def get_model_info(self) -> dict[str, Any]:
+        return {"provider": "SlowSTT"}
+
+    async def stream_transcribe(
+        self,
+        audio_stream: AsyncGenerator[bytes, None],
+        token: CancellationToken | None = None,
+        *,
+        on_decode_start: Callable[[], None] | None = None,
+        on_decode_end: Callable[[], None] | None = None,
+    ) -> AsyncGenerator[PartialTranscript, None]:
+        # Simulate slow transcription that respects cancellation
+        await asyncio.sleep(self._delay_s)
+        if token is not None and token.is_cancelled():
+            return
+        if on_decode_start is not None:
+            on_decode_start()
+        yield PartialTranscript(text="slow result", is_final=True, confidence=1.0)
+        if on_decode_end is not None:
+            on_decode_end()
+
+
+class TestShutdownResponsiveness:
+    """Tests for Ctrl+C and shutdown responsiveness."""
+
+    def test_shutdown_during_stt_completes_promptly(self) -> None:
+        """Shutdown during STT should complete within bounded time."""
+        async def scenario() -> None:
+            engine = FakeEngine()
+            core, parts = build_core(stt=SlowSTT(delay_s=2.0), engine=engine)
+            run_task = asyncio.create_task(core.run())
+            await wait_until(lambda: core.state is VoicePipelineState.LISTENING)
+
+            await say(parts["mic"])
+
+            # Give STT time to start
+            await asyncio.sleep(0.1)
+
+            # Stop should complete promptly despite slow STT
+            import time
+            start = time.monotonic()
+            await core.stop()
+            elapsed = time.monotonic() - start
+
+            await asyncio.wait_for(run_task, timeout=2.0)
+
+            # Should complete within timeout + small buffer, not the full 2s delay
+            assert elapsed < 1.0, f"Shutdown took {elapsed:.2f}s, expected < 1.0s"
+            assert core.is_stopped
+
+        run_async(scenario())
+
+    def test_shutdown_during_llm_streaming_completes_promptly(self) -> None:
+        """Shutdown during LLM streaming should complete promptly."""
+        async def scenario() -> None:
+            engine = FakeEngine()
+            # Orchestrator that streams slowly
+            orchestrator = ScriptedOrchestrator(deltas=["x" * 1000])
+            core, parts = build_core(orchestrator=orchestrator, engine=engine)
+            run_task = asyncio.create_task(core.run())
+            await wait_until(lambda: core.state is VoicePipelineState.LISTENING)
+
+            await say(parts["mic"])
+            await wait_until(lambda: parts["orchestrator"].prompts)
+
+            import time
+            start = time.monotonic()
+            await core.stop()
+            elapsed = time.monotonic() - start
+
+            await asyncio.wait_for(run_task, timeout=2.0)
+
+            assert elapsed < 1.0, f"Shutdown took {elapsed:.2f}s, expected < 1.0s"
+            assert core.is_stopped
+
+        run_async(scenario())
+
+    def test_shutdown_during_tts_synthesis_completes_promptly(self) -> None:
+        """Shutdown during TTS synthesis should complete promptly."""
+        async def scenario() -> None:
+            engine = FakeEngine(block_playback=True)
+            # TTS provider that synthesizes slowly (gate_text triggers slow synthesis)
+            core, parts = build_core(engine=engine, gate_text=ANSWER)
+            run_task = asyncio.create_task(core.run())
+            await wait_until(lambda: core.state is VoicePipelineState.LISTENING)
+
+            await say(parts["mic"])
+            await wait_until(lambda: ANSWER in parts["provider"].requests)
+
+            import time
+            start = time.monotonic()
+            await core.stop()
+            elapsed = time.monotonic() - start
+
+            await asyncio.wait_for(run_task, timeout=2.0)
+
+            assert elapsed < 1.0, f"Shutdown took {elapsed:.2f}s, expected < 1.0s"
+            assert core.is_stopped
+            # No orphaned tasks
+            assert interaction_tasks() == []
+
+        run_async(scenario())

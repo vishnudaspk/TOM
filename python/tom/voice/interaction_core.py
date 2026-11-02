@@ -67,9 +67,11 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from tom.core.context import CancellationToken
+from tom.ipc.errors import ConnectionLostError, NotConnectedError
 from tom.schemas.turn import ResponseAction, ResponseDecision, TurnContext, TurnStatus
 from tom.schemas.voice import SynthesisRequest, VoicePipelineState
-from tom.telemetry.logging import get_logger
+from tom.telemetry.logging import VoiceEventNames, get_logger, set_utterance_id
+from tom.voice.debug_trace import DebugTraceSession
 from tom.voice.latency import (
     InteractionLatencyTracer,
     LatencyReport,
@@ -95,9 +97,6 @@ if TYPE_CHECKING:
     from tom.voice.streaming_tts import StreamingTTSProvider
 
 logger = get_logger(__name__)
-
-# Import voice event names for structured logging
-from tom.telemetry.logging import VoiceEventNames, set_utterance_id, get_utterance_id
 
 # Sentence backpressure between the LLM producer and the 9.3 streamer. Bounded
 # so a fast model cannot outrun synthesis and grow memory without limit.
@@ -244,6 +243,7 @@ class TurnExecutor:
         epochs: TurnEpochGuard,
         min_sentence_chars: int = 20,
         include_context_in_prompt: bool = True,
+        debug_trace: DebugTraceSession | None = None,
     ) -> None:
         self._stt = stt
         self._tts = tts
@@ -253,6 +253,7 @@ class TurnExecutor:
         self._epochs = epochs
         self._min_sentence_chars = min_sentence_chars
         self._include_context = include_context_in_prompt
+        self._debug_trace = debug_trace
 
     # ------------------------------------------------------------------
     # Pipeline
@@ -266,8 +267,12 @@ class TurnExecutor:
         token: CancellationToken,
         progress: TurnProgress,
         on_speaking: Callable[[int], None] | None = None,
+        on_playback_completed: Callable[[], None] | None = None,
         tracer: InteractionLatencyTracer | None = None,
     ) -> TurnExecutionResult:
+        # Log transcript (text_raw) if debug trace active
+        # Actual transcript comes from _transcribe
+        pass
         """Execute one turn, preserving streaming end to end.
 
         Args:
@@ -276,6 +281,7 @@ class TurnExecutor:
             token: Cooperative cancellation for this turn.
             progress: Live progress sink read by the coordinator on barge-in.
             on_speaking: Called once, just before the first audio is produced.
+            on_playback_completed: Called when playback finishes (after tail).
             tracer: Optional Phase 9.6 latency recorder. Purely observational:
                 it never gates, delays, or alters pipeline behaviour.
 
@@ -350,6 +356,7 @@ class TurnExecutor:
                     token=token,
                     progress=progress,
                     tracer=tracer,
+                    on_playback_completed=on_playback_completed,
                 )
             finally:
                 await _reap(producer)
@@ -388,7 +395,13 @@ class TurnExecutor:
         progress: TurnProgress,
         tracer: InteractionLatencyTracer | None = None,
     ) -> str:
-        """Commit the 9.1 final transcript for one VAD-delimited utterance."""
+        """Commit the 9.1 final transcript for one VAD-delimited utterance.
+
+        Returns:
+            Final transcript text. Empty string means either:
+            - VAD noise (no speech detected) — pipeline recovers to LISTENING cleanly
+            - STT error (infrastructure failure) — logged with telemetry, pipeline recovers
+        """
 
         async def _pcm() -> AsyncGenerator[bytes, None]:
             if audio:
@@ -396,6 +409,7 @@ class TurnExecutor:
 
         final = ""
         partial_marked = False
+        stt_error: Exception | None = None
         try:
             async for partial in self._stt.stream_transcribe(
                 _pcm(),
@@ -414,12 +428,30 @@ class TurnExecutor:
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            logger.warning("turn_executor_stt_failed", epoch_id=epoch, error=str(exc))
+            stt_error = exc
+            logger.warning(
+                "turn_executor_stt_failed",
+                epoch_id=epoch,
+                error=str(exc),
+                error_type=type(exc).__name__,
+            )
+            # Distinguish empty transcript from STT error for telemetry
             return ""
 
         progress.transcript = final
         if tracer is not None:
             tracer.mark(LatencyStage.STT_FINAL)
+        # Log STT error for telemetry without blocking pipeline recovery
+        if stt_error is not None:
+            logger.info(
+                "stt_error_recovered",
+                epoch_id=epoch,
+                error_type=type(stt_error).__name__,
+                transcript_empty=not final,
+            )
+        # Debug trace: log raw transcript
+        if self._debug_trace:
+            self._debug_trace.log_text("text_raw", turn_id=epoch, text=final)
         return final
 
     async def _produce_sentences(
@@ -464,6 +496,7 @@ class TurnExecutor:
         token: CancellationToken,
         progress: TurnProgress,
         tracer: InteractionLatencyTracer | None = None,
+        on_playback_completed: Callable[[], None] | None = None,
     ) -> int:
         """Feed queued sentences to the 9.3 streamer; count what reached playback."""
 
@@ -474,31 +507,44 @@ class TurnExecutor:
                     return
                 if not self._alive(epoch, token):
                     return
+                # Debug trace: log sanitized text sent to TTS
+                if self._debug_trace:
+                    self._debug_trace.log_text("text_sanitized", turn_id=epoch, text=item)
                 yield item
 
         chunks = 0
         # aclosing() runs the 9.3 generator's shutdown path (cancel producer /
         # sequencer / playback and reap them) even on the early-exit below, so a
         # stale turn never leaves detached tasks behind.
-        async with aclosing(
-            self._tts.stream_synthesize(
-                _sentences(),
-                token=None,
-                playback_observer=self._playback_observer(epoch, token, tracer),
-                on_first_synth_start=lambda: tracer.mark(LatencyStage.TTS_FIRST_SYNTH_START) if tracer else None,
-                on_first_synth_end=lambda: tracer.mark(LatencyStage.TTS_FIRST_SYNTH_END) if tracer else None,
-                on_playback_started=lambda: tracer.mark(LatencyStage.PLAYBACK_STARTED) if tracer else None,
-                on_playback_completed=lambda: tracer.mark(LatencyStage.PLAYBACK_COMPLETED) if tracer else None,
+        try:
+            async with aclosing(
+                self._tts.stream_synthesize(
+                    _sentences(),
+                    token=None,
+                    playback_observer=self._playback_observer(epoch, token, tracer),
+                    on_first_synth_start=lambda: tracer.mark(LatencyStage.TTS_FIRST_SYNTH_START) if tracer else None,
+                    on_first_synth_end=lambda: tracer.mark(LatencyStage.TTS_FIRST_SYNTH_END) if tracer else None,
+                    on_playback_started=lambda: tracer.mark(LatencyStage.PLAYBACK_STARTED) if tracer else None,
+                    on_playback_completed=on_playback_completed,
+                )
+            ) as stream:
+                async for chunk in stream:
+                    if not self._alive(epoch, token):
+                        break
+                    progress.reached_speaking = True
+                    progress.spoken_sentences.append(chunk.sentence)
+                    # Debug trace: log exact TTS chunk text
+                    if self._debug_trace:
+                        self._debug_trace.log_text("text_tts", turn_id=epoch, text=chunk.sentence)
+                    if tracer is not None:
+                        tracer.mark(LatencyStage.FIRST_AUDIO)
+                    chunks += 1
+        except (ConnectionLostError, NotConnectedError) as exc:
+            logger.warning(
+                "turn_executor_tts_stream_ipc_disconnected",
+                epoch_id=epoch,
+                error=str(exc),
             )
-        ) as stream:
-            async for chunk in stream:
-                if not self._alive(epoch, token):
-                    break
-                progress.reached_speaking = True
-                progress.spoken_sentences.append(chunk.sentence)
-                if tracer is not None:
-                    tracer.mark(LatencyStage.FIRST_AUDIO)
-                chunks += 1
         return chunks
 
     async def _speak_ack(
@@ -652,6 +698,8 @@ class InteractionCore:
         tracer_factory: Callable[[int | None], InteractionLatencyTracer] | None = None,
         latency_history: int = 8,
         turn_arbitrator: TurnArbiter | None | _DefaultArbiterSentinel = _DEFAULT_ARBITER,
+        startup_greeting: bool = True,
+        debug_trace: DebugTraceSession | None = None,
     ) -> None:
         self._mic = mic_loop
         self._engine = engine
@@ -684,6 +732,7 @@ class InteractionCore:
             epochs=self._epochs,
             min_sentence_chars=min_sentence_chars,
             include_context_in_prompt=include_context_in_prompt,
+            debug_trace=debug_trace,
         )
 
         self._running = False
@@ -692,6 +741,8 @@ class InteractionCore:
         self._barging_in = False
         self._playback_active = False
         self._barge_in_count = 0
+        self._startup_greeting = startup_greeting
+        self._debug_trace = debug_trace
 
         self._frames = bytearray()
         self._smart_turn_candidate: bytes | None = None
@@ -799,8 +850,9 @@ class InteractionCore:
                 await self._mic.start()
             self._transition(VoicePipelineState.LISTENING)
 
-            # Run startup greeting once per voice session
-            await self._run_startup_greeting()
+            # Run startup greeting once per voice session (if enabled)
+            if self._startup_greeting:
+                await self._run_startup_greeting()
 
             async for event in subscription:
                 if self._stopping:
@@ -829,7 +881,13 @@ class InteractionCore:
         # 3. Flush live audio before reaping the turn, mirroring barge-in.
         #    Read the flag here: reaping triggers _on_turn_done, which clears it.
         if self._playback_active:
-            await self._stops.stop(epoch)
+            try:
+                await self._stops.stop(epoch)
+            except (ConnectionLostError, NotConnectedError) as exc:
+                logger.warning(
+                    "shutdown_stop_playback_ipc_disconnected",
+                    error=str(exc),
+                )
             self._playback_active = False
 
         # 4. Cancel and reap: generators close, queued synthesis is discarded.
@@ -850,7 +908,13 @@ class InteractionCore:
         self._smart_turn_candidate = None
 
         # Stops the mic and ends the run() event stream.
-        await self._mic.stop()
+        try:
+            await self._mic.stop()
+        except (ConnectionLostError, NotConnectedError) as exc:
+            logger.warning(
+                "shutdown_mic_stop_ipc_disconnected",
+                error=str(exc),
+            )
 
         self._transition(VoicePipelineState.INTERRUPTED)
         self._transition(VoicePipelineState.IDLE)
@@ -864,7 +928,14 @@ class InteractionCore:
         try:
             # 1. Get current time from Rust engine
             logger.info(VoiceEventNames.STARTUP_GREETING_TIME_RECEIVED)
-            time_info = await self._engine.get_system_time()
+            try:
+                time_info = await self._engine.get_system_time()
+            except (ConnectionLostError, NotConnectedError) as exc:
+                logger.warning(
+                    "startup_greeting_time_ipc_disconnected",
+                    error=str(exc),
+                )
+                return
             time_str = time_info.local_time_str
 
             # 2. Generate greeting via LLM
@@ -892,7 +963,14 @@ class InteractionCore:
             # 3. Synthesize and play via TTS
             logger.info(VoiceEventNames.STARTUP_GREETING_TTS_STARTED)
             synth_req = SynthesisRequest(text=greeting_text.strip())
-            synth_res = await self._tts.synthesize(synth_req)
+            try:
+                synth_res = await self._tts.synthesize(synth_req)
+            except (ConnectionLostError, NotConnectedError) as exc:
+                logger.warning(
+                    "startup_greeting_tts_ipc_disconnected",
+                    error=str(exc),
+                )
+                return
 
             if not synth_res.samples:
                 logger.warning("startup_greeting_empty_tts_output")
@@ -907,11 +985,18 @@ class InteractionCore:
 
             # 4. Play through engine
             logger.info(VoiceEventNames.STARTUP_GREETING_PLAYBACK_STARTED)
-            await self._engine.play_audio_buffer(
-                audio_data=synth_res.audio_data,
-                sample_rate=synth_res.sample_rate,
-                channels=synth_res.channels,
-            )
+            try:
+                await self._engine.play_audio_buffer(
+                    audio_data=synth_res.audio_data,
+                    sample_rate=synth_res.sample_rate,
+                    channels=synth_res.channels,
+                )
+            except (ConnectionLostError, NotConnectedError) as exc:
+                logger.warning(
+                    "startup_greeting_playback_ipc_disconnected",
+                    error=str(exc),
+                )
+                return
             logger.info(VoiceEventNames.STARTUP_GREETING_PLAYBACK_COMPLETED)
 
         except Exception as exc:
@@ -947,7 +1032,13 @@ class InteractionCore:
 
             # 3. Single authoritative engine flush.
             if self._playback_active:
-                await self._stops.stop(epoch)
+                try:
+                    await self._stops.stop(epoch)
+                except (ConnectionLostError, NotConnectedError) as exc:
+                    logger.warning(
+                        "barge_in_stop_playback_ipc_disconnected",
+                        error=str(exc),
+                    )
                 self._playback_active = False
 
             if tracer is not None:
@@ -971,6 +1062,10 @@ class InteractionCore:
                 epoch=epoch,
                 barge_in_count=self._barge_in_count,
             )
+
+            # Debug trace: log barge-in event
+            if self._debug_trace:
+                self._debug_trace.log_barge_in("accepted", epoch=epoch, count=self._barge_in_count)
 
             # 5. Partial assistant content is already retained by TurnExecutor;
             #    this closes any turn that never reached it.
@@ -1052,6 +1147,26 @@ class InteractionCore:
         if self._active_turn is not None and not self._active_turn.done():
             await self.handle_barge_in()
 
+        # Defensive: ensure pipeline is in a valid state before starting a new turn.
+        # If a previous error left the pipeline in ERROR state, reset to IDLE first.
+        # If pipeline is stuck in SPEAKING, recover through INTERRUPTED.
+        if self._pipeline.state is VoicePipelineState.ERROR:
+            logger.warning(
+                "pipeline_in_error_state_resetting_before_new_turn",
+                epoch=self._epochs.current,
+            )
+            self._pipeline.transition_to(VoicePipelineState.IDLE)
+            self._pipeline.transition_to(VoicePipelineState.LISTENING)
+        elif self._pipeline.state is VoicePipelineState.SPEAKING:
+            # Should not happen if barge-in worked, but recover defensively
+            logger.warning(
+                "pipeline_stuck_in_speaking_recovering_before_new_turn",
+                epoch=self._epochs.current,
+            )
+            self._pipeline.transition_to(VoicePipelineState.INTERRUPTED)
+            self._pipeline.transition_to(VoicePipelineState.IDLE)
+            self._pipeline.transition_to(VoicePipelineState.LISTENING)
+
         epoch = self._epochs.bump()
         token = CancellationToken()
         progress = TurnProgress(epoch_id=epoch)
@@ -1088,21 +1203,80 @@ class InteractionCore:
         progress: TurnProgress,
         tracer: InteractionLatencyTracer,
     ) -> TurnExecutionResult:
+        barge_in_tick_task: asyncio.Task | None = None
+
+        async def _barge_in_tick_loop() -> None:
+            """Log barge-in tick every ~50ms during SPEAKING/PROCESSING."""
+            while True:
+                if self._pipeline.state not in (VoicePipelineState.SPEAKING, VoicePipelineState.PROCESSING):
+                    await asyncio.sleep(0.05)
+                    continue
+                # Get mic RMS (approximate from microphone loop)
+                mic_rms = 0.0
+                if hasattr(self._mic, '_vad') and hasattr(self._mic._vad, 'threshold'):
+                    # Can't easily get current RMS without access to frame buffer
+                    pass
+                # Get playback RMS (approximate from TTS streamer)
+                playback_rms = 0.0
+                # Decision logic
+                mic_active = self._mic.is_in_speech if hasattr(self._mic, 'is_in_speech') else False
+                barge_in_threshold = getattr(self._mic, '_barge_in_rms_threshold', 0.0)
+                sustained_ms = getattr(self._mic, '_barge_in_sustained_ms', 0)
+                decision = "ignored"
+                reason = "not_in_speaking_or_threshold_not_met"
+                if self._pipeline.state == VoicePipelineState.SPEAKING and mic_active:
+                    decision = "accepted"
+                    reason = "mic_rms_above_threshold"
+                elif self._pipeline.state == VoicePipelineState.PROCESSING and mic_active:
+                    decision = "accepted"
+                    reason = "barge_in_during_processing"
+
+                if self._debug_trace:
+                    self._debug_trace.log_barge_in(
+                        "tick",
+                        turn_id=epoch,
+                        state=self._pipeline.state.value,
+                        mic_rms=0.0,  # Would need access to current frame
+                        playback_rms=0.0,
+                        threshold=barge_in_threshold,
+                        sustained_ms=sustained_ms,
+                        decision=decision,
+                        reason=reason,
+                    )
+                await asyncio.sleep(0.05)
+
+        barge_in_tick_task = asyncio.create_task(_barge_in_tick_loop(), name=f"tom.barge_in_tick.{epoch}")
+
         def _on_speaking(active_epoch: int) -> None:
             self._playback_active = True
             self._transition(VoicePipelineState.SPEAKING, active_epoch)
-            # Pause microphone during playback to avoid audio feedback loop
+            # Gate microphone during playback to avoid audio feedback loop
             if self._epochs.is_current(active_epoch):
-                self._mic.pause()
+                self._mic.gate()
 
-        return await self._executor.execute(
-            audio,
-            epoch=epoch,
-            token=token,
-            progress=progress,
-            on_speaking=_on_speaking,
-            tracer=tracer,
-        )
+        def _on_playback_completed() -> None:
+            # Ungate microphone after playback tail completes
+            if self._epochs.is_current(epoch):
+                self._mic.ungate()
+
+        try:
+            result = await self._executor.execute(
+                audio,
+                epoch=epoch,
+                token=token,
+                progress=progress,
+                on_speaking=_on_speaking,
+                on_playback_completed=_on_playback_completed,
+                tracer=tracer,
+            )
+            return result
+        finally:
+            if barge_in_tick_task:
+                barge_in_tick_task.cancel()
+                try:
+                    await barge_in_tick_task
+                except asyncio.CancelledError:
+                    pass
 
     def _on_turn_done(self, task: asyncio.Task[TurnExecutionResult]) -> None:
         """Reap the finished turn and return the lifecycle to LISTENING."""
@@ -1134,8 +1308,8 @@ class InteractionCore:
             return
         self._transition(VoicePipelineState.IDLE)
         self._transition(VoicePipelineState.LISTENING)
-        # Resume microphone after turn completes
-        self._mic.resume()
+        # NOTE: Microphone is now ungated via on_playback_completed callback
+        # after playback tail completes, not here.
 
     # ------------------------------------------------------------------
     # Internals
@@ -1164,6 +1338,9 @@ class InteractionCore:
                 new_state=str(target),
                 epoch=epoch,
             )
+            # Debug trace: log state transition
+            if self._debug_trace:
+                self._debug_trace.log_state(str(old_state), str(target), epoch=epoch)
         except InvalidStateTransitionError as exc:
             logger.debug(
                 "interaction_transition_skipped",

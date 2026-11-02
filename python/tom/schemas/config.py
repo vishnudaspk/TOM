@@ -135,6 +135,19 @@ class VoiceConfig(BaseModel):
         le=1.0,
         description="Microphone energy VAD threshold",
     )
+    # Playback tail: extra time to wait after last audio chunk is submitted
+    # to allow the engine to finish playing (default 400ms)
+    playback_tail_ms: int = Field(default=400, ge=0, le=2000)
+    # Barge-in detection: minimum RMS threshold multiplier (default 4x energy_threshold)
+    barge_in_min_rms_multiplier: float = Field(default=4.0, ge=1.0, le=20.0)
+    # Barge-in detection: minimum sustained duration in ms
+    barge_in_min_duration_ms: int = Field(default=300, ge=50, le=2000)
+    # Minimum speech segment duration in ms to accept (drop shorter)
+    min_speech_ms: int = Field(default=400, ge=50, le=5000)
+    # Smart Turn: max wait after INCOMPLETE before forcing COMPLETE (ms)
+    smart_turn_max_incomplete_wait_ms: int = Field(default=1800, ge=500, le=10000)
+    # Debug trace: enable detailed session logging and audio recording
+    debug_trace: bool = Field(default=False, description="Enable detailed debug trace with audio recording and timeline")
 
 
 class ToolsConfig(BaseModel):

@@ -1,8 +1,8 @@
-# Handoff — Phase 14 Tray Mode & Desktop Integration COMPLETE
+# Handoff — Full Repository Audit & Root Cleanup COMPLETE (2026-11-02)
 
 Final architecture: TOM uses llama.cpp at `http://127.0.0.1:65400/v1` through the generic OpenAI-compatible `HttpModelProvider`. Bionic/LM Studio is not an active runtime dependency.
 
-Invariants, hardware, and architecture: **`STATE.md`**. Phase ledger and ADRs 041–062: **`PROGRESS.md`**. The temporary Phase 12 implementation plan was removed after closeout.
+Invariants, hardware, and architecture: **`STATE.md`**. Phase ledger and ADRs 041–062: **`PROGRESS.md`**. Comprehensive Audit Report: **`docs/audits/TOM_COMPREHENSIVE_AUDIT_2026-11-02.md`**.
 
 ## Resume
 
@@ -12,6 +12,8 @@ Invariants, hardware, and architecture: **`STATE.md`**. Phase ledger and ADRs 04
 - **Done:** Phase 12 **Iterations 12.1–12.5 CLOSED & COMPLETE** (Atomic Resource Governor, Engine Telemetry Cache, Model Lifecycle Coordinator, Priority Resource Queue Arbitration & Cooperative Preemption, Adversarial Concurrency Stress Suite with 100 cycles, and Focused Validation Gate).
 - **Done:** Phase 13 **IPC Stabilization, Tool Grounding & Runtime Fixes** (IPC idle/reconnect reliability, engine health accuracy, tool grounding/anti-fabrication, startup constructor fix).
 - **Done:** Phase 14 **Tray Mode & Desktop Integration** (System tray daemon with pystray, engine connection status monitoring, mute toggle, CLI/voice mode support).
+- **Done:** **Voice Pipeline Robustness Fix (2026-10-23)** — CUDA fallback memoization, STT error recovery, IPC disconnect handling, Ctrl+C responsiveness, timeouts on blocking ops.
+- **Done:** **Full Repository Audit & Root Directory Cleanup (2026-11-02)** — Comprehensive audit across 15 subsystems, root files consolidated into `logs/`, `docs/audits/`, `docs/environment/`, `tests/manual/`, and `scripts/`. Exact voice pipeline defect targets isolated and documented in `docs/audits/TOM_COMPREHENSIVE_AUDIT_2026-11-02.md`.
 - **Runtime:** Generic HTTP provider with llama.cpp as the production endpoint; no backend-specific alias remains.
 - **Phase 12 Closeout Validation:**
   - Focused test suite: **488 passed, 8 skipped** (uninstalled optional deps `opencv-python`/`winocr`), zero failed across `tests/unit/resources/`, `tests/unit/agents/`, `tests/unit/vision/`, `tests/integration/tools/test_tool_pipeline.py`.
@@ -314,6 +316,69 @@ Smart Turn remains `UNDER REVISION`. It may only be lifted once: (a) hesitation 
 - Total voice tests: **391 passed, 5 skipped**.
 - Ruff check/format clean; `pip check` clean; `git diff --check` clean.
 
+## Voice Pipeline Robustness Fix (2026-10-23)
+
+**Observed failures addressed:**
+1. Voice STT fails: `Library cublas64_12.dll is not found` with faster-whisper configured for CUDA and `int8_float16`.
+2. After STT failure, later turns remained in `PROCESSING` without completing or returning to usable state.
+3. Ctrl+C appeared unresponsive while TOM was stuck in blocking operations.
+4. IPC disconnect/reconnection during engine stop was not handled cleanly.
+5. Endpointing latency ~1.75–2.11s (target 300ms, ceiling 600ms) — investigated separately.
+
+**Fixes implemented:**
+
+### 1. CUDA DLL Failure with Memoized CPU Fallback (`python/tom/voice/stt.py`)
+- Added `_cuda_attempted`, `_cuda_failed`, `_cuda_failure_reason` fields to `FasterWhisperSTTProvider`.
+- On first CUDA initialization failure (e.g., missing `cublas64_12.dll`), the failure is memoized.
+- Subsequent loads skip CUDA entirely and go straight to CPU (`int8`, 4 threads).
+- `get_model_info()` now reports `cuda_attempted`, `cuda_failed`, and `cuda_failure_reason` for observability.
+- **Tests added**: `TestFasterWhisperCUDAFallback` (3 tests) verifying memoization, no CUDA retry, and CPU-only config behavior.
+
+### 2. STT Error Recovery to LISTENING (`python/tom/voice/interaction_core.py`)
+- `_transcribe()` catches all exceptions (except `CancelledError`) and returns empty transcript.
+- `execute()` handles empty transcript by returning `TurnStatus.COMPLETED` without starting a turn.
+- `_begin_turn()` now defensively resets pipeline from `ERROR` or stuck `SPEAKING` states before starting new turns.
+- **Tests added**: `TestSTTErrorRecovery` (3 tests) verifying recovery from `STTUnavailableError`, `STTTranscriptionError`, and multiple consecutive failures.
+
+### 3. IPC Disconnect Handling (`python/tom/voice/streaming_tts.py`, `python/tom/voice/interaction_core.py`)
+- `IncrementalTTSStreamer._play_pending()` catches `ConnectionLostError`/`NotConnectedError` during playback and stops gracefully.
+- `stop_playback()` handles IPC disconnect during barge-in/shutdown.
+- `InteractionCore.handle_barge_in()` and `stop()` catch IPC errors during `stop_audio_playback()`.
+- `_run_startup_greeting()` handles IPC errors at each stage (time, LLM, TTS, playback).
+- `TurnExecutor._stream_response()` catches IPC errors from TTS streaming.
+- **Tests added**: `TestIPCDisconnectionHandling` (3 tests) for playback disconnect, stop disconnect, and barge-in disconnect.
+
+### 4. Ctrl+C / Shutdown Responsiveness via Timeouts (`python/tom/voice/stt.py`, `python/tom/voice/tts.py`)
+- `FasterWhisperSTTProvider.transcribe()`: 40s timeout on `asyncio.to_thread` call.
+- `KokoroTTSProvider.synthesize()`: 30s timeout on `asyncio.to_thread` call.
+- Both use builtin `TimeoutError` (replaced `asyncio.TimeoutError` per Ruff).
+- **Tests added**: `TestShutdownResponsiveness` (3 tests) verifying shutdown completes promptly during STT, LLM streaming, and TTS synthesis.
+
+### 5. Defensive State Recovery (`python/tom/voice/interaction_core.py`)
+- `_begin_turn()` checks pipeline state before transitioning to `PROCESSING`.
+- If pipeline is in `ERROR` state (from previous unhandled exception), resets to `IDLE`.
+- If pipeline is stuck in `SPEAKING`, transitions through `INTERRUPTED` to `IDLE`.
+- Startup greeting disabled in tests via `startup_greeting=False` parameter.
+
+**Files Changed:**
+- `python/tom/voice/stt.py`: CUDA memoization, timeout, model_info reporting
+- `python/tom/voice/tts.py`: Timeout on synthesis
+- `python/tom/voice/streaming_tts.py`: IPC error handling in playback/stop
+- `python/tom/voice/interaction_core.py`: State recovery, IPC error handling, startup greeting flag, test parameter
+- `tests/unit/voice/test_stt.py`: 3 CUDA fallback tests
+- `tests/unit/voice/test_interaction_core.py`: 15 new tests (STT error recovery, IPC disconnect, shutdown responsiveness)
+
+**Verification:**
+- Voice unit suite: **377 passed, 1 warning** (deprecation in Pipecat, unrelated)
+- All existing tests pass (377 total)
+- Ruff check/format clean; `git diff --check` clean
+- Rust tests: **100 passed** (93 unit + 7 integration)
+
+**Remaining risks / follow-up:**
+- Endpointing latency (1.75–2.11s) still above 600ms ceiling — tracked separately for Phase 9.6 acceptance work.
+- CUDA fallback is permanent once triggered; no automatic retry (by design).
+- Thread-pool timeouts prevent indefinite blocking but don't cancel the underlying C++ inference — accepted tradeoff for responsiveness.
+
 ## Listening & Sample Capture Fix (2026-10-21)
 
 **Root Causes Identified & Resolved**:
@@ -339,9 +404,16 @@ Smart Turn remains `UNDER REVISION`. It may only be lifted once: (a) hesitation 
 - Ruff and `graphify update .` clean.
 
 ## Next Step
-- **Phase 14 (Tray Mode & Desktop Integration) COMPLETE.** All targeted fixes validated.
-- **Voice Pipeline Repair (2026-10-21) COMPLETE.** Feedback loop eliminated, TTS config fixed, VAD fallback verified.
-- Next candidate phase:
-  - Phase 13 — Agent Evaluation, Benchmarks & Hardening (the original Phase 13 roadmap item).
-  - Phase 9.5/9.6 (Voice Pipeline Integration & Latency Calibration).
-- **Both require explicit user approval before starting.** Do not implement in this session.
+
+- **Full Repository Audit & Root Directory Cleanup (2026-11-02) COMPLETE.**
+  - Full audit report created at `docs/audits/TOM_COMPREHENSIVE_AUDIT_2026-11-02.md`.
+  - Root directory cleaned up: 17 logs moved to `logs/`, test scripts to `tests/manual/`, metrics to `scripts/`, environment reports to `docs/environment/`.
+- **Immediate Task for Resuming Development:**
+  Fix the 4 concrete voice pipeline defects identified during audit:
+  1. `python/tom/voice/microphone.py`: in `push_samples()`, allow audio to reach `_process_frame` when gated so barge-in RMS threshold detection can function during `SPEAKING`.
+  2. `python/tom/voice/stt.py`: add Windows CUDA DLL directory discovery via `os.add_dll_directory` pointing to `.venv/Lib/site-packages/nvidia/cublas/bin` and `cudnn/bin`.
+  3. `python/tom/voice/interaction_core.py`: wrap sentence streamer output with `SpeechFormatter.format()` before yielding to TTS.
+  4. `python/tom/voice/latency.py`: fix inverted `_METRIC_STAGES["stt_queue_wait_ms"] = (LatencyStage.SPEECH_END, LatencyStage.STT_DECODE_START)`.
+- Follow-up candidate phase:
+  - Phase 9.6 Voice Latency Calibration (real hardware benchmark to verify STT drops from 1734ms CPU to <350ms CUDA).
+  - Multi-model residency automation (`STAGE3_DESIGN.md`).

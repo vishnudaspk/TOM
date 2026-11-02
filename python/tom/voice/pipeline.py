@@ -21,7 +21,7 @@ from tom.schemas.voice import (
     VoicePipelineState,
     VoiceTurnResult,
 )
-from tom.telemetry.logging import get_logger, VoiceEventNames
+from tom.telemetry.logging import VoiceEventNames, get_logger
 from tom.voice.formatter import SpeechFormatter
 
 if TYPE_CHECKING:
@@ -83,6 +83,7 @@ VALID_PIPELINE_TRANSITIONS: dict[VoicePipelineState, set[VoicePipelineState]] = 
     },
     VoicePipelineState.ERROR: {
         VoicePipelineState.IDLE,
+        VoicePipelineState.LISTENING,
     },
 }
 

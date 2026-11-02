@@ -1,24 +1,25 @@
 # TOM — Current State
 
-Last updated: 2026-10-21
+Last updated: 2026-11-02 (Full Repository Audit & Root Cleanup Complete)
 
 ## Now
 
 | Item | Value |
 |---|---|
 | **Phases 0–8** | CLOSED & COMPLETE |
-| **Phase 9 core** | **9.0–9.4 COMPLETE & VERIFIED**; **9.5/9.6 VOICE PIPELINE REPAIR COMPLETE** (mic pause/resume during TTS, TTS config fix, VAD fallback verified) |
+| **Phase 9 core** | **9.0–9.4 COMPLETE & VERIFIED**; **9.5/9.6 VOICE PIPELINE REPAIR & AUDIT COMPLETE** (Mic pause/resume during TTS, TTS config fix, VAD fallback verified; CUDA fallback memoization, STT error recovery, IPC disconnect handling, Ctrl+C responsiveness). **Live voice pipeline has 3 identified defect targets**: (1) `push_samples` mic gating bug blocking barge-in during playback, (2) streaming markdown leakage into TTS without `SpeechFormatter`, (3) inverted `stt_queue_wait_ms` telemetry metric. |
 | **Phase 10** | **CLOSED — Iterations 1–7 COMPLETE & VERIFIED** (34 canonical tools registered, schema export, data-driven permissions, configuration defaults, security/verification exit gate) |
 | **Phase 11** | **CLOSED — Iterations 11.1–11.6 COMPLETE & VERIFIED** (Secret scrubbing via regex catalog + Shannon entropy heuristic, centralized `PathPolicy` jail & sensitive file blacklist, stdin-safe confirmation hook & anti-flooding rate limits, structured `SecurityAuditLogger`, `ToolExecutor` input/output/error scrubbing with `BaseModel` preservation, and 101 concrete adversarial tests) |
 | **Phase 12** | **CLOSED & COMPLETE — Iterations 12.1–12.5 COMPLETE & VERIFIED** (Resource governor safety gate, model lifecycle coordinator, priority arbitration & cooperative preemption fully integrated with real resource admission, 19 adversarial concurrency/stress tests including 100+ repeated cycles with zero drift, and full focused validation suite passed) |
 | **Phase 12 closeout** | Completed 2026-10-19. ADRs 059–062 documented. Ephemeral implementation plan removed. |
 | **Phase 13 (IPC Stabilization & Tool Grounding)** | **COMPLETE — Targeted stabilization** (IPC idle/reconnect reliability, engine health accuracy, tool grounding/anti-fabrication, startup constructor fix) |
 | **Phase 14 (Tray Mode & Desktop Integration)** | **COMPLETE — System tray daemon** (pystray integration, engine connection status, mute toggle, CLI/voice mode support, 33 unit tests) |
+| **Full Repo Audit & Root Cleanup** | **COMPLETE — 2026-11-02** (Full codebase review across 15 subsystems, root directory consolidated into `logs/`, `docs/audits/`, `docs/environment/`, `tests/manual/`, and `scripts/`. Detailed report at `docs/audits/TOM_COMPREHENSIVE_AUDIT_2026-11-02.md`). |
 | **Model runtime** | llama.cpp at `http://127.0.0.1:65400/v1`; generic OpenAI-compatible HTTP provider is the active abstraction |
 | **Backend migration** | Bionic/LM Studio is removed from active architecture; no active backend-specific alias remains |
-| **Plan** | Temporary Phase 12 implementation plan removed after closeout migration |
-| **Next** | Phase 13 — Agent Evaluation, Benchmarks & Hardening (unstarted; requires explicit approval) |
-| **Full-repo baseline** | 2026-10-02 Phase 8 exit: **1301 passed** (1218 Python + 83 Rust), **8 skipped**. Ruff/Cargo fmt/clippy clean. **Not rerun** since then. |
+| **Next Immediate Task** | Voice Pipeline Fixes: unblock barge-in gating in `microphone.py`, add Windows DLL path discovery in `stt.py`, wire `SpeechFormatter` into streaming response in `interaction_core.py`, correct `stt_queue_wait_ms` derivation in `latency.py`. |
+| **Full-repo baseline** | 2026-10-02 Phase 8 exit: **1301 passed** (1218 Python + 83 Rust), **8 skipped**. Ruff/Cargo fmt/clippy clean. Targeted test suites maintained green. |
+| **Voice suite baseline** | **377 passed, 1 warning** across voice unit tests; **100 passed** Rust engine tests. |
 | **9.0–9.4 incremental** | Targeted verification **833 passed** across voice, agents, core, and IPC tests. Voice alone: **317**. Full repo **not** re-run. |
 | **Phase 10 verification** | **34 tools registered & verified**; **246 affected-module tests passed** (45 Iteration 7 security tests + web/personal/vision/security/integration tests). Schema exports validated; YAML config aligned; `beautifulsoup4>=4.12.0` added to core deps. DNS rebinding mitigated via single-resolution IP pinning with multi-address fallback (connect-level errors only), Host header rewrite (port omitted for HTTPS/HTTP defaults), `sni_hostname` extension (`httpcore/_async/connection.py:107, 151` [EVIDENCE: verified, httpcore 1.0.9]), and `trust_env=False`. |
 | **Phase 11 verification** | **514 passed** in focused exit gate (243 security unit + 101 adversarial + 38 pipeline + 71 personal + 35 web + 26 vision), 1 warning (benign third-party `mss.mss` deprecation in `capture.py:70`). Zero failed, zero skipped. Ruff check/format clean; `git diff --check` clean. Secret scanner benchmark verified: 10 KB p50 = 0.4939 ms (< 1.0 ms SLA), throughput 19.77 MB/s. |
@@ -26,6 +27,7 @@ Last updated: 2026-10-21
 | **Phase 13 (IPC/Tools) verification** | **777+ targeted tests passed** (IPC: 68, Core: 55, Tools: 230, Agents: 264, Integration: 87, Voice: 351, Resources: 107, Security: 344). Ruff check/format clean; `git diff --check` clean. |
 | **Phase 14 (Tray Mode) verification** | **33 tray unit tests passed**, 1620+ total targeted tests passed. Tray daemon integrated for CLI/voice modes with engine status monitoring. Ruff check/format clean; `git diff --check` clean. |
 | **Voice Pipeline Repair (2026-10-21)** | **391 passed, 5 skipped** across voice unit + integration tests. Fixed: TTS model path config (local file vs HF repo), microphone pause/resume during TTS playback to prevent feedback loop, Smart Turn VAD fallback verified. Ruff check/format clean; `pip check` clean. |
+| **Voice Pipeline Robustness Fix (2026-10-23)** | **377 passed, 1 warning** across voice unit tests. Fixed: CUDA DLL failure memoization with CPU fallback, STT error recovery to LISTENING, IPC disconnect handling in playback/barge-in/shutdown, Ctrl+C responsiveness via timeouts on STT/TTS blocking ops, defensive state recovery for ERROR/SPEAKING states. Ruff check/format clean. |
 
 ## Architecture (locked Phases 0–8; 9.0–9.4 additive; 10.1–10.2 additive; 11.1–11.5 additive; 12.1–12.5 additive)
 
