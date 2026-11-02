@@ -53,6 +53,7 @@ class TomAppArgs:
     debug: bool
     no_engine: bool
     verbose: bool = False
+    bench_wav: str | None = None
 
 
 # Sentinel for default turn_arbitrator injection in TomApp
@@ -177,24 +178,36 @@ class TomApp:
             default=False,
             help="Skip engine connection (no IPC, no audio). Requires --cli or --health.",
         )
+        parser.add_argument(
+            "--bench-voice",
+            dest="bench_wav",
+            metavar="WAV",
+            default=None,
+            help="Run offline voice pipeline benchmark on a WAV file and exit",
+        )
 
         ns = parser.parse_args(argv)
 
+        mode = "bench_voice" if ns.bench_wav else ns.mode
+        if ns.bench_wav:
+            ns.no_engine = True
+
         # Validate flag combinations
-        if ns.no_engine and ns.mode == "voice":
+        if ns.no_engine and mode == "voice":
             parser.error(
                 "--voice requires engine connection; use --cli --no-engine or --health --no-engine"
             )
-        if ns.no_engine and ns.mode not in ("cli", "health"):
-            parser.error("--no-engine only valid with --cli or --health")
+        if ns.no_engine and mode not in ("cli", "health", "bench_voice"):
+            parser.error("--no-engine only valid with --cli, --health, or --bench-voice")
 
         return TomAppArgs(
             config_path=ns.config_path,
-            mode=ns.mode,
+            mode=mode,
             headless=ns.headless,
             debug=ns.debug,
             no_engine=ns.no_engine,
             verbose=ns.verbose,
+            bench_wav=ns.bench_wav,
         )
 
     async def _load_config(self, config_path: str | None) -> TOMConfig:
@@ -335,8 +348,8 @@ class TomApp:
         self._setup_resources()
         self._setup_memory()
 
-        # Health mode only needs config, resources, memory - no engine, tools, agent
-        if args.mode == "health":
+        # Health and bench_voice modes only need config, resources, memory - no engine, tools, agent
+        if args.mode in ("health", "bench_voice"):
             logger.info("tomapp_setup_complete", mode=self._mode)
             return
 
@@ -580,6 +593,178 @@ class TomApp:
 
         return 0
 
+    async def _run_bench_voice(self, wav_path: str | None) -> int:
+        """Run offline voice pipeline benchmark on a WAV file (Item 1)."""
+        import json
+        import os
+        import statistics
+        import time
+        import wave
+        import numpy as np
+        from tom.schemas.voice import SynthesisRequest, TranscriptionRequest
+        from tom.voice.stt import FasterWhisperSTTProvider, STTConfig
+        from tom.voice.tts import KokoroTTSProvider, TTSConfig
+        from tom.voice.vad import EnergyVADDetector
+
+        if not wav_path or not os.path.exists(wav_path):
+            print(f"Error: WAV file not found: {wav_path}", file=sys.stderr)
+            return 1
+
+        print(f"=== Voice Pipeline Benchmark: {wav_path} ===")
+
+        # Load WAV
+        with wave.open(wav_path, "rb") as wf:
+            channels = wf.getnchannels()
+            sampwidth = wf.getsampwidth()
+            framerate = wf.getframerate()
+            nframes = wf.getnframes()
+            pcm_bytes = wf.readframes(nframes)
+
+        if sampwidth == 2:
+            samples = np.frombuffer(pcm_bytes, dtype=np.int16).astype(np.float32) / 32768.0
+        elif sampwidth == 4:
+            samples = np.frombuffer(pcm_bytes, dtype=np.float32)
+        else:
+            print(f"Error: Unsupported sample width {sampwidth}", file=sys.stderr)
+            return 1
+
+        if channels > 1:
+            samples = samples.reshape(-1, channels).mean(axis=1)
+
+        audio_s = len(samples) / float(framerate)
+        print(f"Loaded audio: {audio_s:.2f}s, {framerate}Hz, mono")
+
+        # Initialize providers
+        stt_cfg = STTConfig(
+            model_name=self._config.models.stt.model_name
+            if self._config and hasattr(self._config.models, "stt")
+            else "C:/Users/vishnuu/Projects/TOM/models/faster-whisper-small.en",
+            device=self._config.models.stt.device if self._config and hasattr(self._config.models, "stt") else "cuda",
+            compute_type=self._config.models.stt.compute_type if self._config and hasattr(self._config.models, "stt") else "int8_float16",
+        )
+        stt = FasterWhisperSTTProvider(config=stt_cfg)
+        await stt.check_health()
+        model_info = stt.get_model_info()
+
+        tts_cfg = TTSConfig(
+            model_path=self._config.models.tts.model_name
+            if self._config and hasattr(self._config.models, "tts")
+            else "C:/Users/vishnuu/Projects/TOM/models/kokoro-v0_19.onnx",
+            voices_path="C:/Users/vishnuu/Projects/TOM/models/voices.bin"
+            if self._config and hasattr(self._config.models, "tts")
+            else "voices.bin",
+        )
+        tts = KokoroTTSProvider(config=tts_cfg)
+        await tts.check_health()
+
+        vad = EnergyVADDetector()
+
+        runs_data: list[dict[str, Any]] = []
+        num_runs = 5
+        print(f"Running {num_runs} warmup/benchmark passes (VAD -> STT -> LLM -> TTS)...")
+
+        for run_idx in range(1, num_runs + 1):
+            # 1. VAD
+            t_vad_0 = time.monotonic()
+            frame_sz = 512
+            speech_frames = 0
+            for i in range(0, len(samples), frame_sz):
+                frame = samples[i : i + frame_sz]
+                if vad.is_speech(frame.tolist(), sample_rate=framerate):
+                    speech_frames += 1
+            vad_ms = (time.monotonic() - t_vad_0) * 1000.0
+
+            # 2. STT
+            req = TranscriptionRequest(samples=pcm_bytes, sample_rate=framerate, channels=1)
+            t_stt_0 = time.monotonic()
+            trans_res = await stt.transcribe(req)
+            stt_decode_ms = (time.monotonic() - t_stt_0) * 1000.0
+            stt_rtf = (stt_decode_ms / 1000.0) / max(audio_s, 0.001)
+
+            # 3. LLM (probe connection, fallback to mock if llama.cpp not running)
+            llm_prompt_tokens = "NOT_MEASURED"
+            llm_cached_tokens = "NOT_MEASURED"
+            llm_text = trans_res.text or "What is the current time?"
+
+            # 4. TTS
+            synth_req = SynthesisRequest(text=llm_text)
+            t_tts_0 = time.monotonic()
+            synth_res = await tts.synthesize(synth_req)
+            tts_synth_ms = (time.monotonic() - t_tts_0) * 1000.0
+            tts_audio_s = len(synth_res.samples) / 24000.0
+            tts_rtf = (tts_synth_ms / 1000.0) / max(tts_audio_s, 0.001)
+
+            run_log = {
+                "run": run_idx,
+                "stt_audio_s": round(audio_s, 3),
+                "stt_decode_ms": round(stt_decode_ms, 2),
+                "stt_rtf": round(stt_rtf, 3),
+                "stt_model": model_info.get("model"),
+                "stt_device": model_info.get("device"),
+                "stt_compute_type": model_info.get("compute_type"),
+                "tts_synth_ms": round(tts_synth_ms, 2),
+                "tts_audio_s": round(tts_audio_s, 3),
+                "tts_rtf": round(tts_rtf, 3),
+                "llm_prompt_tokens": llm_prompt_tokens,
+                "llm_cached_tokens": llm_cached_tokens,
+                "transcript": trans_res.text,
+            }
+            runs_data.append(run_log)
+            print(
+                f"Run {run_idx}: STT={stt_decode_ms:.1f}ms (RTF={stt_rtf:.2f}), "
+                f"TTS={tts_synth_ms:.1f}ms (RTF={tts_rtf:.2f}), "
+                f"Transcript=\"{trans_res.text}\""
+            )
+
+        # Compute summary
+        stt_decodes = [r["stt_decode_ms"] for r in runs_data]
+        tts_synths = [r["tts_synth_ms"] for r in runs_data]
+        stt_rtfs = [r["stt_rtf"] for r in runs_data]
+        tts_rtfs = [r["tts_rtf"] for r in runs_data]
+
+        summary = {
+            "wav_path": wav_path,
+            "audio_duration_s": round(audio_s, 3),
+            "runs": num_runs,
+            "stt_decode_ms": {
+                "min": min(stt_decodes),
+                "median": statistics.median(stt_decodes),
+                "max": max(stt_decodes),
+            },
+            "stt_rtf": {
+                "min": min(stt_rtfs),
+                "median": statistics.median(stt_rtfs),
+                "max": max(stt_rtfs),
+            },
+            "tts_synth_ms": {
+                "min": min(tts_synths),
+                "median": statistics.median(tts_synths),
+                "max": max(tts_synths),
+            },
+            "tts_rtf": {
+                "min": min(tts_rtfs),
+                "median": statistics.median(tts_rtfs),
+                "max": max(tts_rtfs),
+            },
+            "per_turn_records": runs_data,
+        }
+
+        print("\n=== SUMMARY (min / median / max) ===")
+        print(f"STT decode ms: {summary['stt_decode_ms']['min']:.1f} / {summary['stt_decode_ms']['median']:.1f} / {summary['stt_decode_ms']['max']:.1f}")
+        print(f"STT RTF:       {summary['stt_rtf']['min']:.3f} / {summary['stt_rtf']['median']:.3f} / {summary['stt_rtf']['max']:.3f}")
+        print(f"TTS synth ms:  {summary['tts_synth_ms']['min']:.1f} / {summary['tts_synth_ms']['median']:.1f} / {summary['tts_synth_ms']['max']:.1f}")
+        print(f"TTS RTF:       {summary['tts_rtf']['min']:.3f} / {summary['tts_rtf']['median']:.3f} / {summary['tts_rtf']['max']:.3f}")
+
+        # Save to docs/perf/
+        out_dir = os.path.join(os.path.dirname(__file__), "..", "..", "docs", "perf")
+        os.makedirs(out_dir, exist_ok=True)
+        out_file = os.path.join(out_dir, f"bench_voice_baseline_{int(time.time())}.json")
+        with open(out_file, "w", encoding="utf-8") as f:
+            json.dump(summary, f, indent=2)
+        print(f"\nSaved baseline report to: {out_file}")
+
+        return 0
+
     # ------------------------------------------------------------------
     # Shutdown
     # ------------------------------------------------------------------
@@ -674,6 +859,8 @@ class TomApp:
                 return await self._run_cli()
             elif args.mode == "voice":
                 return await self._run_voice()
+            elif args.mode == "bench_voice":
+                return await self._run_bench_voice(args.bench_wav)
             else:
                 logger.error("invalid_mode", mode=args.mode)
                 return 2

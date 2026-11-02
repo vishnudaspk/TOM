@@ -1,0 +1,102 @@
+{
+  "wav_path": "tests/benchmarks/voice/ws3/recordings/006_what_is_the_current_time.wav",
+  "audio_duration_s": 3.7,
+  "runs": 5,
+  "stt_decode_ms": {
+    "min": 109.0,
+    "median": 110.0,
+    "max": 125.0
+  },
+  "stt_rtf": {
+    "min": 0.029,
+    "median": 0.03,
+    "max": 0.034
+  },
+  "tts_synth_ms": {
+    "min": 485.0,
+    "median": 515.0,
+    "max": 1812.0
+  },
+  "tts_rtf": {
+    "min": 0.385,
+    "median": 0.409,
+    "max": 1.44
+  },
+  "per_turn_records": [
+    {
+      "run": 1,
+      "stt_audio_s": 3.7,
+      "stt_decode_ms": 110.0,
+      "stt_rtf": 0.03,
+      "stt_model": "C:/Users/vishnuu/Projects/TOM/models/faster-whisper-small.en",
+      "stt_device": "cuda",
+      "stt_compute_type": "int8_float16",
+      "tts_synth_ms": 1812.0,
+      "tts_audio_s": 1.259,
+      "tts_rtf": 1.44,
+      "llm_prompt_tokens": "NOT_MEASURED",
+      "llm_cached_tokens": "NOT_MEASURED",
+      "transcript": "what is the current time"
+    },
+    {
+      "run": 2,
+      "stt_audio_s": 3.7,
+      "stt_decode_ms": 109.0,
+      "stt_rtf": 0.029,
+      "stt_model": "C:/Users/vishnuu/Projects/TOM/models/faster-whisper-small.en",
+      "stt_device": "cuda",
+      "stt_compute_type": "int8_float16",
+      "tts_synth_ms": 485.0,
+      "tts_audio_s": 1.259,
+      "tts_rtf": 0.385,
+      "llm_prompt_tokens": "NOT_MEASURED",
+      "llm_cached_tokens": "NOT_MEASURED",
+      "transcript": "what is the current time"
+    },
+    {
+      "run": 3,
+      "stt_audio_s": 3.7,
+      "stt_decode_ms": 125.0,
+      "stt_rtf": 0.034,
+      "stt_model": "C:/Users/vishnuu/Projects/TOM/models/faster-whisper-small.en",
+      "stt_device": "cuda",
+      "stt_compute_type": "int8_float16",
+      "tts_synth_ms": 515.0,
+      "tts_audio_s": 1.259,
+      "tts_rtf": 0.409,
+      "llm_prompt_tokens": "NOT_MEASURED",
+      "llm_cached_tokens": "NOT_MEASURED",
+      "transcript": "what is the current time"
+    },
+    {
+      "run": 4,
+      "stt_audio_s": 3.7,
+      "stt_decode_ms": 109.0,
+      "stt_rtf": 0.029,
+      "stt_model": "C:/Users/vishnuu/Projects/TOM/models/faster-whisper-small.en",
+      "stt_device": "cuda",
+      "stt_compute_type": "int8_float16",
+      "tts_synth_ms": 500.0,
+      "tts_audio_s": 1.259,
+      "tts_rtf": 0.397,
+      "llm_prompt_tokens": "NOT_MEASURED",
+      "llm_cached_tokens": "NOT_MEASURED",
+      "transcript": "what is the current time"
+    },
+    {
+      "run": 5,
+      "stt_audio_s": 3.7,
+      "stt_decode_ms": 125.0,
+      "stt_rtf": 0.034,
+      "stt_model": "C:/Users/vishnuu/Projects/TOM/models/faster-whisper-small.en",
+      "stt_device": "cuda",
+      "stt_compute_type": "int8_float16",
+      "tts_synth_ms": 547.0,
+      "tts_audio_s": 1.259,
+      "tts_rtf": 0.435,
+      "llm_prompt_tokens": "NOT_MEASURED",
+      "llm_cached_tokens": "NOT_MEASURED",
+      "transcript": "what is the current time"
+    }
+  ]
+}
