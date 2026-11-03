@@ -216,6 +216,7 @@ class VoiceEventNames:
     PIPELINE_TIMEOUT = "voice.pipeline.timeout"
     LATENCY_REPORT = "voice.latency.report"
     LISTENING_HEARTBEAT = "voice.listening.heartbeat"
+    MIC_RESUMED_BY_WATCHDOG = "microphone_resumed_by_watchdog"
     
     # IPC
     IPC_REQUEST_SENT = "ipc.request.sent"

@@ -335,3 +335,73 @@ async def test_fault_injection_soak_zero_deaf_listening():
         f"{deaf_count}/30 turns left mic gated (deaf-LISTENING) after failures"
     )
 
+
+# ---------------------------------------------------------------------------
+# P0.4 — Watchdog tests
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_watchdog_resumes_paused_mic_in_listening():
+    """Watchdog detects mic paused > threshold in LISTENING and recovers it."""
+    from tests.unit.voice.test_interaction_core import build_core
+    from tom.schemas.voice import VoicePipelineState
+
+    core, deps = build_core()
+    core._pipeline.transition_to(VoicePipelineState.LISTENING)
+    mic = deps["mic"]
+    mic.pause()
+    assert getattr(mic, "_paused", False) is True
+
+    with patch("tom.voice.interaction_core.logger.error") as mock_err:
+        task = asyncio.create_task(core._listening_watchdog(poll_interval_s=0.01, timeout_s=0.05))
+        await asyncio.sleep(0.1)
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+        assert getattr(mic, "_paused", False) is False
+        assert getattr(mic, "_gated", False) is False
+        # Verify ERROR event was logged with structured fields
+        matching = [
+            call for call in mock_err.call_args_list
+            if call.args and call.args[0] == "microphone_resumed_by_watchdog"
+        ]
+        assert len(matching) == 1
+        kwargs = matching[0].kwargs
+        assert kwargs["recovery_result"] == "resumed"
+        assert kwargs["pause_duration"] >= 0.05
+
+
+@pytest.mark.asyncio
+async def test_watchdog_transitions_to_error_when_recovery_fails():
+    """Watchdog transitions pipeline to ERROR state when mic recovery fails."""
+    from tests.unit.voice.test_interaction_core import build_core
+    from tom.schemas.voice import VoicePipelineState
+
+    core, deps = build_core()
+    core._pipeline.transition_to(VoicePipelineState.LISTENING)
+    mic = deps["mic"]
+    mic.pause()
+    # Force recovery failure
+    mic.resume = MagicMock(side_effect=RuntimeError("hardware disconnect"))
+
+    with patch("tom.voice.interaction_core.logger.error") as mock_err:
+        task = asyncio.create_task(core._listening_watchdog(poll_interval_s=0.01, timeout_s=0.05))
+        await asyncio.sleep(0.1)
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+        assert core.state == VoicePipelineState.ERROR
+        matching = [
+            call for call in mock_err.call_args_list
+            if call.args and call.args[0] == "microphone_resumed_by_watchdog"
+        ]
+        assert len(matching) == 1
+        assert matching[0].kwargs["recovery_result"] == "failed"
+
+

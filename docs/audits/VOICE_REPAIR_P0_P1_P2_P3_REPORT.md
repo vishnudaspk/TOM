@@ -1,132 +1,50 @@
-# TOM Voice Pipeline Repair & Latency Optimization Report (P0, P1, P2, P3)
+# TOM Voice Pipeline Repair & Post-Implementation Verification Report (P0, P1, P2, P3)
 
 **Date**: 2026-11-03  
 **Branch**: `wip/audit-2026-11-02`  
-**Execution Mode**: Local Windows development environment, local hardware only, no cloud services, no model downloads.
+**Execution Environment**: Local Windows development environment, local hardware only, no cloud services, no model downloads.
 
 ---
 
 ## 1. Master Status Summary Table
 
-| Item | Status | Implementation | Test Evidence | Live Evidence | Commit |
+| Item | Implementation Status | Unit Test Status | Live Verification | Performance Target | Commit |
 |---|---|---|---|---|---|
-| **P0.1** | `PASS` | Diagnosed session `3617271b` log; evaluated H1, H2, H3 | Runtime log analysis in `logs/tom.log` | Raw trace & log sequence | N/A (Diagnostic) |
-| **P0.2** | `PASS` | Log `voice.tts.failed` at ERROR with full exc, traceback, duration, elapsed, timeout | `test_mic_recovery.py::test_drain_failure_observable_fields` | Unit verified | `9b3924d` |
-| **P0.3** | `PASS` | Audited all mic lifecycle call sites across repository | Table generated with failure path guarantees | Unit verified | N/A (Audit) |
-| **P0.4** | `PASS` | Enforced LISTENING invariant via `_run_turn` & `_play_pending` `try/finally` | `test_mic_recovery.py::test_single_fire_idempotency` | Unit verified | `9b3924d` |
-| **P0.5** | `PASS` | Made playback drain non-fatal; `_on_playback_completed` guaranteed on all exits | `test_mic_recovery.py::test_mic_recovery_after_playback_drain_exception` | Unit verified | `9b3924d` |
-| **P0.6** | `PASS` | Added 5s `voice.listening.heartbeat` in LISTENING state | `test_interaction_core.py`, log inspection | Unit verified | `9b3924d` |
-| **P0.7** | `PASS` | 6 hermetic fault-injection tests + 30-turn soak (`seed=42`) | `pytest tests/unit/voice/test_mic_recovery.py` (6/6 passed) | Unit verified | `1f3a06d` |
-| **P0.8** | `BLOCKED` | 15 long-answer questions protocol prepared | Manual physical speech required | BLOCKED (needs human speaker) | N/A (Protocol prepared) |
-| **P1.a** | `PASS` | First-chunk policy in `SentenceStreamer` (clause/punctuation / 7-word boundary) | `tests/unit/voice/test_sentence_streamer.py::TestFirstChunkPolicy` (5/5 passed) | Unit verified | `e5011a2` |
-| **P1.b** | `PASS` | Voice response length capped to 200 tokens via `max_response_tokens` | `tests/unit/agents/test_orchestrator_streaming.py` (passed) | Unit verified | `c8105fb` |
-| **P1.c** | `PASS` | Eliminated 187-203ms sentence lookahead gap in `IncrementalTTSStreamer` | `tests/unit/voice/test_streaming_tts.py::test_first_chunk_synthesis_starts_without_waiting_for_second_sentence` | Unit verified | `6aa0952` |
-| **P1.d** | `PASS` | Evaluated Kokoro ONNX Runtime (8 threads, spinning=0 optimal median 1366ms) | Thread count benchmarks (4, 6, 8 threads; spinning 0, 1) | Measured CPU baseline | `374d4ed` |
-| **P2** | `PASS` | Merge split utterances during PROCESSING barge-in (2s window) | `tests/unit/voice/test_split_utterance.py` (5/5 passed) | Unit verified | `6b27593` |
-| **P3** | `PASS` | Corrected `endpointing_ms` to measure silence hangover (`speech_end - user_speech_stop`) | `tests/unit/voice/test_latency_tracer.py` (31/31 passed) | Unit verified | `2bd7b52` |
-| **A/B** | `BLOCKED` | Carry-forward review reconciliation from previous prompt | Checked `HANDOFF.md`, `STATE.md`, `PROGRESS.md`, `docs/audits/` | BLOCKED (original req unavailable) | N/A |
+| **P0.1** | `IMPLEMENTED` | `PASS` (Log audit) | Evaluated runtime trace | N/A | N/A (Diagnostic) |
+| **P0.2** | `IMPLEMENTED` | `PASS` (Observable fields) | Pending P0.8 live run | N/A | `9b3924d` |
+| **P0.3** | `IMPLEMENTED` | `PASS` (Lifecycle audit) | Verified against code | N/A | N/A (Audit) |
+| **P0.4** | `IMPLEMENTED` | `PASS` (Invariant + Watchdog) | Pending P0.8 live run | N/A | `9b3924d` + Working tree |
+| **P0.5** | `IMPLEMENTED` | `PASS` (Non-fatal drain) | Pending P0.8 live run | N/A | `9b3924d` |
+| **P0.6** | `IMPLEMENTED` | `PASS` (5s Heartbeat) | Pending P0.8 live run | N/A | `9b3924d` |
+| **P0.7** | `IMPLEMENTED` | `PASS` (8 tests, 30 soak) | N/A (Hermetic) | N/A | `1f3a06d` + Working tree |
+| **P0.8** | `BLOCKED` | N/A | `BLOCKED` (Human required) | N/A | N/A (Protocol prepared) |
+| **P1.a** | `IMPLEMENTED` | `PASS` (First-chunk policy) | Pending live session | N/A | `e5011a2` |
+| **P1.b** | `IMPLEMENTED` | `PASS` (Prompt + 200 cap) | Pending live session | N/A | `c8105fb` + Working tree |
+| **P1.c** | `IMPLEMENTED` | `PASS` (Lookahead gap cut) | Pending live session | N/A | `6aa0952` |
+| **P1.d** | `IMPLEMENTED` | `PASS` (CPU benchmarked) | Evaluated on i9-13900H | `FAIL — target missed` | `374d4ed` |
+| **P2** | `IMPLEMENTED` | `PASS` (5 PCM merge tests)| Pending live session | N/A | `6b27593` |
+| **P3** | `IMPLEMENTED` | `PASS` (31 metric tests) | Verified on timestamps | N/A | `2bd7b52` |
+| **A/B** | `BLOCKED` | N/A | N/A | N/A | N/A (Req unavailable) |
+
+> [!IMPORTANT]
+> **P0 Closeout Status**: P0 implementation and hermetic unit/soak testing are 100% complete and passing. However, **P0 cannot be declared fully closed/verified live** because **P0.8 (Live 15-turn human voice test)** is `BLOCKED` pending a human operator speaking acoustically into the physical microphone.
 
 ---
 
-## 2. Root Cause Analysis Supported by Runtime Evidence (P0.1)
+## 2. P0.1 — Runtime Evidence (Session `3617271b`)
 
-### Observed Failure in Session `3617271b`
-- **15:36:41.55**: Turn 10 entered `SPEAKING`.
-- **15:36:42.80**: LLM completed 39 tokens (~12 seconds of spoken audio).
-- **15:36:57.871**: WARNING `voice.tts.failed`, `stage: playback_drain`.
-- **15:36:57.873**: State transition `SPEAKING` -> `IDLE` -> `LISTENING`.
-- **15:36:57.873 to 15:37:52.326** (~54.5 seconds): Zero microphone events were emitted while user spoke.
-- **15:37:52.326**: Manual shutdown sequence initiated.
+### Explicit Event Accounting after Failure (15:36:57.9 to 15:37:52.3)
+- **`audio.get_speech` request count**: `NOT_LOGGED` in Python log. (Engine poll requests are handled in-memory by `MicrophoneLoop` every 20ms without individual per-poll log entries to avoid flooding disk I/O).
+- **Successful response count**: `NOT_LOGGED`.
+- **Failed / timeout response count**: `NOT_LOGGED`.
+- **Frames/samples received count**: `NOT_LOGGED` in historical logs (this missing observability led directly to adding the P0.6 Heartbeat).
+- **Rust capture task status**: **ALIVE**. Engine process was alive and no errors logged.
+- **Python capture loop status**: **ALIVE**. Confirmed by `microphone_loop_stopped` logged at `15:37:52.326` during clean shutdown.
+- **Audio device status**: **OPEN** and active throughout.
+- **IPC connection status**: **CONNECTED**. Confirmed by `ipc_client_state_transition: connected -> closed` at `15:37:52.333`.
+- **Microphone internal state**: `gated == True`, `paused == False`, `muted == False`.
 
-### Runtime Metrics & System State
-- `audio.get_speech` requests after failure: `NOT_LOGGED` in Python log.
-- Successful responses: `NOT_LOGGED`.
-- Failed / timeout responses: `NOT_LOGGED`.
-- Total returned frames/samples: `NOT_LOGGED`.
-- Rust capture task: **ALIVE**. Engine process was alive and no errors logged.
-- Python microphone loop: **ALIVE** until `microphone_loop_stopped` logged at 15:37:52.326 during shutdown.
-- Audio device: **OPEN** and active throughout.
-- IPC connection: **CONNECTED** until `ipc_client_state_transition: connected -> closed` at 15:37:52.333.
-- Microphone internal state: `gated == True`, `paused == False`, `muted == False`.
-
-### Evaluation of Hypotheses
-- **H1 (Microphone Lifecycle) — PROVEN**:
-  In `interaction_core.py`, entering `SPEAKING` invoked `_on_speaking`, which called `self._mic.gate()`. In `streaming_tts.py`, `_on_playback_completed` was only called at the very end of `_play_worker` after `await asyncio.sleep(drain_seconds)` completed. When an exception occurred during the drain calculation or sleep, `_play_worker` exited early without calling `_on_playback_completed()`. As a result, `self._mic.ungate()` was never invoked. The turn manager completed the turn and transitioned the pipeline to `LISTENING`, but the microphone remained gated (`_gated == True`), causing all subsequent audio frames below the 4x energy barge-in threshold to be discarded.
-- **H2 (Playback Drain Divergence) — ADDRESSED**:
-  The drain calculation used a rigid sleep that was vulnerable to unhandled exceptions and timing jitter. Fixed with error resilience, bounded drain timeouts, and try/finally guarantees.
-- **H3 (Capture/IPC Process Death) — DISPROVEN**:
-  Runtime logs show that both the IPC client and the Python microphone loop remained active and connected for 54.5 seconds until explicit shutdown at 15:37:52.
-
----
-
-## 3. Exact Failure Path and Recovery Path
-
-### Exact Failure Path (Before Fix)
-```
-Turn 10 enters SPEAKING
-  │
-  ├─► _on_speaking() is called
-  │     └─► mic.gate()  [mic._gated = True]
-  │
-  ├─► IncrementalTTSStreamer._play_worker()
-  │     ├─► Audio chunks sent to engine
-  │     ├─► _drain_playback() raises exception / fails
-  │     └─► _play_worker terminates WITHOUT calling _on_playback_completed()
-  │
-  ├─► TurnExecutor completes with TurnStatus.COMPLETED
-  │
-  ├─► _on_turn_done()
-  │     ├─► pipeline.transition_to(IDLE)
-  │     └─► pipeline.transition_to(LISTENING)  [mic._gated remains True!]
-  │
-  └─► System is deaf in LISTENING: normal audio frames discarded.
-```
-
-### Exact Recovery Path (After Fix)
-```
-Turn enters SPEAKING
-  │
-  ├─► _on_speaking() is called
-  │     └─► mic.gate()  [mic._gated = True]
-  │
-  ├─► IncrementalTTSStreamer._play_pending()
-  │     └─► try:
-  │           ... play audio and drain ...
-  │         finally:
-  │           _fire_completed() ──► calls _on_playback_completed() exactly once
-  │
-  ├─► InteractionCore._run_turn()
-  │     └─► try:
-  │           await _executor.execute(...)
-  │         finally:
-  │           _on_playback_completed() ──► idempotent safety net: mic.ungate()
-  │
-  ├─► _on_turn_done()
-  │     ├─► pipeline.transition_to(IDLE)
-  │     └─► pipeline.transition_to(LISTENING)
-  │
-  └─► LISTENING invariant holds: mic._gated == False, mic is actively receiving speech.
-```
-
----
-
-## 4. Complete Microphone Lifecycle Call-Site Table (P0.3)
-
-| File:line | Operation | Caller / Path | Normal Completion | Exception | Cancellation | Barge-in | IPC Failure | Guaranteed Recovery? |
-|---|---|---|---|---|---|---|---|---|
-| `python/tom/voice/interaction_core.py:1414` | `self._mic.gate()` | `_on_speaking()` callback when entering `SPEAKING` | Ungated via `_on_playback_completed` | Ungated via `_run_turn` `finally` | Ungated via `_run_turn` `finally` | Ungated on barge-in speech onset | Ungated via `_run_turn` `finally` | **YES** (Guaranteed by double `finally`) |
-| `python/tom/voice/interaction_core.py:1427` | `self._mic.ungate()` | `_on_playback_completed()` callback | Ungated | Ungated | Ungated | N/A | Ungated | **YES** (Idempotent single-fire) |
-| `python/tom/voice/interaction_core.py:1182` | `self._mic.resume()` | `handle_barge_in()` after barge-in | Resumed | Resumed via `finally` | Resumed | N/A | Handled in caller | **YES** |
-| `python/tom/desktop/tray.py:143` | `mic.mute()` | User clicks tray toggle "Mute" | Muted until toggle | N/A | N/A | N/A | N/A | **YES** (User controlled) |
-| `python/tom/desktop/tray.py:145` | `mic.unmute()` | User clicks tray toggle "Unmute" | Unmuted | N/A | N/A | N/A | N/A | **YES** (User controlled) |
-| `python/tom/voice/microphone.py:333` | `mic.pause()` | Internal method | Pauses ingest | N/A | N/A | N/A | N/A | **YES** (Cleared on resume) |
-| `python/tom/voice/microphone.py:338` | `mic.resume()` | Internal method | Resumes ingest | N/A | N/A | N/A | N/A | **YES** (Clears pending buffer) |
-
----
-
-## 5. Raw Before / After Failure Logs (Session `3617271b`)
-
-### 40 Lines Before `voice.tts.failed` (Lines 611–650)
+### 40 Raw Log Lines Before Failure (`logs/tom.log` lines 611–650)
 ```json
 {"timestamp": "2026-11-02T15:36:05.053631+00:00", "level": "INFO", "logger": "tom.resources.manager", "component": "resources.manager", "event": "resource_lease_released", "session_id": "3617271b", "utterance_id": "turn-6-898061be", "context": {"role": "reasoning", "lease_id": "lease_6e3f359c", "remaining_allocated_vram_mb": 0, "utterance_id": "turn-6-898061be"}}
 {"timestamp": "2026-11-02T15:36:13.798649+00:00", "level": "INFO", "logger": "tom.voice.interaction_core", "component": "voice.interaction_core", "event": "voice.latency.report", "session_id": "3617271b", "utterance_id": "turn-6-898061be", "context": {"latency_report": {"marks_ns": {"user_speech_stop": 14248375000000, "speech_end": 14249031000000, "stt_decode_start": 14249031000000, "stt_decode_end": 14249406000000, "stt_final": 14249406000000, "llm_first_token": 14249687000000, "sentence1": 14249906000000, "tts_first_synth_start": 14250234000000, "tts_first_synth_end": 14251281000000, "first_audio": 14251296000000, "playback_started": 14251296000000}}}}
@@ -174,7 +92,7 @@ Turn enters SPEAKING
 {"timestamp": "2026-11-02T15:36:57.871293+00:00", "level": "WARNING", "logger": "tom.voice.streaming_tts", "component": "voice.streaming_tts", "event": "voice.tts.failed", "session_id": "3617271b", "utterance_id": "turn-10-77a3dc61", "context": {"stage": "playback_drain", "utterance_id": "turn-10-77a3dc61"}}
 ```
 
-### 11 Lines Following Failure in Session `3617271b` until Shutdown
+### Raw Log Sequence After Failure Until Shutdown (Lines 652–662)
 ```json
 {"timestamp": "2026-11-02T15:36:57.872277+00:00", "level": "INFO", "logger": "tom.voice.interaction_core", "component": "voice.interaction_core", "event": "voice.latency.report", "session_id": "3617271b", "utterance_id": "turn-10-77a3dc61", "context": {"latency_report": {"marks_ns": {"user_speech_stop": 14285890000000, "speech_end": 14286546000000, "stt_decode_start": 14286546000000, "stt_decode_end": 14286765000000, "stt_final": 14286765000000, "llm_first_token": 14287156000000, "sentence1": 14287781000000, "tts_first_synth_start": 14287984000000, "tts_first_synth_end": 14291343000000, "first_audio": 14291390000000, "playback_started": 14291390000000}, "metrics": {"stt_first_partial_ms": {"metric": "stt_first_partial_ms", "value_ms": null, "target_ms": 200.0, "ceiling_ms": 350.0, "status": "not_measured"}, "stt_finalization_ms": {"metric": "stt_finalization_ms", "value_ms": 219.0, "target_ms": 350.0, "ceiling_ms": 500.0, "status": "pass"}, "stt_queue_wait_ms": {"metric": "stt_queue_wait_ms", "value_ms": 0.0, "target_ms": 50.0, "ceiling_ms": 150.0, "status": "pass"}, "stt_decode_ms": {"metric": "stt_decode_ms", "value_ms": 219.0, "target_ms": 200.0, "ceiling_ms": 400.0, "status": "pass_ceiling_only"}, "llm_ttft_ms": {"metric": "llm_ttft_ms", "value_ms": 391.0, "target_ms": 500.0, "ceiling_ms": 1000.0, "status": "pass"}, "sentence1_ms": {"metric": "sentence1_ms", "value_ms": 625.0, "target_ms": 50.0, "ceiling_ms": 100.0, "status": "fail"}, "tts_first_audio_ms": {"metric": "tts_first_audio_ms", "value_ms": 3609.0, "target_ms": 350.0, "ceiling_ms": 500.0, "status": "fail"}, "tts_first_synth_ms": {"metric": "tts_first_synth_ms", "value_ms": 3359.0, "target_ms": 200.0, "ceiling_ms": 400.0, "status": "fail"}, "playback_latency_ms": {"metric": "playback_latency_ms", "value_ms": null, "target_ms": 50.0, "ceiling_ms": 150.0, "status": "not_measured"}, "perceived_response_ms": {"metric": "perceived_response_ms", "value_ms": 4844.0, "target_ms": 1500.0, "ceiling_ms": 2200.0, "status": "fail"}, "user_stop_to_first_audio_ms": {"metric": "user_stop_to_first_audio_ms", "value_ms": 4844.0, "target_ms": 1500.0, "ceiling_ms": 2200.0, "status": "fail"}, "user_felt_latency_ms": {"metric": "user_felt_latency_ms", "value_ms": 5500.0, "target_ms": 2100.0, "ceiling_ms": 3000.0, "status": "fail"}, "barge_in_stop_ms": {"metric": "barge_in_stop_ms", "value_ms": null, "target_ms": 150.0, "ceiling_ms": 250.0, "status": "not_measured"}, "endpointing_ms": {"metric": "endpointing_ms", "value_ms": 1984.0, "target_ms": 300.0, "ceiling_ms": 600.0, "status": "fail"}}, "all_passed": false, "failures": ["sentence1_ms", "tts_first_audio_ms", "tts_first_synth_ms", "perceived_response_ms", "user_stop_to_first_audio_ms", "user_felt_latency_ms", "endpointing_ms"], "unmeasured": ["stt_first_partial_ms", "playback_latency_ms", "barge_in_stop_ms"]}, "utterance_id": "turn-10-77a3dc61"}}
 {"timestamp": "2026-11-02T15:36:57.873276+00:00", "level": "INFO", "logger": "tom.voice.interaction_core", "component": "voice.interaction_core", "event": "voice.pipeline.state_changed", "session_id": "3617271b", "utterance_id": "turn-10-77a3dc61", "context": {"old_state": "SPEAKING", "new_state": "IDLE", "epoch": null, "utterance_id": "turn-10-77a3dc61"}}
@@ -191,91 +109,77 @@ Turn enters SPEAKING
 
 ---
 
-## 6. TTS Playback-Drain Diagnostic Output (P0.2)
+## 3. P0.4 — Watchdog Implementation & Verification
 
-Under the fix committed in `9b3924d`, playback drain failures now emit ERROR-level events with full structured context:
+The watchdog is centrally implemented in [`InteractionCore._listening_watchdog`](file:///c:/Users/vishnuu/Projects/TOM/python/tom/voice/interaction_core.py) and started in `InteractionCore.run()`.
+
+### Key Behaviors
+1. **Central Invariant**: `pipeline_state == LISTENING` implies microphone capture is active and delivery is unblocked.
+2. **Detection**: Polls every 0.2s (configurable). If `pipeline_state == LISTENING` while `mic._paused or mic._gated` for $> 1.0$s (monotonic time), watchdog triggers.
+3. **Controlled Recovery**: Calls `mic.resume()` or `mic.ungate()`. Does **not** recreate capture loops or instantiate duplicate audio consumers.
+4. **ERROR Logging**: Emits `microphone_resumed_by_watchdog` (`VoiceEventNames.MIC_RESUMED_BY_WATCHDOG`) at ERROR level with `session_id`, `turn_id`, `pause_duration`, `previous_microphone_state`, and `recovery_result`.
+5. **Controlled Failure State**: If recovery raises or fails to clear the paused/gated state, transitions `VoicePipelineManager` directly to `VoicePipelineState.ERROR`.
+6. **No Loop Churn**: `recovery_attempted` flag suppresses repeated uncontrolled recovery loops during the same paused interval.
+
+---
+
+## 4. P0.5 — Playback Drain Semantics & Hardware Verification
+
+### Engine-Side Signal Audit
+- **Signal Existence**: **DOES NOT EXIST**.
+- Inspection of `rust/tom-engine/src/ipc/handlers.rs` and `audio/manager.rs` confirms that `audio.play_buffer` queues samples into an internal `tokio::sync::mpsc` channel and returns immediately with `{"success": true, "samples_played": count}`.
+- There is no completion event, push callback, or buffer-empty notification sent from Rust back over the named pipe.
+
+### Wall-Clock Drain Accounting & Formula
+Drain accounting is managed in [`IncrementalTTSStreamer._play_pending`](file:///c:/Users/vishnuu/Projects/TOM/python/tom/voice/streaming_tts.py):
+1. **Total Duration**: As each chunk is sent to the engine, its duration is accumulated:
+   $$\text{chunk\_duration\_s} = \frac{\text{len}(\text{pcm\_bytes})}{2 \times \text{sample\_rate}}$$
+2. **Start Timestamp**: `playback_start_time = time.monotonic()` recorded upon submitting the first chunk.
+3. **Remaining Wait**:
+   $$\text{remaining} = \max\left(0.0, \text{total\_audio\_duration\_s} - (\text{time.monotonic()} - \text{playback\_start\_time})\right)$$
+4. **Hardware Tail Padding**: Adds `tail_s = self._playback_tail_ms / 1000.0` (default 300ms) to ensure hardware ring buffers flush before capture resumes, avoiding self-echo.
+5. **Bounded Timeout**: Outer safeguard `asyncio.wait_for(..., timeout=self._drain_timeout_s)` limits worst-case stalls.
+
+### Failure Separation & Recovery
+- Playback drain exceptions are logged as distinct `VoiceEventNames.TTS_FAILED` errors with `stage="playback_drain"`, stack trace, and duration metadata.
+- All exits execute inside `try/finally` calling `_fire_completed()` $\to$ `_on_playback_completed()`, guaranteeing microphone ungating.
+- On cancellation or barge-in, `stop_playback()` sends `audio.playback_stop` over IPC to clear the Rust playback queue and cancel playback tasks.
+
+---
+
+## 5. P0.6 — LISTENING Heartbeat Samples
+
+Heartbeat runs every 5s while in `LISTENING`:
+
+### Structured Log Format Sample
 ```json
 {
-  "timestamp": "2026-11-03T...",
-  "level": "ERROR",
-  "logger": "tom.voice.streaming_tts",
-  "component": "voice.streaming_tts",
-  "event": "voice.tts.failed",
-  "session_id": "...",
-  "utterance_id": "turn-10-...",
+  "timestamp": "2026-11-03T17:35:10.124500+00:00",
+  "level": "INFO",
+  "logger": "tom.voice.interaction_core",
+  "component": "voice.interaction_core",
+  "event": "voice.listening.heartbeat",
   "context": {
-    "stage": "playback_drain",
-    "utterance_id": "turn-10-...",
-    "error_type": "TimeoutError",
-    "error_message": "Playback drain exceeded timeout 15.000s (submitted 12.450s audio, elapsed 15.005s)",
-    "traceback": "Traceback (most recent call last):\n  File ... in _drain_playback\n    raise TimeoutError(...)\n",
-    "submitted_duration_s": 12.45,
-    "elapsed_s": 15.005,
-    "drain_timeout_s": 15.0,
-    "playback_state": "draining",
-    "engine_state": "connected"
+    "pipeline_state": "listening",
+    "mic_gated": false,
+    "mic_paused": false,
+    "mic_muted": false,
+    "frames_since_last_heartbeat": 250,
+    "seconds_since_last_speech_onset": 4.12
   }
 }
 ```
 
 ---
 
-## 7. LISTENING Heartbeat Diagnostic Samples (P0.6)
-
-The 5-second heartbeat in `InteractionCore` periodically checks microphone status while TOM is in `LISTENING`:
-
-### Healthy Heartbeat (Frames Flowing, Mic Active)
-```json
-{
-  "timestamp": "2026-11-03T...",
-  "level": "INFO",
-  "logger": "tom.voice.interaction_core",
-  "component": "voice.interaction_core",
-  "event": "voice.listening.heartbeat",
-  "context": {
-    "pipeline_state": "LISTENING",
-    "mic_state": "running",
-    "capture_loop_alive": true,
-    "frames_received": 249,
-    "input_rms": 0.003421,
-    "input_peak": 0.04512,
-    "seconds_since_last_speech": 8.24,
-    "ipc_healthy": true
-  }
-}
-```
-
-### Unhealthy Heartbeat (Defect Surfaced: Deaf-in-LISTENING)
-```json
-{
-  "timestamp": "2026-11-03T...",
-  "level": "INFO",
-  "logger": "tom.voice.interaction_core",
-  "component": "voice.interaction_core",
-  "event": "voice.listening.heartbeat",
-  "context": {
-    "pipeline_state": "LISTENING",
-    "mic_state": "gated",
-    "capture_loop_alive": true,
-    "frames_received": 0,
-    "input_rms": null,
-    "input_peak": null,
-    "seconds_since_last_speech": 54.45,
-    "ipc_healthy": true
-  }
-}
-```
-
----
-
-## 8. Hermetic Test Evidence & 30-Turn Soak (P0.7)
+## 6. P0.7 — Hermetic Test Evidence
 
 ### Execution Command
 ```powershell
 .venv\Scripts\pytest.exe tests/unit/voice/test_mic_recovery.py -v
 ```
 
-### Raw Test Output
+### Raw Pytest Output
 ```
 ============================= test session starts =============================
 platform win32 -- Python 3.11.9, pytest-9.1.1, pluggy-1.6.0
@@ -283,137 +187,94 @@ rootdir: C:\Users\vishnuu\Projects\TOM
 configfile: pyproject.toml
 plugins: anyio-4.15.1, asyncio-1.4.0, timeout-2.4.0
 asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
-collected 6 items
+collected 8 items
 
-tests\unit\voice\test_mic_recovery.py::test_mic_recovery_after_playback_drain_exception PASSED [ 16%]
-tests\unit\voice\test_mic_recovery.py::test_mic_recovery_after_cancellation_during_speaking PASSED [ 33%]
-tests\unit\voice\test_mic_recovery.py::test_mic_recovery_after_synthesis_exception PASSED [ 50%]
-tests\unit\voice\test_mic_recovery.py::test_mic_recovery_after_ipc_disconnect PASSED [ 66%]
-tests\unit\voice\test_mic_recovery.py::test_single_fire_idempotency PASSED [ 83%]
-tests\unit\voice\test_mic_recovery.py::test_30_turn_fault_injection_soak PASSED [100%]
+tests\unit\voice\test_mic_recovery.py::test_drain_exception_fires_callback PASSED [ 12%]
+tests\unit\voice\test_mic_recovery.py::test_cancel_during_speaking_fires_callback PASSED [ 25%]
+tests\unit\voice\test_mic_recovery.py::test_synthesis_exception_fires_callback PASSED [ 37%]
+tests\unit\voice\test_mic_recovery.py::test_ipc_disconnect_fires_callback PASSED [ 50%]
+tests\unit\voice\test_mic_recovery.py::test_single_fire_idempotency PASSED [ 62%]
+tests\unit\voice\test_mic_recovery.py::test_30_turn_fault_injection_soak PASSED [ 75%]
+tests\unit\voice\test_mic_recovery.py::test_watchdog_resumes_paused_mic_in_listening PASSED [ 87%]
+tests\unit\voice\test_mic_recovery.py::test_watchdog_transitions_to_error_when_recovery_fails PASSED [100%]
 
-============================== 6 passed in 0.51s ==============================
-Exit code: 0
+============================== 8 passed in 0.81s ==============================
+Exit Code: 0
 ```
 
-### 30-Turn Fault Injection Soak Verification
+### 30-Turn Soak Verification Details
 - **Random Seed**: `seed = 42` (fixed, reproducible).
-- **Fault Matrix**:
-  - `Turn 1, 6, 11, 16, 21, 26`: Playback drain exception.
-  - `Turn 2, 7, 12, 17, 22, 27`: TTS synthesis exception.
-  - `Turn 3, 8, 13, 18, 23, 28`: External cancellation during SPEAKING.
-  - `Turn 4, 9, 14, 19, 24, 29`: IPC connection disconnect during playback.
-  - `Turn 5, 10, 15, 20, 25, 30`: Normal healthy speech turn.
-- **Invariant Audit**: In all 30 turns across all injected faults, zero turns left TOM in a deaf-but-LISTENING state (`mic._gated == False`, `pipeline_state == LISTENING`).
+- **Fault Matrix Breakdown**:
+  - `drain_timeout`: 7 turns simulated. Result: Callback fired, 0 turns deaf.
+  - `synth_error`: 8 turns simulated. Result: Callback fired, 0 turns deaf.
+  - `cancel`: 7 turns simulated. Result: Callback fired, 0 turns deaf.
+  - `normal`: 8 turns simulated. Result: Callback fired, 0 turns deaf.
+- **Result**: `deaf_count == 0` (0/30 turns left mic gated in LISTENING).
 
 ---
 
-## 9. Live 15-Turn Verification Protocol (P0.8)
+## 7. P1 Latency Corrections & CPU Baseline
 
-**Status**: `BLOCKED` — Automated agents cannot physically speak acoustic questions into a local hardware microphone.
-
-### Question Protocol Sheet (for Human Operator)
-1. "Explain how the TCP three-way handshake establishes a reliable transport connection."
-2. "Describe the life cycle of a star from stellar nebula to black hole or white dwarf."
-3. "Summarize the primary differences between asynchronous event-driven architectures and thread-pool architectures."
-4. "Detail the chronological events that led to the fall of the Western Roman Empire."
-5. "Explain how public-key cryptography and RSA key generation mathematically work."
-6. "Walk through the architectural trade-offs between monolithic SQL databases and distributed NoSQL databases."
-7. "Explain the biological mechanism of mRNA translation in ribosomes."
-8. "Discuss the economic and societal impacts of the Industrial Revolution in nineteenth-century England."
-9. "Describe the fundamental components and pipeline stages of a modern modern optimizing compiler."
-10. "Explain quantum entanglement and the concept of Bell inequality violation."
-11. "Detail the process of cellular respiration through glycolysis, the Krebs cycle, and oxidative phosphorylation."
-12. "Describe the mechanics and aerodynamics of fixed-wing aircraft lift and drag."
-13. "Explain the Byzantine Generals Problem and how consensus is reached in distributed systems."
-14. "Summarize the history and philosophical implications of the Turing Test and the Chinese Room argument."
-15. "Detail the mechanisms of tectonic plate movement, subduction zones, and seismic activity."
-
-### Human Operator Instructions
-1. Start llama.cpp server with model at `http://127.0.0.1:65400/v1`.
-2. Launch TOM voice daemon: `python -m tom.main --voice`.
-3. Speak each question sequentially. Wait for TOM to finish speaking and return to `LISTENING` before asking the next question.
-4. Verify that turn 11 through 15 continue to process speech without restarting the daemon.
-
----
-
-## 10. Latency Benchmarks & Stage Timings (P1.a–P1.d)
-
-### P1.a First-Chunk Policy
-- Implemented in `SentenceStreamer`. Flushes speakable clause at natural boundaries (`,`, `;`, `:`, `—`) if $\ge 15$ characters and $\ge 3$ words.
-- If punctuation is delayed, flushes at 7 words.
-- Holds tiny fragments ($< 15$ chars, $< 3$ words).
-- Preserves single sentences $\le 12$ words.
-- Benchmark: 5/5 test cases passed in `test_sentence_streamer.py`.
-
-### P1.b Voice Response Length Cap
-- Voice-specific limit set to `max_response_tokens: 200` in `config/voice.yaml` and `VoiceConfig`.
-- Passed to `AgentOrchestrator` in `main.py` when running in voice mode. CLI / chat mode preserves full 1024 token capacity.
-
-### P1.c Lookahead Gap Elimination
-- **Previous Bottleneck**: `IncrementalTTSStreamer._produce_sentences` awaited `iterator.__anext__()` for sentence 2 before dispatching `_synthesize_chunk` for sentence 1 solely to set the `is_last` boolean flag. This caused a 187–203 ms idle gap.
-- **Fix**: Dispatches `_synthesize_chunk` immediately without waiting for sentence 2; resolves `is_last` concurrently via `asyncio.Event` before playback.
-- **Evidence**: Verified via `test_first_chunk_synthesis_starts_without_waiting_for_second_sentence`.
+### P1.b Voice Prompt & Token Cap
+- In [`python/tom/agents/prompts.py`](file:///c:/Users/vishnuu/Projects/TOM/python/tom/agents/prompts.py), `VOICE_SYSTEM_PROMPT` was explicitly updated:
+  > *"Speak in at most two short sentences by default, unless the user explicitly asks for detail, explanation, or elaboration. Prefer direct answers without preambles or repeated summaries. No markdown formatting. No bulleted lists. No code blocks."*
+- Cap of `max_response_tokens: 200` enforced for voice mode in `config/voice.yaml` and `main.py`.
+- Unit verified in [`tests/unit/agents/test_orchestrator_streaming.py`](file:///c:/Users/vishnuu/Projects/TOM/tests/unit/agents/test_orchestrator_streaming.py).
 
 ### P1.d Kokoro ONNX CPU Performance Evaluation
-Benchmarked Kokoro v0.19 CPU inference across thread counts and spinning modes for representative 8-word chunks:
-| Configuration | Threads | `allow_spinning` | Median Latency (ms) | Min (ms) | Max (ms) |
-|---|---:|---:|---:|---:|---:|
-| CPU | 4 | 0 | 1667.9 | 1580.2 | 1790.1 |
-| CPU | 6 | 0 | 1447.8 | 1390.4 | 1520.3 |
-| CPU | 8 | 0 | **1366.1** | 1320.5 | 1450.0 |
-| CPU | 8 | 1 | 1473.2 | 1410.1 | 1580.4 |
-
-- **Optimal Configuration**: 8 threads, `allow_spinning=0` (lowest latency and lowest thread contention).
-- **Warmup Benefit**: Cold synthesis takes ~1850ms; subsequent warmed runs average ~1366ms (saves ~450ms).
-- **Target Assessment**: 400ms target for 8-word chunk is **not achievable** on CPU execution provider without ONNX DirectML/CUDA GPU acceleration or INT8 model quantization. VRAM delta: 0 MB. CPU utilization: ~30.9%.
+- **Target**: Median first-chunk $\le 400$ms for ~8-word chunk.
+- **Status**: **`FAIL — target missed`**.
+- **Hardware Measured**: Intel Core i9-13900H, CPUExecutionProvider (CPU-only, no local GPU ONNX provider).
+- **Measured Results (8 words)**:
+  - 4 threads, spinning=0: 1667.9 ms
+  - 6 threads, spinning=0: 1447.8 ms
+  - **8 threads, spinning=0: 1366.1 ms (optimal)**
+  - 8 threads, spinning=1: 1473.2 ms (thread contention penalty)
+- **Constraint Compliance**: Zero model downloads, no GPU ONNX installation, no VRAM consumption. The 400ms target cannot be met on CPU execution provider without hardware acceleration or quantized models.
 
 ---
 
-## 11. P2 — Split-Utterance Merging During PROCESSING
+## 8. P2 & P3 Verification
 
-### Problem Solved
-When a user begins an utterance, pauses briefly, and continues speaking while TOM is in `PROCESSING` (before audio playback begins), previous versions treated the continuation as an abortive barge-in, discarding the first utterance segment.
+### P2 Split-Utterance Merge Edge Cases
+Implemented in [`InteractionCore._run_turn`](file:///c:/Users/vishnuu/Projects/TOM/python/tom/voice/interaction_core.py) and verified via [`tests/unit/voice/test_split_utterance.py`](file:///c:/Users/vishnuu/Projects/TOM/tests/unit/voice/test_split_utterance.py) (5/5 passed):
+1. `test_split_utterance_merges_pcm_and_runs_stt_once`: Original + continuation PCM concatenated; STT called exactly once on combined buffer.
+2. `test_no_merge_after_timeout`: Continuation arriving $> 2.0$s after cancellation is treated as a separate utterance.
+3. `test_no_merge_during_speaking`: Normal barge-in applies; does not merge if audio output already started.
+4. `test_repeated_cancellations_chain_merges`: Chained PROCESSING barge-ins append PCM safely.
+5. `test_duplicate_audio_not_merged`: Prevents reprocessing previously completed buffers.
 
-### Implementation
-- `InteractionCore` stores incoming PCM in `_active_audio`.
-- On barge-in occurring during `PROCESSING` before playback has started, PCM is preserved in `_pending_cancelled_audio` with a monotonic timestamp.
-- On the next utterance, if arrival is within the 2.0s merge window, `_begin_turn` concatenates `original_pcm + continuation_pcm` and transcribes once.
-- If audio playback has already started (SPEAKING state), merge is aborted and normal barge-in interrupt applies.
-- Tests: 5/5 passed in `tests/unit/voice/test_split_utterance.py`.
-
----
-
-## 12. P3 — Endpointing Metric Correction
-
-### Metric Correction
-- **Old (Buggy) Formula**: Measured entire utterance duration (`speech_end - speech_start`), reporting false 1.75–2.11s latencies.
-- **Correct Formula**: Measures silence hangover:
-  $$\text{endpointing\_ms} = \text{speech\_end} - \text{user\_speech\_stop}$$
-- Verified: configured 600 ms VAD silence hangover measures ~656 ms (accounting for 20 ms frame boundaries), not ~2.0s.
-- Stale claims in `STATE.md`, `PROGRESS.md`, and `HANDOFF.md` removed and updated.
-- Tests: 31/31 passed in `tests/unit/voice/test_latency_tracer.py`.
+### P3 Corrected Endpointing Formula
+Corrected in [`latency.py`](file:///c:/Users/vishnuu/Projects/TOM/python/tom/voice/latency.py) and tested via [`tests/unit/voice/test_latency_tracer.py`](file:///c:/Users/vishnuu/Projects/TOM/tests/unit/voice/test_latency_tracer.py) (31/31 passed):
+$$\text{endpointing\_ms} = \text{speech\_end} - \text{user\_speech\_stop}$$
+- Verified: Returns actual silence hangover (~656ms for 600ms setting with 20ms frames), removing the erroneous ~1.75–2.11s full-utterance duration metric.
 
 ---
 
-## 13. Carry-Forward Review Items A and B Reconciliation
+## 9. Git Audit & Commit Attribution
 
-- **Status**: `BLOCKED — original requirement unavailable; checked HANDOFF.md, STATE.md, PROGRESS.md, audit reports`.
-- Per instruction: Checked all repository documentation and audit logs; the specific historical textual definitions for items A and B from earlier external prompts were not retained in repository source control.
+### Commit History
+```
+86af89f (HEAD -> wip/audit-2026-11-02) docs(audit): comprehensive report and doc reconciliation for voice repair P0-P3
+6b27593 feat(voice): P2 - merge split utterances during PROCESSING barge-in
+374d4ed perf(voice): P1.d - evaluate Kokoro performance and configure optimal ONNX Runtime settings
+6aa0952 fix(voice): P1.c - eliminate 187-203ms sentence-to-synthesis gap in IncrementalTTSStreamer
+e5011a2 feat(voice): P1.a - implement first-chunk policy in SentenceStreamer
+c8105fb feat(voice): P1.b - apply voice response length limit and max_response_tokens cap
+2bd7b52 fix(metrics): P3 - endpointing_ms now measures silence hangover (USER_SPEECH_STOP -> SPEECH_END)
+1f3a06d test(voice): P0.7 - hermetic mic-recovery fault-injection tests (6 cases, 30-turn soak)
+9b3924d fix(voice): P0.2/P0.4/P0.5/P0.6 - mic recovery invariant, drain ERROR logging, heartbeat
+b538e79 feat(telemetry): instrument user_felt_latency_ms and router_ms for live baseline
+```
 
----
+### Attribution of Commit `9b3924d`
+Commit `9b3924d` combined:
+- **P0.2**: ERROR-level playback drain logging with traceback in `streaming_tts.py`.
+- **P0.4**: Invariant enforcement via `try/finally` in `_run_turn` and `_play_pending`.
+- **P0.5**: Non-fatal drain semantics in `_play_pending`.
+- **P0.6**: LISTENING heartbeat in `interaction_core.py`.
+The active watchdog for P0.4 is now committed in the working tree along with unit tests in `test_mic_recovery.py`.
 
-## 14. Git Diff Summary & Commits
-
-### Completed Commits in Session
-- `9b3924d`: `fix(voice): P0.2/P0.4/P0.5/P0.6 - mic recovery invariant, drain ERROR logging, heartbeat`
-- `1f3a06d`: `test(voice): P0.7 - hermetic mic-recovery fault-injection tests (6 cases, 30-turn soak)`
-- `2bd7b52`: `fix(metrics): P3 - endpointing_ms now measures silence hangover (USER_SPEECH_STOP -> SPEECH_END)`
-- `c8105fb`: `feat(voice): P1.b - apply voice response length limit and max_response_tokens cap`
-- `e5011a2`: `feat(voice): P1.a - implement first-chunk policy in SentenceStreamer`
-- `6aa0952`: `fix(voice): P1.c - eliminate 187-203ms sentence-to-synthesis gap in IncrementalTTSStreamer`
-- `374d4ed`: `perf(voice): P1.d - evaluate Kokoro performance and configure optimal ONNX Runtime settings`
-- `6b27593`: `feat(voice): P2 - merge split utterances during PROCESSING barge-in`
-
-### Test Suite Exit Gate
-- `pytest tests/unit/voice -q --timeout=30`: **408 passed** (0 failures, 1 warning in third-party dependency).
+### Graphify Status
+- No Graphify files exist in the git tracking area (`graphify-out/` is git-ignored).
+- Working tree contains only the explicit verification and watchdog code fixes.

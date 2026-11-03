@@ -160,3 +160,9 @@ class TestMaxResponseTokens:
         assert len(deltas) > 0
         assert provider.last_request is not None
         assert provider.last_request.max_tokens == 200
+
+    def test_voice_prompt_limits_ordinary_replies_to_two_short_sentences(self) -> None:
+        from tom.agents.prompts import VOICE_SYSTEM_PROMPT
+
+        assert "at most two short sentences" in VOICE_SYSTEM_PROMPT
+        assert "unless the user explicitly asks for detail" in VOICE_SYSTEM_PROMPT

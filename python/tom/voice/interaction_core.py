@@ -754,6 +754,7 @@ class InteractionCore:
         self._barge_in_count = 0
         self._startup_greeting = startup_greeting
         self._debug_trace = debug_trace
+        self._session_id: str | None = getattr(debug_trace, "session_id", None)
 
         self._frames = bytearray()
         self._smart_turn_candidate: bytes | None = None
@@ -870,6 +871,7 @@ class InteractionCore:
         # Subscribe synchronously so no event emitted during start() is lost.
         subscription = self._mic.subscribe()
         heartbeat_task: asyncio.Task[None] | None = None
+        watchdog_task: asyncio.Task[None] | None = None
         try:
             if not self._mic.is_running:
                 await self._mic.start()
@@ -879,6 +881,10 @@ class InteractionCore:
             # so we can detect deaf-LISTENING (gated mic) from logs alone.
             heartbeat_task = asyncio.create_task(
                 self._listening_heartbeat(), name="tom.listening_heartbeat"
+            )
+            # P0.4: LISTENING watchdog — recovers mic if paused > 1s in LISTENING
+            watchdog_task = asyncio.create_task(
+                self._listening_watchdog(), name="tom.listening_watchdog"
             )
 
             # Run startup greeting once per voice session (if enabled)
@@ -890,6 +896,12 @@ class InteractionCore:
                     break
                 await self._handle_event(event)
         finally:
+            if watchdog_task is not None:
+                watchdog_task.cancel()
+                try:
+                    await watchdog_task
+                except asyncio.CancelledError:
+                    pass
             if heartbeat_task is not None:
                 heartbeat_task.cancel()
                 try:
@@ -937,6 +949,102 @@ class InteractionCore:
                 frames_since_last_heartbeat=frames_since_last,
                 seconds_since_last_speech_onset=seconds_since_speech,
             )
+
+    async def _listening_watchdog(
+        self,
+        poll_interval_s: float = 0.2,
+        timeout_s: float = 1.0,
+    ) -> None:
+        """Watchdog enforcing the LISTENING invariant (P0.4).
+
+        Detects if pipeline_state == LISTENING while the microphone remains
+        paused or gated for more than 1.0 second (or custom timeout_s).
+        Attempts controlled recovery without creating duplicate loops/consumers.
+        Emits ERROR event 'microphone_resumed_by_watchdog'.
+        Transitions to explicit ERROR state if recovery fails.
+        """
+        paused_since: float | None = None
+        recovery_attempted = False
+
+        while not (self._stopping or self._stopped):
+            try:
+                await asyncio.sleep(poll_interval_s)
+                if self._stopping or self._stopped:
+                    return
+
+                if self._pipeline.state != VoicePipelineState.LISTENING:
+                    paused_since = None
+                    recovery_attempted = False
+                    continue
+
+                mic = self._mic
+                is_paused = getattr(mic, "_paused", False) or getattr(mic, "_gated", False)
+
+                if not is_paused:
+                    paused_since = None
+                    recovery_attempted = False
+                    continue
+
+                now = time.monotonic()
+                if paused_since is None:
+                    paused_since = now
+                    recovery_attempted = False
+                    continue
+
+                pause_duration = now - paused_since
+                if pause_duration >= timeout_s and not recovery_attempted:
+                    recovery_attempted = True
+                    was_paused = getattr(mic, "_paused", False)
+                    was_gated = getattr(mic, "_gated", False)
+                    turn_id = (
+                        getattr(self._turn_manager.current, "turn_id", None)
+                        if self._turn_manager and self._turn_manager.current
+                        else None
+                    )
+
+                    recovery_ok = False
+                    try:
+                        if hasattr(mic, "resume"):
+                            mic.resume()
+                        elif hasattr(mic, "ungate"):
+                            mic.ungate()
+                        recovery_ok = not (
+                            getattr(mic, "_paused", False) or getattr(mic, "_gated", False)
+                        )
+                    except Exception as exc:
+                        logger.error(
+                            "microphone_watchdog_recovery_exception",
+                            error=str(exc),
+                            pause_duration=pause_duration,
+                        )
+                        recovery_ok = False
+
+                    if recovery_ok:
+                        logger.error(
+                            VoiceEventNames.MIC_RESUMED_BY_WATCHDOG,
+                            session_id=self._session_id or "voice_session",
+                            turn_id=turn_id,
+                            pause_duration=pause_duration,
+                            previous_microphone_state={"paused": was_paused, "gated": was_gated},
+                            recovery_result="resumed",
+                        )
+                    else:
+                        logger.error(
+                            VoiceEventNames.MIC_RESUMED_BY_WATCHDOG,
+                            session_id=self._session_id or "voice_session",
+                            turn_id=turn_id,
+                            pause_duration=pause_duration,
+                            previous_microphone_state={"paused": was_paused, "gated": was_gated},
+                            recovery_result="failed",
+                        )
+                        try:
+                            self._transition(VoicePipelineState.ERROR)
+                        except Exception as tr_exc:
+                            logger.error(f"Failed to transition to ERROR state: {tr_exc}")
+            except asyncio.CancelledError:
+                break
+            except Exception as loop_exc:
+                logger.warning(f"Error in listening watchdog: {loop_exc}")
 
     async def stop(self) -> None:
         """Stop the interaction loop cleanly. Idempotent and never leaks tasks."""
