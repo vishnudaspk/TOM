@@ -300,61 +300,65 @@ class IncrementalTTSStreamer(StreamingTTSProvider):
     ) -> None:
         """Dispatch one synthesis task per sentence, in order, on a bounded pool.
 
-        Reads one sentence ahead so ``is_last`` is decided by the only stage
-        that can know it (the upstream generator) rather than guessed by the
-        consumer.
+        Dispatches synthesis immediately when a sentence arrives so synthesis of
+        chunk 0 starts without waiting for chunk 1 lookahead (eliminating the
+        ~187-203 ms sentence-to-synthesis gap). Resolution of ``is_last`` runs
+        concurrently with synthesis.
         """
         iterator = sentences.__aiter__()
         semaphore = asyncio.Semaphore(self._max_concurrent)
-        lookahead: str = ""
-        has_lookahead = False
         index = 0
+        prev_is_last_event: asyncio.Event | None = None
+        prev_is_last_box: list[bool] = [False]
 
         try:
             while True:
                 if token is not None and token.is_cancelled():
                     break
 
-                if has_lookahead:
-                    sentence = lookahead
-                else:
-                    try:
-                        sentence = await iterator.__anext__()
-                    except StopAsyncIteration:
-                        break
-
                 try:
-                    lookahead = await iterator.__anext__()
-                    has_lookahead = True
-                    is_last = False
+                    sentence = await iterator.__anext__()
                 except StopAsyncIteration:
-                    has_lookahead = False
-                    is_last = True
+                    if prev_is_last_event is not None:
+                        prev_is_last_box[0] = True
+                        prev_is_last_event.set()
+                    break
 
                 text = sentence.strip()
                 if not text:
-                    if is_last:
-                        break
                     continue
+
+                if prev_is_last_event is not None:
+                    prev_is_last_box[0] = False
+                    prev_is_last_event.set()
+
+                is_last_event = asyncio.Event()
+                is_last_box = [False]
+                prev_is_last_event = is_last_event
+                prev_is_last_box = is_last_box
 
                 await semaphore.acquire()
                 slots.put_nowait(
                     asyncio.create_task(
-                        self._synthesize_chunk(index, text, is_last, semaphore),
+                        self._synthesize_chunk(
+                            index, text, is_last_event, is_last_box, semaphore
+                        ),
                         name=f"tom.streaming_tts.synth.{index}",
                     )
                 )
                 index += 1
-                if is_last:
-                    break
         finally:
+            if prev_is_last_event is not None and not prev_is_last_event.is_set():
+                prev_is_last_box[0] = True
+                prev_is_last_event.set()
             slots.put_nowait(_EOF)
 
     async def _synthesize_chunk(
         self,
         index: int,
         sentence: str,
-        is_last: bool,
+        is_last_event: asyncio.Event,
+        is_last_box: list[bool],
         semaphore: asyncio.Semaphore,
     ) -> _Playable | None:
         """Synthesize one sentence off the event loop; None when synthesis fails."""
@@ -385,6 +389,10 @@ class IncrementalTTSStreamer(StreamingTTSProvider):
 
         if index == 0 and self._on_first_synth_end is not None:
             self._on_first_synth_end()
+
+        # Wait for lookahead to determine whether this chunk is the last
+        await is_last_event.wait()
+        is_last = is_last_box[0]
 
         return _Playable(
             chunk=SynthesisChunk(
