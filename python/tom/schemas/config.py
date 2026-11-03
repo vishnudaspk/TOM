@@ -148,6 +148,14 @@ class VoiceConfig(BaseModel):
     smart_turn_max_incomplete_wait_ms: int = Field(default=1800, ge=500, le=10000)
     # Debug trace: enable detailed session logging and audio recording
     debug_trace: bool = Field(default=False, description="Enable detailed debug trace with audio recording and timeline")
+    # Voice response token cap. Keeps spoken replies short (2-3 sentences).
+    # Use 0 to rely solely on the system prompt instruction without a hard cap.
+    max_response_tokens: int = Field(
+        default=200,
+        ge=0,
+        le=2048,
+        description="Max tokens for voice LLM responses (0 = uncapped, prompt-only limit)",
+    )
 
 
 class ToolsConfig(BaseModel):

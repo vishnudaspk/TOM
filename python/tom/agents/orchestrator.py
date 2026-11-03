@@ -52,11 +52,13 @@ class AgentOrchestrator:
         router: IntentRouter,
         resource_manager: ResourceManager | None = None,
         config: TOMConfig | None = None,
+        max_response_tokens: int = 1024,
     ) -> None:
         self._agent = agent
         self._router = router
         self._resource_manager = resource_manager
         self._config = config
+        self._max_response_tokens = max_response_tokens
 
     @property
     def agent(self) -> Agent:
@@ -277,7 +279,7 @@ class AgentOrchestrator:
         req = ModelRequest(
             model="router",
             messages=messages,
-            max_tokens=1024,
+            max_tokens=self._max_response_tokens,
             temperature=self._agent.config.temperature,
         )
 
@@ -325,7 +327,7 @@ class AgentOrchestrator:
         req = ModelRequest(
             model="router",
             messages=messages,
-            max_tokens=1024,
+            max_tokens=self._max_response_tokens,
             temperature=self._agent.config.temperature,
             stream=True,
         )

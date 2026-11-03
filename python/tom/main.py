@@ -325,11 +325,19 @@ class TomApp:
 
     def _setup_orchestrator(self) -> None:
         """Initialize AgentOrchestrator with agent, router, and resource manager."""
+        # Voice mode applies a token cap to keep spoken replies concise.
+        # CLI mode keeps the full 1024-token budget for structured output.
+        voice_tokens = (
+            self._config.voice.max_response_tokens
+            if self._config and self._mode == "voice" and self._config.voice.max_response_tokens > 0
+            else 1024
+        )
         self._orchestrator = AgentOrchestrator(
             agent=self._agent,
             router=self._router,
             resource_manager=self._resource_manager,
             config=self._config,
+            max_response_tokens=voice_tokens,
         )
         logger.info("orchestrator_initialized")
 

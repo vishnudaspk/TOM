@@ -20,3 +20,6 @@ min_speech_ms: 400
 smart_turn_max_incomplete_wait_ms: 1800
 # Debug trace: enable detailed session logging and audio recording
 debug_trace: false
+# Max tokens for voice LLM responses (keeps spoken replies to ~2-3 sentences).
+# Set to 0 to rely on the system prompt instruction alone (no hard cap).
+max_response_tokens: 200
