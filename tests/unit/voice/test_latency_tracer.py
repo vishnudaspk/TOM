@@ -214,9 +214,39 @@ def test_unmeasured_metric_is_excluded_from_pass_verdict() -> None:
     assert report.unmeasured == ["x"]
 
 
-def test_endpointing_unmeasured_without_turn_start() -> None:
-    report = InteractionLatencyTracer(clock=FakeClock()).get_report()
+def test_endpointing_unmeasured_without_user_speech_stop() -> None:
+    """endpointing_ms requires USER_SPEECH_STOP mark; turn_start_ns alone is not enough."""
+    clock = FakeClock()
+    # Mark SPEECH_END but no USER_SPEECH_STOP — old code used turn_start_ns,
+    # which would yield a non-None result; new code requires USER_SPEECH_STOP.
+    tracer = InteractionLatencyTracer(clock=clock, turn_start_ns=0)
+    clock.advance_ms(600)
+    tracer.mark(LatencyStage.SPEECH_END)
+    report = tracer.get_report()
+    # Under the old (wrong) calculation this would be 600 ms (measured).
+    # Under the correct calculation it must be unmeasured.
     assert "endpointing_ms" in report.unmeasured
+
+
+def test_endpointing_is_silence_hangover_not_utterance_duration() -> None:
+    """endpointing_ms = SPEECH_END - USER_SPEECH_STOP, not SPEECH_END - turn_start."""
+    clock = FakeClock()
+    tracer = InteractionLatencyTracer(clock=clock, turn_start_ns=0)
+    # 2-second utterance before USER_SPEECH_STOP
+    clock.advance_ms(2000)
+    tracer.mark(LatencyStage.USER_SPEECH_STOP)
+    # 600 ms silence hangover
+    clock.advance_ms(600)
+    tracer.mark(LatencyStage.SPEECH_END)
+
+    report = tracer.get_report()
+    # Correct: only the hangover (600 ms), NOT the full 2600 ms from turn start.
+    assert report.measured["endpointing_ms"] == pytest.approx(600.0), (
+        "endpointing_ms must measure only silence hangover, not utterance duration"
+    )
+    # Prove it would differ from the old (wrong) calculation:
+    wrong_old_value = 2600.0  # SPEECH_END - turn_start_ns
+    assert report.measured["endpointing_ms"] != pytest.approx(wrong_old_value)
 
 
 def test_require_stages_names_the_missing_marks() -> None:

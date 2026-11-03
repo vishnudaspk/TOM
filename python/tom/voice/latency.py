@@ -48,8 +48,8 @@ Stage semantics (plan section 10.2)
  * ``perceived_response_ms``    = ``PLAYBACK_STARTED`` - ``SPEECH_END``
  * ``user_stop_to_first_audio_ms`` = ``FIRST_AUDIO``   - ``SPEECH_END``
  * ``barge_in_stop_ms``         = ``BARGE_IN_STOP``  - ``BARGE_IN_ONSET``
- * ``endpointing_ms``           = ``SPEECH_END``     - turn start (the
-   hangover the VAD waited before committing the utterance)
+ * ``endpointing_ms``           = ``SPEECH_END`` - ``USER_SPEECH_STOP`` (VAD
+   silence hangover: time from last speech frame to committed utterance)
 
 SLA table (plan section 10.2). Targets are the primary acceptance criteria;
 ceilings are the hard limits. :meth:`InteractionLatencyTracer.assert_slas`
@@ -376,13 +376,15 @@ class InteractionLatencyTracer:
         return (last - first) / 1_000_000.0
 
     def _endpointing_ms(self) -> float | None:
-        if self._turn_start_ns is None:
-            return None
+        # endpointing_ms = SPEECH_END - USER_SPEECH_STOP
+        # = silence hangover the VAD waited after the last speech frame.
+        # Previously measured SPEECH_END - turn_start_ns which spanned the
+        # entire utterance duration and was therefore always wrong.
+        stop = self._marks_ns.get(LatencyStage.USER_SPEECH_STOP)
         end = self._marks_ns.get(LatencyStage.SPEECH_END)
-        if end is None or end == self._turn_start_ns:
-            # Identical mark (0 ms) is a fake pass; report not_measured (Item 6).
+        if stop is None or end is None or end <= stop:
             return None
-        return (end - self._turn_start_ns) / 1_000_000.0
+        return (end - stop) / 1_000_000.0
 
 
 # Metric name -> the two stage marks it is derived from.
