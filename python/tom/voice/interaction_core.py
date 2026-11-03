@@ -778,6 +778,11 @@ class InteractionCore:
         self._turn_start_ns: int | None = None
         self._last_speech_frame_ns: int | None = None
         self._reports: deque[LatencyReport] = deque(maxlen=self._latency_history)
+        # P2: Split-utterance merging during PROCESSING
+        self._active_audio: bytes | None = None
+        self._pending_cancelled_audio: bytes | None = None
+        self._pending_cancelled_time: float | None = None
+        self._merge_window_s: float = 2.0
 
     # ------------------------------------------------------------------
     # Introspection
@@ -978,6 +983,9 @@ class InteractionCore:
         self._frames.clear()
         self._cancel_smart_turn_timeout()
         self._smart_turn_candidate = None
+        self._active_audio = None
+        self._pending_cancelled_audio = None
+        self._pending_cancelled_time = None
 
         # Stops the mic and ends the run() event stream.
         try:
@@ -1091,6 +1099,29 @@ class InteractionCore:
         token = self._active_token
         tracer = self._tracer
 
+        # P2: Check if this barge-in occurred during PROCESSING before audio output started
+        was_processing = (
+            self._pipeline.state == VoicePipelineState.PROCESSING
+            and not self._playback_active
+            and self._active_audio is not None
+        )
+        if was_processing:
+            now = time.monotonic()
+            if self._pending_cancelled_audio is None or self._pending_cancelled_time is None:
+                self._pending_cancelled_audio = self._active_audio
+                self._pending_cancelled_time = now
+            else:
+                elapsed = now - self._pending_cancelled_time
+                if elapsed <= self._merge_window_s:
+                    if not self._pending_cancelled_audio.endswith(self._active_audio):
+                        self._pending_cancelled_audio += self._active_audio
+                else:
+                    self._pending_cancelled_audio = self._active_audio
+                    self._pending_cancelled_time = now
+        else:
+            self._pending_cancelled_audio = None
+            self._pending_cancelled_time = None
+
         try:
             # 1-2. Synchronous invalidation (no awaits between bump and cancel).
             epoch = self._epochs.bump()
@@ -1127,6 +1158,7 @@ class InteractionCore:
             self._active_token = None
             self._active_progress = None
             self._smart_turn_candidate = None
+            self._active_audio = None
 
             logger.warning(
                 VoiceEventNames.PIPELINE_CANCELLED,
@@ -1248,6 +1280,29 @@ class InteractionCore:
             return
         if self._active_turn is not None and not self._active_turn.done():
             await self.handle_barge_in()
+
+        # P2: Merge split utterances during PROCESSING
+        if self._pending_cancelled_audio is not None and self._pending_cancelled_time is not None:
+            elapsed = time.monotonic() - self._pending_cancelled_time
+            if 0.0 <= elapsed <= self._merge_window_s:
+                logger.info(
+                    "utterance_merged_during_processing",
+                    original_bytes=len(self._pending_cancelled_audio),
+                    continuation_bytes=len(audio),
+                    merged_bytes=len(self._pending_cancelled_audio) + len(audio),
+                    elapsed_s=round(elapsed, 3),
+                )
+                audio = self._pending_cancelled_audio + audio
+            else:
+                logger.info(
+                    "utterance_merge_expired",
+                    elapsed_s=round(elapsed, 3),
+                    window_s=self._merge_window_s,
+                )
+            self._pending_cancelled_audio = None
+            self._pending_cancelled_time = None
+
+        self._active_audio = audio
 
         # Defensive: ensure pipeline is in a valid state before starting a new turn.
         # If a previous error left the pipeline in ERROR state, reset to IDLE first.
@@ -1417,6 +1472,7 @@ class InteractionCore:
                     latency_report=report.as_dict(),
                 )
             self._tracer = None
+        self._active_audio = None
         self._playback_active = False
         if self._stopping or self._stopped or self._barging_in:
             # Shutdown and barge-in own the lifecycle transition themselves.
