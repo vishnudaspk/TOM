@@ -215,6 +215,7 @@ class VoiceEventNames:
     PIPELINE_CANCELLED = "voice.pipeline.cancelled"
     PIPELINE_TIMEOUT = "voice.pipeline.timeout"
     LATENCY_REPORT = "voice.latency.report"
+    LISTENING_HEARTBEAT = "voice.listening.heartbeat"
     
     # IPC
     IPC_REQUEST_SENT = "ipc.request.sent"

@@ -26,6 +26,7 @@ import asyncio
 import time
 import functools
 import inspect
+import traceback
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator, AsyncIterator, Callable
 from concurrent.futures import ThreadPoolExecutor
@@ -456,6 +457,10 @@ class IncrementalTTSStreamer(StreamingTTSProvider):
         Tracks total audio duration and waits for playback to drain plus
         a configurable tail before signaling completion. This ensures the
         SPEAKING state persists until audio actually finishes playing.
+
+        ``_on_playback_completed`` is guaranteed to be called exactly once on
+        every exit path (normal, drain timeout, IPC disconnect, cancellation)
+        so the microphone is always ungated even when TTS fails.
         """
         if self._engine is None:
             return
@@ -463,56 +468,74 @@ class IncrementalTTSStreamer(StreamingTTSProvider):
         first_chunk = True
         total_audio_duration_s = 0.0
         playback_start_time: float | None = None
+        completed_called = False
 
-        while True:
-            item = await play_queue.get()
-            if item is _EOF:
-                # All chunks submitted. Wait for audio to drain from engine buffer + tail (Item 6).
-                if playback_start_time is not None:
-                    elapsed = time.monotonic() - playback_start_time
-                    remaining = max(0.0, total_audio_duration_s - elapsed)
-                    tail_s = self._playback_tail_ms / 1000.0
-                    await asyncio.sleep(remaining + tail_s)
-                if self._on_playback_completed is not None:
-                    self._on_playback_completed()
-                return
-            if token is not None and token.is_cancelled():
-                return
-            chunk = item.chunk
-            # Calculate chunk duration: audio_data is PCM16 (2 bytes/sample), mono
-            chunk_duration_s = len(chunk.audio_data) / 2 / item.sample_rate
-            total_audio_duration_s += chunk_duration_s
-            try:
-                await self._engine.play_audio_buffer(
-                    audio_data=chunk.audio_data,
-                    sample_rate=item.sample_rate,
-                    channels=item.channels,
-                    device_name=self._playback_device,
-                )
-            except (ConnectionLostError, NotConnectedError) as exc:
-                logger.warning(
-                    VoiceEventNames.TTS_FAILED,
-                    stage="playback_ipc_disconnected",
-                    error=str(exc),
-                )
-                # Engine disconnected - stop trying to play remaining chunks
-                return
-            except Exception as exc:
-                logger.warning(
-                    VoiceEventNames.TTS_FAILED,
-                    stage="playback",
-                    error=str(exc),
-                )
-                # Continue with next chunk on other errors
-                continue
-            if first_chunk:
-                first_chunk = False
-                playback_start_time = time.monotonic()
-                if not observed and playback_observer is not None:
-                    observed = True
-                    playback_observer()
-                if not observed and self._on_playback_started is not None:
-                    self._on_playback_started()
+        def _fire_completed() -> None:
+            nonlocal completed_called
+            if not completed_called and self._on_playback_completed is not None:
+                completed_called = True
+                self._on_playback_completed()
+
+        try:
+            while True:
+                item = await play_queue.get()
+                if item is _EOF:
+                    # All chunks submitted. Wait for audio to drain from engine
+                    # buffer + tail (Item 6). Drain sleep is inside try so that
+                    # a cancellation still reaches _fire_completed via finally.
+                    try:
+                        if playback_start_time is not None:
+                            elapsed = time.monotonic() - playback_start_time
+                            remaining = max(0.0, total_audio_duration_s - elapsed)
+                            tail_s = self._playback_tail_ms / 1000.0
+                            await asyncio.sleep(remaining + tail_s)
+                    finally:
+                        _fire_completed()
+                    return
+                if token is not None and token.is_cancelled():
+                    return
+                chunk = item.chunk
+                # Calculate chunk duration: audio_data is PCM16 (2 bytes/sample), mono
+                chunk_duration_s = len(chunk.audio_data) / 2 / item.sample_rate
+                total_audio_duration_s += chunk_duration_s
+                try:
+                    await self._engine.play_audio_buffer(
+                        audio_data=chunk.audio_data,
+                        sample_rate=item.sample_rate,
+                        channels=item.channels,
+                        device_name=self._playback_device,
+                    )
+                except (ConnectionLostError, NotConnectedError) as exc:
+                    logger.error(
+                        VoiceEventNames.TTS_FAILED,
+                        stage="playback_ipc_disconnected",
+                        error=str(exc),
+                        exc_info=True,
+                    )
+                    # Engine disconnected - stop trying to play remaining chunks.
+                    # _fire_completed() will run in the outer finally.
+                    return
+                except Exception as exc:
+                    logger.error(
+                        VoiceEventNames.TTS_FAILED,
+                        stage="playback",
+                        error=str(exc),
+                        exc_info=True,
+                    )
+                    # Continue with next chunk on other errors
+                    continue
+                if first_chunk:
+                    first_chunk = False
+                    playback_start_time = time.monotonic()
+                    if not observed and playback_observer is not None:
+                        observed = True
+                        playback_observer()
+                    if not observed and self._on_playback_started is not None:
+                        self._on_playback_started()
+        finally:
+            # Safety net: ensure mic is ungated on every exit (cancellation,
+            # IPC disconnect, exception, normal return without _EOF).
+            _fire_completed()
 
     async def _watch_cancellation(
         self,
@@ -530,10 +553,13 @@ class IncrementalTTSStreamer(StreamingTTSProvider):
         try:
             await asyncio.wait_for(asyncio.shield(player), timeout=self._drain_timeout_s)
         except Exception as exc:
-            logger.warning(
+            logger.error(
                 VoiceEventNames.TTS_FAILED,
                 stage="playback_drain",
                 error=str(exc),
+                exc_type=type(exc).__name__,
+                drain_timeout_s=self._drain_timeout_s,
+                traceback=traceback.format_exc(),
             )
 
     @staticmethod

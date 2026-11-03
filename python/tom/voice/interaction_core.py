@@ -864,10 +864,17 @@ class InteractionCore:
         self._stopping = False
         # Subscribe synchronously so no event emitted during start() is lost.
         subscription = self._mic.subscribe()
+        heartbeat_task: asyncio.Task[None] | None = None
         try:
             if not self._mic.is_running:
                 await self._mic.start()
             self._transition(VoicePipelineState.LISTENING)
+
+            # P0.6: LISTENING heartbeat — emits every 5 s while state == LISTENING
+            # so we can detect deaf-LISTENING (gated mic) from logs alone.
+            heartbeat_task = asyncio.create_task(
+                self._listening_heartbeat(), name="tom.listening_heartbeat"
+            )
 
             # Run startup greeting once per voice session (if enabled)
             if self._startup_greeting:
@@ -878,8 +885,53 @@ class InteractionCore:
                     break
                 await self._handle_event(event)
         finally:
+            if heartbeat_task is not None:
+                heartbeat_task.cancel()
+                try:
+                    await heartbeat_task
+                except asyncio.CancelledError:
+                    pass
             subscription.close()
             self._running = False
+
+    async def _listening_heartbeat(self) -> None:
+        """Emit a structured heartbeat log every 5 s while state is LISTENING.
+
+        Allows post-hoc diagnosis of deaf-LISTENING (mic gated while pipeline
+        believes it is listening) from logs alone, without live inspection.
+        Fields are real measurements, never estimated.
+        """
+        _INTERVAL_S = 5.0
+        prev_frame_count = len(self._frames)
+
+        while True:
+            await asyncio.sleep(_INTERVAL_S)
+            if self._stopping or self._stopped:
+                return
+            if self._pipeline.state != VoicePipelineState.LISTENING:
+                prev_frame_count = len(self._frames)
+                continue
+
+            cur_frame_count = len(self._frames)
+            frames_since_last = cur_frame_count - prev_frame_count
+            prev_frame_count = cur_frame_count
+
+            seconds_since_speech: float | None = None
+            if self._last_speech_frame_ns is not None:
+                seconds_since_speech = (
+                    time.monotonic_ns() - self._last_speech_frame_ns
+                ) / 1e9
+
+            mic = self._mic
+            logger.info(
+                VoiceEventNames.LISTENING_HEARTBEAT,
+                pipeline_state="listening",
+                mic_gated=getattr(mic, "_gated", None),
+                mic_paused=getattr(mic, "_paused", None),
+                mic_muted=getattr(mic, "_muted", None),
+                frames_since_last_heartbeat=frames_since_last,
+                seconds_since_last_speech_onset=seconds_since_speech,
+            )
 
     async def stop(self) -> None:
         """Stop the interaction loop cleanly. Idempotent and never leaks tasks."""
@@ -1306,8 +1358,16 @@ class InteractionCore:
             if self._epochs.is_current(active_epoch):
                 self._mic.gate()
 
+        _playback_completed_called = False
+
         def _on_playback_completed() -> None:
-            # Ungate microphone after playback tail completes
+            # Ungate microphone after playback tail completes.
+            # Called by IncrementalTTSStreamer._play_pending (guaranteed via
+            # finally) and also by the _run_turn finally as a safety net.
+            nonlocal _playback_completed_called
+            if _playback_completed_called:
+                return
+            _playback_completed_called = True
             if self._epochs.is_current(epoch):
                 self._mic.ungate()
 
@@ -1323,6 +1383,9 @@ class InteractionCore:
             )
             return result
         finally:
+            # Safety net: if TTS failed and _on_playback_completed was never
+            # called, ungate the microphone here so LISTENING is not deaf.
+            _on_playback_completed()
             if barge_in_tick_task:
                 barge_in_tick_task.cancel()
                 try:
