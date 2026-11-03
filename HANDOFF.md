@@ -28,6 +28,15 @@ Invariants, hardware, and architecture: **`STATE.md`**. Phase ledger and ADRs 04
   - Reconciled `docs/audits/TOM_COMPREHENSIVE_AUDIT_2026-11-02.md` against live code: marked CUDA STT, markdown stripping, hallucination filter, queue wait latency, and Smart Turn force-complete as RESOLVED with file:line references.
   - Cleaned redundant `tests/docs/perf/00-baseline.md`.
   - Next: Step 1 (Live Baseline).
+- **Done:** **Voice UX Phase (Wake Word, Identity, Greeting & Session Lifecycle) (2026-11-04)**:
+  - Feature A (Wake-Word Session Lifecycle): Implemented 4-state session model (inactive/armed -> activation -> active conversation -> automatic deactivation). Unactivated speech is ignored; standalone "Hey TOM" plays short ack ("Listening.", "Yeah?"); embedded command ("Hey TOM, explain...") activates and executes once with wake phrase stripped (`override_transcript`); follow-up queries proceed without repeating wake phrase across multiple turns; inactivity timeout (`wakeword_timeout_seconds: 30.0s`) deactivates session only in idle `LISTENING` (never during processing/playback) and refreshes on interactions.
+  - Feature B (Consistent Identity): Authoritative `python/tom/identity.py` (`ASSISTANT_NAME = "TOM"`, `USER_ROLE = "user"`, `ASSISTANT_ROLE = "assistant"`). Consumed directly by `VOICE_SYSTEM_PROMPT`, `CLI_SYSTEM_PROMPT`, `build_system_prompt()`, and default `AgentConfig`.
+  - Feature C (Natural, Varied Greetings): Local time-of-day templates (`_GREETINGS`) across morning/afternoon/evening/night with no consecutive repeats and one-shot non-replay guard.
+  - Verification: 19 new targeted unit tests (5 greetings, 9 wake-word lifecycle, 5 identity) and 40 regression tests in `test_interaction_core.py` passed (59 passed total in 7.70s). Ruff clean on all changed files. Physical microphone test unverified (local engine/model processes not running).
+  - Outstanding Issues Recorded:
+    1. **Wake-word timeout bug:** TOM still responds to ordinary speech after the configured 30-second inactivity timeout.
+    2. **Greeting quality:** Current greetings still sound robotic and need further improvement.
+    3. **Identity status:** Assistant identity now consistently recognizes itself as TOM across prompts, agent configurations, and session initialization.
 - **Runtime:** Generic HTTP provider with llama.cpp as the production endpoint; no backend-specific alias remains.
 - **Phase 12 Closeout Validation:**
   - Focused test suite: **488 passed, 8 skipped** (uninstalled optional deps `opencv-python`/`winocr`), zero failed across `tests/unit/resources/`, `tests/unit/agents/`, `tests/unit/vision/`, `tests/integration/tools/test_tool_pipeline.py`.

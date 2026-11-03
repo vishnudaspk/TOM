@@ -563,6 +563,9 @@ class TomApp:
             pipeline=pipeline,
             turn_arbitrator=turn_arbitrator,
             debug_trace=session if debug_trace else None,
+            wakeword_enabled=getattr(self._config.voice, "wakeword_enabled", False) if self._config else False,
+            wakeword_phrase=getattr(self._config.voice, "wakeword_phrase", "hey tom") if self._config else "hey tom",
+            wakeword_timeout_seconds=getattr(self._config.voice, "wakeword_timeout_seconds", 30.0) if self._config else 30.0,
         )
 
         # Tray daemon integration (optional desktop UX)

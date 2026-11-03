@@ -64,6 +64,7 @@ from collections import deque
 from collections.abc import AsyncGenerator, Callable
 from contextlib import aclosing, suppress
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from tom.core.context import CancellationToken
@@ -72,6 +73,8 @@ from tom.schemas.turn import ResponseAction, ResponseDecision, TurnContext, Turn
 from tom.schemas.voice import SynthesisRequest, VoicePipelineState
 from tom.telemetry.logging import VoiceEventNames, get_logger, set_utterance_id
 from tom.voice.debug_trace import DebugTraceSession
+from tom.voice.formatter import SpeechFormatter
+from tom.voice.greetings import pick_greeting, pick_wake_ack
 from tom.voice.latency import (
     InteractionLatencyTracer,
     LatencyReport,
@@ -86,7 +89,7 @@ from tom.voice.response_policy import ResponsePolicy
 from tom.voice.sentence_streamer import SentenceStreamer
 from tom.voice.smart_turn import SmartTurnV3Arbiter, TurnArbitrationDecision
 from tom.voice.turn_manager import ConversationTurnManager
-from tom.voice.formatter import SpeechFormatter
+from tom.voice.wakeword import is_wake_phrase, strip_wake_phrase
 
 if TYPE_CHECKING:
     from tom.agents.orchestrator import AgentOrchestrator
@@ -246,6 +249,7 @@ class TurnExecutor:
         include_context_in_prompt: bool = True,
         debug_trace: DebugTraceSession | None = None,
         formatter: SpeechFormatter | None = None,
+        wakeword_phrase: str = "hey tom",
     ) -> None:
         self._stt = stt
         self._tts = tts
@@ -257,6 +261,7 @@ class TurnExecutor:
         self._include_context = include_context_in_prompt
         self._debug_trace = debug_trace
         self._formatter = formatter or SpeechFormatter()
+        self._wakeword_phrase = wakeword_phrase
 
     # ------------------------------------------------------------------
     # Pipeline
@@ -272,6 +277,7 @@ class TurnExecutor:
         on_speaking: Callable[[int], None] | None = None,
         on_playback_completed: Callable[[], None] | None = None,
         tracer: InteractionLatencyTracer | None = None,
+        override_transcript: str | None = None,
     ) -> TurnExecutionResult:
         # Log transcript (text_raw) if debug trace active
         # Actual transcript comes from _transcribe
@@ -287,6 +293,7 @@ class TurnExecutor:
             on_playback_completed: Called when playback finishes (after tail).
             tracer: Optional Phase 9.6 latency recorder. Purely observational:
                 it never gates, delays, or alters pipeline behaviour.
+            override_transcript: Pre-transcribed / stripped command transcript.
 
         Returns:
             TurnExecutionResult. ``asyncio.CancelledError`` propagates after the
@@ -303,13 +310,25 @@ class TurnExecutor:
 
         context: TurnContext | None = None
         try:
-            transcript = await self._transcribe(
-                audio,
-                epoch=epoch,
-                token=token,
-                progress=progress,
-                tracer=tracer,
-            )
+            if override_transcript is not None:
+                transcript = override_transcript
+                progress.transcript = transcript
+                if tracer is not None:
+                    tracer.mark(LatencyStage.STT_FINAL)
+            else:
+                transcript = await self._transcribe(
+                    audio,
+                    epoch=epoch,
+                    token=token,
+                    progress=progress,
+                    tracer=tracer,
+                )
+                if self._wakeword_phrase and is_wake_phrase(transcript, self._wakeword_phrase):
+                    stripped = strip_wake_phrase(transcript, self._wakeword_phrase)
+                    if stripped:
+                        transcript = stripped
+                        progress.transcript = transcript
+
             if not self._alive(epoch, token):
                 return self._empty_result(progress, interrupted=True)
             if not transcript:
@@ -710,6 +729,9 @@ class InteractionCore:
         startup_greeting: bool = True,
         debug_trace: DebugTraceSession | None = None,
         smart_turn_max_incomplete_wait_ms: int | None = None,
+        wakeword_enabled: bool = False,
+        wakeword_phrase: str = "hey tom",
+        wakeword_timeout_seconds: float = 30.0,
     ) -> None:
         self._mic = mic_loop
         self._engine = engine
@@ -718,6 +740,7 @@ class InteractionCore:
         self._epochs = epochs or TurnEpochGuard()
         self._stops = PlaybackStopGuard(engine)
         self._orchestrator = orchestrator
+        self._stt = stt
         self._tts = tts
         if turn_arbitrator is _DEFAULT_ARBITER:
             arbiter = SmartTurnV3Arbiter()
@@ -744,6 +767,7 @@ class InteractionCore:
             include_context_in_prompt=include_context_in_prompt,
             debug_trace=debug_trace,
             formatter=SpeechFormatter(),
+            wakeword_phrase=wakeword_phrase,
         )
 
         self._running = False
@@ -755,6 +779,15 @@ class InteractionCore:
         self._startup_greeting = startup_greeting
         self._debug_trace = debug_trace
         self._session_id: str | None = getattr(debug_trace, "session_id", None)
+
+        # Wake-word session lifecycle:
+        self._wakeword_enabled = wakeword_enabled
+        self._wakeword_phrase = wakeword_phrase
+        self._wakeword_timeout_seconds = wakeword_timeout_seconds
+        self._wakeword_active = not wakeword_enabled  # True means "awake / active session"
+        self._wakeword_timeout_handle: asyncio.TimerHandle | None = None
+        self._last_greeting_text: str | None = None
+        self._last_wake_ack: str | None = None
 
         self._frames = bytearray()
         self._smart_turn_candidate: bytes | None = None
@@ -1162,6 +1195,7 @@ class InteractionCore:
         self._close_open_turn(progress)
         self._frames.clear()
         self._cancel_smart_turn_timeout()
+        self._cancel_wakeword_timeout()
         self._smart_turn_candidate = None
         self._active_audio = None
         self._pending_cancelled_audio = None
@@ -1182,45 +1216,24 @@ class InteractionCore:
         self._stopping = False
 
     async def _run_startup_greeting(self) -> None:
-        """Run the proactive startup greeting: get time, generate greeting via LLM, synthesize and play."""
+        """Run the proactive startup greeting using local time-aware templates."""
+        if not self._startup_greeting:
+            return
+        self._startup_greeting = False
         logger.info(VoiceEventNames.STARTUP_GREETING_STARTED)
 
         try:
-            # 1. Get current time from Rust engine
-            logger.info(VoiceEventNames.STARTUP_GREETING_TIME_RECEIVED)
-            try:
-                time_info = await self._engine.get_system_time()
-            except (ConnectionLostError, NotConnectedError) as exc:
-                logger.warning(
-                    "startup_greeting_time_ipc_disconnected",
-                    error=str(exc),
-                )
-                return
-            time_str = time_info.local_time_str
-
-            # 2. Generate greeting via LLM
-            logger.info(VoiceEventNames.STARTUP_GREETING_LLM_STARTED)
-            greeting_prompt = (
-                f"The current local time is {time_str}. "
-                f"Generate a brief, friendly spoken greeting for a voice assistant startup. "
-                f"Include the exact time naturally in the greeting. "
-                f"Keep it under 20 words. Be conversational and warm."
-            )
-            greeting_chunks = []
-            async for chunk in self._orchestrator.stream(greeting_prompt):
-                greeting_chunks.append(chunk)
-            greeting_text = "".join(greeting_chunks)
-
-            if not greeting_text or not greeting_text.strip():
-                logger.warning("startup_greeting_empty_llm_response")
-                return
+            # 1. Select template-based greeting (local time-aware, no LLM call)
+            greeting_text = pick_greeting(datetime.now().hour, self._last_greeting_text)
+            self._last_greeting_text = greeting_text
 
             logger.info(
                 VoiceEventNames.STARTUP_GREETING_LLM_COMPLETED,
                 greeting_length=len(greeting_text),
+                greeting=greeting_text,
             )
 
-            # 3. Synthesize and play via TTS
+            # 2. Synthesize and play via TTS
             logger.info(VoiceEventNames.STARTUP_GREETING_TTS_STARTED)
             synth_req = SynthesisRequest(text=greeting_text.strip())
             try:
@@ -1243,7 +1256,7 @@ class InteractionCore:
                 channels=synth_res.channels,
             )
 
-            # 4. Play through engine
+            # 3. Play through engine
             logger.info(VoiceEventNames.STARTUP_GREETING_PLAYBACK_STARTED)
             try:
                 await self._engine.play_audio_buffer(
@@ -1362,6 +1375,8 @@ class InteractionCore:
             self._mic.resume()
         finally:
             self._barging_in = False
+            if self._pipeline.state is VoicePipelineState.LISTENING:
+                self._arm_wakeword_timeout()
 
     def _cancel_smart_turn_timeout(self) -> None:
         """Cancel any pending incomplete turn timeout."""
@@ -1390,6 +1405,7 @@ class InteractionCore:
         from tom.voice.events import AudioFrameEvent, SpeechEndEvent, SpeechStartEvent
 
         if isinstance(event, SpeechStartEvent):
+            self._cancel_wakeword_timeout()
             self._cancel_smart_turn_timeout()
             if self._active_turn is not None and not self._active_turn.done():
                 await self.handle_barge_in()
@@ -1409,6 +1425,83 @@ class InteractionCore:
             self._frames.clear()
             await self._handle_speech_end(audio)
 
+    async def _transcribe_audio(self, audio: bytes) -> str:
+        """Transcribe an audio segment using the streaming STT provider."""
+        async def _pcm() -> AsyncGenerator[bytes, None]:
+            if audio:
+                yield audio
+
+        token = CancellationToken()
+        final = ""
+        try:
+            async for partial in self._stt.stream_transcribe(_pcm(), token):
+                if partial.is_final:
+                    final = partial.text.strip()
+        except Exception as exc:
+            logger.warning("transcribe_audio_failed", error=str(exc))
+            return ""
+        return final
+
+    async def _play_wake_ack(self) -> None:
+        """Play a short acknowledgement after wake-word detection."""
+        ack_text = pick_wake_ack(self._last_wake_ack)
+        self._last_wake_ack = ack_text
+        try:
+            synth_req = SynthesisRequest(text=ack_text)
+            synth_res = await self._tts.synthesize(synth_req)
+            if synth_res.samples:
+                await self._engine.play_audio_buffer(
+                    audio_data=synth_res.audio_data,
+                    sample_rate=synth_res.sample_rate,
+                    channels=synth_res.channels,
+                )
+        except Exception as exc:
+            logger.warning("wake_ack_playback_failed", error=str(exc))
+        finally:
+            self._transition(VoicePipelineState.LISTENING)
+            self._arm_wakeword_timeout()
+
+    def _cancel_wakeword_timeout(self) -> None:
+        """Cancel any pending inactivity timeout callback."""
+        if self._wakeword_timeout_handle is not None:
+            self._wakeword_timeout_handle.cancel()
+            self._wakeword_timeout_handle = None
+
+    def _arm_wakeword_timeout(self) -> None:
+        """Arm the inactivity timeout countdown once TOM returns to LISTENING."""
+        self._cancel_wakeword_timeout()
+        if (
+            self._wakeword_enabled
+            and self._wakeword_active
+            and self._wakeword_timeout_seconds > 0
+            and not self._stopping
+            and not self._stopped
+        ):
+            try:
+                loop = asyncio.get_running_loop()
+                self._wakeword_timeout_handle = loop.call_later(
+                    self._wakeword_timeout_seconds,
+                    self._on_wakeword_timeout,
+                )
+            except RuntimeError:
+                pass
+
+    def _on_wakeword_timeout(self) -> None:
+        """Deactivate session after inactivity timeout in LISTENING state."""
+        self._wakeword_timeout_handle = None
+        if not (self._wakeword_enabled and self._wakeword_active):
+            return
+        if (
+            self._pipeline.state is VoicePipelineState.LISTENING
+            and self._active_turn is None
+            and not self._playback_active
+        ):
+            logger.info(
+                "wakeword_session_timed_out",
+                timeout_s=self._wakeword_timeout_seconds,
+            )
+            self._wakeword_active = False
+
     async def _handle_speech_end(self, audio: bytes) -> None:
         """Arbitrate a VAD-delimited candidate before committing a turn."""
         if not audio:
@@ -1419,6 +1512,33 @@ class InteractionCore:
         candidate = audio
         if self._smart_turn_candidate is not None:
             candidate = self._smart_turn_candidate + audio
+
+        # Wake-word gate: when enabled and not yet active, only proceed if wake phrase detected
+        if self._wakeword_enabled and not self._wakeword_active:
+            transcript = await self._transcribe_audio(candidate)
+            if is_wake_phrase(transcript, self._wakeword_phrase):
+                logger.info(
+                    "wakeword_detected",
+                    phrase=self._wakeword_phrase,
+                    transcript=transcript,
+                )
+                self._wakeword_active = True
+                self._smart_turn_candidate = None
+                from tom.voice.wakeword import strip_wake_phrase
+
+                remainder = strip_wake_phrase(transcript, self._wakeword_phrase)
+                if remainder:
+                    await self._begin_turn(candidate, override_transcript=remainder)
+                    return
+                await self._play_wake_ack()
+                return
+            else:
+                logger.debug(
+                    "wakeword_not_detected_discarding",
+                    transcript=transcript,
+                )
+                self._smart_turn_candidate = None
+                return
 
         if self._turn_arbitrator is None:
             await self._begin_turn(candidate)
@@ -1455,10 +1575,11 @@ class InteractionCore:
         self._smart_turn_candidate = None
         await self._begin_turn(candidate)
 
-    async def _begin_turn(self, audio: bytes) -> None:
+    async def _begin_turn(self, audio: bytes, override_transcript: str | None = None) -> None:
         """Allocate an epoch and run one turn in the background."""
         if self._stopping or self._stopped or not audio:
             return
+        self._cancel_wakeword_timeout()
         if self._active_turn is not None and not self._active_turn.done():
             await self.handle_barge_in()
 
@@ -1529,7 +1650,14 @@ class InteractionCore:
         )
 
         task = asyncio.create_task(
-            self._run_turn(audio, epoch, token, progress, self._tracer),
+            self._run_turn(
+                audio,
+                epoch,
+                token,
+                progress,
+                self._tracer,
+                override_transcript=override_transcript,
+            ),
             name=f"tom.interaction.turn.{epoch}",
         )
         self._active_turn = task
@@ -1542,6 +1670,7 @@ class InteractionCore:
         token: CancellationToken,
         progress: TurnProgress,
         tracer: InteractionLatencyTracer,
+        override_transcript: str | None = None,
     ) -> TurnExecutionResult:
         barge_in_tick_task: asyncio.Task | None = None
 
@@ -1616,6 +1745,7 @@ class InteractionCore:
                 on_speaking=_on_speaking,
                 on_playback_completed=_on_playback_completed,
                 tracer=tracer,
+                override_transcript=override_transcript,
             )
             return result
         finally:
@@ -1660,6 +1790,7 @@ class InteractionCore:
             return
         self._transition(VoicePipelineState.IDLE)
         self._transition(VoicePipelineState.LISTENING)
+        self._arm_wakeword_timeout()
         # NOTE: Microphone is now ungated via on_playback_completed callback
         # after playback tail completes, not here.
 
