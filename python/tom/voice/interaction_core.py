@@ -778,6 +778,7 @@ class InteractionCore:
         self._tracer: InteractionLatencyTracer | None = None
         self._turn_start_ns: int | None = None
         self._last_speech_frame_ns: int | None = None
+        self._last_frame_received_at: float | None = None  # monotonic; updated on every AudioFrameEvent
         self._reports: deque[LatencyReport] = deque(maxlen=self._latency_history)
         # P2: Split-utterance merging during PROCESSING
         self._active_audio: bytes | None = None
@@ -948,23 +949,32 @@ class InteractionCore:
                 mic_muted=getattr(mic, "_muted", None),
                 frames_since_last_heartbeat=frames_since_last,
                 seconds_since_last_speech_onset=seconds_since_speech,
+                capture_loop_alive=getattr(mic, "is_running", lambda: None)() if callable(getattr(mic, "is_running", None)) else getattr(mic, "is_running", None),
+                ipc_healthy=getattr(self._engine, "is_connected", None),
+                input_rms=getattr(mic, "_last_rms", None),
+                input_peak=getattr(mic, "_last_peak", None),
+                time_since_last_frame_s=(time.monotonic() - self._last_frame_received_at) if self._last_frame_received_at is not None else None,
             )
 
     async def _listening_watchdog(
         self,
         poll_interval_s: float = 0.2,
         timeout_s: float = 1.0,
+        starvation_threshold_s: float = 5.0,
     ) -> None:
         """Watchdog enforcing the LISTENING invariant (P0.4).
 
-        Detects if pipeline_state == LISTENING while the microphone remains
-        paused or gated for more than 1.0 second (or custom timeout_s).
-        Attempts controlled recovery without creating duplicate loops/consumers.
-        Emits ERROR event 'microphone_resumed_by_watchdog'.
-        Transitions to explicit ERROR state if recovery fails.
+        Detects two failure modes while pipeline_state == LISTENING:
+        1. Mic paused/gated > timeout_s  → attempt resume, ERROR on failure.
+        2. No audio frames received > starvation_threshold_s (mic not paused)
+           → emit CAPTURE_STARVATION ERROR, attempt recovery, ERROR on failure.
+
+        Never creates duplicate capture loops.
         """
         paused_since: float | None = None
         recovery_attempted = False
+        starvation_since: float | None = None
+        starvation_recovery_attempted = False
 
         while not (self._stopping or self._stopped):
             try:
@@ -975,27 +985,96 @@ class InteractionCore:
                 if self._pipeline.state != VoicePipelineState.LISTENING:
                     paused_since = None
                     recovery_attempted = False
+                    starvation_since = None
+                    starvation_recovery_attempted = False
                     continue
 
                 mic = self._mic
                 is_paused = getattr(mic, "_paused", False) or getattr(mic, "_gated", False)
 
-                if not is_paused:
-                    paused_since = None
-                    recovery_attempted = False
-                    continue
+                # --- paused/gated detection (existing) ---
+                if is_paused:
+                    starvation_since = None
+                    starvation_recovery_attempted = False
+                    if paused_since is None:
+                        paused_since = time.monotonic()
+                        recovery_attempted = False
+                        continue
 
+                    pause_duration = time.monotonic() - paused_since
+                    if pause_duration >= timeout_s and not recovery_attempted:
+                        recovery_attempted = True
+                        was_paused = getattr(mic, "_paused", False)
+                        was_gated = getattr(mic, "_gated", False)
+                        turn_id = (
+                            getattr(self._turn_manager.current, "turn_id", None)
+                            if self._turn_manager and self._turn_manager.current
+                            else None
+                        )
+
+                        recovery_ok = False
+                        try:
+                            if hasattr(mic, "resume"):
+                                mic.resume()
+                            elif hasattr(mic, "ungate"):
+                                mic.ungate()
+                            recovery_ok = not (
+                                getattr(mic, "_paused", False) or getattr(mic, "_gated", False)
+                            )
+                        except Exception as exc:
+                            logger.error(
+                                "microphone_watchdog_recovery_exception",
+                                error=str(exc),
+                                pause_duration=pause_duration,
+                            )
+                            recovery_ok = False
+
+                        if recovery_ok:
+                            logger.error(
+                                VoiceEventNames.MIC_RESUMED_BY_WATCHDOG,
+                                session_id=self._session_id or "voice_session",
+                                turn_id=turn_id,
+                                pause_duration=pause_duration,
+                                previous_microphone_state={"paused": was_paused, "gated": was_gated},
+                                recovery_result="resumed",
+                            )
+                        else:
+                            logger.error(
+                                VoiceEventNames.MIC_RESUMED_BY_WATCHDOG,
+                                session_id=self._session_id or "voice_session",
+                                turn_id=turn_id,
+                                pause_duration=pause_duration,
+                                previous_microphone_state={"paused": was_paused, "gated": was_gated},
+                                recovery_result="failed",
+                            )
+                            try:
+                                self._transition(VoicePipelineState.ERROR)
+                            except Exception as tr_exc:
+                                logger.error(f"Failed to transition to ERROR state: {tr_exc}")
+                    continue  # skip starvation check when paused/gated
+
+                # mic is not paused/gated — reset paused tracking
+                paused_since = None
+                recovery_attempted = False
+
+                # --- capture starvation detection ---
                 now = time.monotonic()
-                if paused_since is None:
-                    paused_since = now
-                    recovery_attempted = False
+                last_frame = self._last_frame_received_at
+                if last_frame is None:
+                    # No frames ever received since session start; use session start proxy.
                     continue
 
-                pause_duration = now - paused_since
-                if pause_duration >= timeout_s and not recovery_attempted:
-                    recovery_attempted = True
-                    was_paused = getattr(mic, "_paused", False)
-                    was_gated = getattr(mic, "_gated", False)
+                stale_s = now - last_frame
+                if stale_s < starvation_threshold_s:
+                    starvation_since = None
+                    starvation_recovery_attempted = False
+                    continue
+
+                if starvation_since is None:
+                    starvation_since = now
+
+                if not starvation_recovery_attempted:
+                    starvation_recovery_attempted = True
                     turn_id = (
                         getattr(self._turn_manager.current, "turn_id", None)
                         if self._turn_manager and self._turn_manager.current
@@ -1006,41 +1085,34 @@ class InteractionCore:
                     try:
                         if hasattr(mic, "resume"):
                             mic.resume()
-                        elif hasattr(mic, "ungate"):
-                            mic.ungate()
                         recovery_ok = not (
                             getattr(mic, "_paused", False) or getattr(mic, "_gated", False)
                         )
                     except Exception as exc:
                         logger.error(
-                            "microphone_watchdog_recovery_exception",
+                            "microphone_watchdog_starvation_recovery_exception",
                             error=str(exc),
-                            pause_duration=pause_duration,
+                            stale_s=stale_s,
                         )
                         recovery_ok = False
 
-                    if recovery_ok:
-                        logger.error(
-                            VoiceEventNames.MIC_RESUMED_BY_WATCHDOG,
-                            session_id=self._session_id or "voice_session",
-                            turn_id=turn_id,
-                            pause_duration=pause_duration,
-                            previous_microphone_state={"paused": was_paused, "gated": was_gated},
-                            recovery_result="resumed",
-                        )
-                    else:
-                        logger.error(
-                            VoiceEventNames.MIC_RESUMED_BY_WATCHDOG,
-                            session_id=self._session_id or "voice_session",
-                            turn_id=turn_id,
-                            pause_duration=pause_duration,
-                            previous_microphone_state={"paused": was_paused, "gated": was_gated},
-                            recovery_result="failed",
-                        )
+                    logger.error(
+                        VoiceEventNames.CAPTURE_STARVATION,
+                        session_id=self._session_id or "voice_session",
+                        turn_id=turn_id,
+                        stale_s=stale_s,
+                        mic_paused=getattr(mic, "_paused", False),
+                        mic_gated=getattr(mic, "_gated", False),
+                        mic_muted=getattr(mic, "_muted", False),
+                        recovery_result="resumed" if recovery_ok else "failed",
+                    )
+
+                    if not recovery_ok:
                         try:
                             self._transition(VoicePipelineState.ERROR)
                         except Exception as tr_exc:
-                            logger.error(f"Failed to transition to ERROR state: {tr_exc}")
+                            logger.error(f"Failed to transition to ERROR state after starvation: {tr_exc}")
+
             except asyncio.CancelledError:
                 break
             except Exception as loop_exc:
@@ -1328,6 +1400,7 @@ class InteractionCore:
             self._transition(VoicePipelineState.LISTENING)
         elif isinstance(event, AudioFrameEvent):
             if not self._stopping:
+                self._last_frame_received_at = time.monotonic()
                 self._frames.extend(event.pcm_bytes)
                 if event.is_speech:
                     self._last_speech_frame_ns = time.monotonic_ns()

@@ -477,6 +477,7 @@ class IncrementalTTSStreamer(StreamingTTSProvider):
         total_audio_duration_s = 0.0
         playback_start_time: float | None = None
         completed_called = False
+        playback_succeeded = False
 
         def _fire_completed() -> None:
             nonlocal completed_called
@@ -497,6 +498,15 @@ class IncrementalTTSStreamer(StreamingTTSProvider):
                             remaining = max(0.0, total_audio_duration_s - elapsed)
                             tail_s = self._playback_tail_ms / 1000.0
                             await asyncio.sleep(remaining + tail_s)
+                        playback_succeeded = True
+                        logger.info(VoiceEventNames.PLAYBACK_COMPLETED)
+                    except Exception as drain_exc:
+                        logger.error(
+                            VoiceEventNames.PLAYBACK_FAILED,
+                            stage="drain",
+                            error=str(drain_exc),
+                            exc_info=True,
+                        )
                     finally:
                         _fire_completed()
                     return
@@ -515,7 +525,7 @@ class IncrementalTTSStreamer(StreamingTTSProvider):
                     )
                 except (ConnectionLostError, NotConnectedError) as exc:
                     logger.error(
-                        VoiceEventNames.TTS_FAILED,
+                        VoiceEventNames.PLAYBACK_FAILED,
                         stage="playback_ipc_disconnected",
                         error=str(exc),
                         exc_info=True,
@@ -525,7 +535,7 @@ class IncrementalTTSStreamer(StreamingTTSProvider):
                     return
                 except Exception as exc:
                     logger.error(
-                        VoiceEventNames.TTS_FAILED,
+                        VoiceEventNames.PLAYBACK_FAILED,
                         stage="playback",
                         error=str(exc),
                         exc_info=True,
@@ -544,6 +554,7 @@ class IncrementalTTSStreamer(StreamingTTSProvider):
             # Safety net: ensure mic is ungated on every exit (cancellation,
             # IPC disconnect, exception, normal return without _EOF).
             _fire_completed()
+            logger.info(VoiceEventNames.PLAYBACK_FINALIZED, success=playback_succeeded)
 
     async def _watch_cancellation(
         self,

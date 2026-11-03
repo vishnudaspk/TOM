@@ -405,3 +405,217 @@ async def test_watchdog_transitions_to_error_when_recovery_fails():
         assert matching[0].kwargs["recovery_result"] == "failed"
 
 
+
+# ---------------------------------------------------------------------------
+# P0 Hardening — capture starvation + playback outcome separation
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_capture_starvation_watchdog_detects_no_frames():
+    """Watchdog detects starvation: no frames for > threshold while not paused."""
+    from tests.unit.voice.test_interaction_core import build_core
+    from tom.schemas.voice import VoicePipelineState
+
+    core, deps = build_core()
+    core._pipeline.transition_to(VoicePipelineState.LISTENING)
+    mic = deps["mic"]
+    # mic not paused/gated, but frames have not arrived (never set)
+    core._last_frame_received_at = None  # no frames ever
+
+    # Starvation path: _last_frame_received_at is None → watchdog skips starvation check
+    # Seed a stale timestamp so starvation triggers
+    import time as _time
+    core._last_frame_received_at = _time.monotonic() - 10.0  # 10 s stale
+
+    with patch("tom.voice.interaction_core.logger.error") as mock_err:
+        task = asyncio.create_task(
+            core._listening_watchdog(poll_interval_s=0.01, timeout_s=0.05, starvation_threshold_s=0.05)
+        )
+        await asyncio.sleep(0.15)
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+        matching = [
+            call for call in mock_err.call_args_list
+            if call.args and call.args[0] == "voice.capture.starvation"
+        ]
+        assert len(matching) >= 1
+        kwargs = matching[0].kwargs
+        assert kwargs["stale_s"] >= 0.05
+
+
+@pytest.mark.asyncio
+async def test_capture_starvation_watchdog_recovers():
+    """Starvation watchdog calls mic.resume() on detection."""
+    from tests.unit.voice.test_interaction_core import build_core
+    from tom.schemas.voice import VoicePipelineState
+    import time as _time
+
+    core, deps = build_core()
+    core._pipeline.transition_to(VoicePipelineState.LISTENING)
+    mic = deps["mic"]
+    original_resume = mic.resume
+    resume_called = []
+
+    def _track_resume():
+        resume_called.append(True)
+        original_resume()
+
+    mic.resume = _track_resume
+    core._last_frame_received_at = _time.monotonic() - 10.0
+
+    with patch("tom.voice.interaction_core.logger.error"):
+        task = asyncio.create_task(
+            core._listening_watchdog(poll_interval_s=0.01, timeout_s=0.05, starvation_threshold_s=0.05)
+        )
+        await asyncio.sleep(0.15)
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+    assert len(resume_called) >= 1
+
+
+@pytest.mark.asyncio
+async def test_capture_starvation_transitions_to_error_when_recovery_fails():
+    """Starvation + failed recovery → pipeline transitions to ERROR."""
+    from tests.unit.voice.test_interaction_core import build_core
+    from tom.schemas.voice import VoicePipelineState
+    import time as _time
+
+    core, deps = build_core()
+    core._pipeline.transition_to(VoicePipelineState.LISTENING)
+    mic = deps["mic"]
+    mic.resume = MagicMock(side_effect=RuntimeError("hw fail"))
+    core._last_frame_received_at = _time.monotonic() - 10.0
+
+    with patch("tom.voice.interaction_core.logger.error"):
+        task = asyncio.create_task(
+            core._listening_watchdog(poll_interval_s=0.01, timeout_s=0.05, starvation_threshold_s=0.05)
+        )
+        await asyncio.sleep(0.15)
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+    assert core.state == VoicePipelineState.ERROR
+
+
+@pytest.mark.asyncio
+async def test_playback_drain_failure_logged_as_failed_not_completed(caplog):
+    """PLAYBACK_FAILED logged and PLAYBACK_COMPLETED NOT logged on drain exception."""
+    import asyncio as _asyncio
+
+    fired = []
+    # Engine mock that accepts play_audio_buffer so playback_start_time gets set
+    engine = MagicMock()
+    engine.play_audio_buffer = AsyncMock()
+    streamer = _make_streamer(engine=engine, on_playback_completed=lambda: fired.append(True))
+
+    from tom.voice.streaming_tts import _EOF, _Playable, SynthesisChunk
+
+    play_queue: _asyncio.Queue = _asyncio.Queue()
+    chunk = SynthesisChunk(sentence="hi", audio_data=b"\x00\x00" * 24, chunk_index=0, is_last=True)
+    play_queue.put_nowait(_Playable(chunk=chunk, sample_rate=24000, channels=1))
+    play_queue.put_nowait(_EOF)
+
+    async def _raising_sleep(_s):
+        raise OSError("drain-exploded")
+
+    with patch("tom.voice.streaming_tts.logger.error") as mock_err, \
+         patch("tom.voice.streaming_tts.logger.info") as mock_info, \
+         patch("tom.voice.streaming_tts.asyncio.sleep", side_effect=_raising_sleep):
+        await streamer._play_pending(play_queue, token=None)
+
+    completed_events = [
+        c for c in mock_info.call_args_list
+        if c.args and c.args[0] == "voice.playback.completed"
+    ]
+    finalized_events = [
+        c for c in mock_info.call_args_list
+        if c.args and c.args[0] == "voice.playback.finalized"
+    ]
+    failed_events = [
+        c for c in mock_err.call_args_list
+        if c.args and c.args[0] == "voice.playback.failed"
+    ]
+
+    assert len(completed_events) == 0, "PLAYBACK_COMPLETED must not fire on drain failure"
+    assert len(failed_events) >= 1, "PLAYBACK_FAILED must fire on drain failure"
+    assert len(finalized_events) == 1, "PLAYBACK_FINALIZED must always fire"
+    assert finalized_events[0].kwargs.get("success") is False
+    # mic ungated via callback
+    assert len(fired) == 1
+
+
+@pytest.mark.asyncio
+async def test_mic_recovery_after_playback_failure_fires_finalized():
+    """PLAYBACK_FINALIZED fires and mic callback fires even when playback raises."""
+    fired = []
+    engine = MagicMock()
+    engine.play_audio_buffer = AsyncMock()
+    streamer = _make_streamer(engine=engine, on_playback_completed=lambda: fired.append(True))
+
+    from tom.voice.streaming_tts import _EOF, _Playable, SynthesisChunk
+    import asyncio as _asyncio
+
+    play_queue: _asyncio.Queue = _asyncio.Queue()
+    chunk = SynthesisChunk(sentence="hi", audio_data=b"\x00\x00" * 24, chunk_index=0, is_last=True)
+    play_queue.put_nowait(_Playable(chunk=chunk, sample_rate=24000, channels=1))
+    play_queue.put_nowait(_EOF)
+
+    async def _raising_sleep(_s):
+        raise RuntimeError("drain-fail")
+
+    with patch("tom.voice.streaming_tts.logger.error"), \
+         patch("tom.voice.streaming_tts.logger.info") as mock_info, \
+         patch("tom.voice.streaming_tts.asyncio.sleep", side_effect=_raising_sleep):
+        await streamer._play_pending(play_queue, token=None)
+
+    finalized = [
+        c for c in mock_info.call_args_list
+        if c.args and c.args[0] == "voice.playback.finalized"
+    ]
+    assert len(finalized) == 1
+    assert finalized[0].kwargs.get("success") is False
+    assert len(fired) == 1  # mic ungated despite failure
+
+
+@pytest.mark.asyncio
+async def test_no_duplicate_capture_loops():
+    """Watchdog starvation recovery does not call mic.start() or create new loops."""
+    from tests.unit.voice.test_interaction_core import build_core
+    from tom.schemas.voice import VoicePipelineState
+    import time as _time
+
+    core, deps = build_core()
+    core._pipeline.transition_to(VoicePipelineState.LISTENING)
+    mic = deps["mic"]
+
+    start_calls = []
+    if hasattr(mic, "start"):
+        original_start = mic.start
+        mic.start = MagicMock(side_effect=lambda *a, **k: start_calls.append(True) or original_start(*a, **k))
+
+    core._last_frame_received_at = _time.monotonic() - 10.0
+
+    with patch("tom.voice.interaction_core.logger.error"):
+        task = asyncio.create_task(
+            core._listening_watchdog(poll_interval_s=0.01, timeout_s=0.05, starvation_threshold_s=0.05)
+        )
+        await asyncio.sleep(0.15)
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+    assert len(start_calls) == 0, "Watchdog must not call mic.start() — no duplicate loops"

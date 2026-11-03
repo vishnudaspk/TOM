@@ -13,10 +13,10 @@
 | **P0.1** | `IMPLEMENTED` | `PASS` (Log audit) | Evaluated runtime trace | N/A | N/A (Diagnostic) |
 | **P0.2** | `IMPLEMENTED` | `PASS` (Observable fields) | Pending P0.8 live run | N/A | `9b3924d` |
 | **P0.3** | `IMPLEMENTED` | `PASS` (Lifecycle audit) | Verified against code | N/A | N/A (Audit) |
-| **P0.4** | `IMPLEMENTED` | `PASS` (Invariant + Watchdog) | Pending P0.8 live run | N/A | `9b3924d` + Working tree |
-| **P0.5** | `IMPLEMENTED` | `PASS` (Non-fatal drain) | Pending P0.8 live run | N/A | `9b3924d` |
-| **P0.6** | `IMPLEMENTED` | `PASS` (5s Heartbeat) | Pending P0.8 live run | N/A | `9b3924d` |
-| **P0.7** | `IMPLEMENTED` | `PASS` (8 tests, 30 soak) | N/A (Hermetic) | N/A | `1f3a06d` + Working tree |
+| **P0.4** | `IMPLEMENTED` | `PASS` (Invariant + Gated & Starvation Watchdog) | Pending P0.8 live run | N/A | `9b3924d` + Working tree |
+| **P0.5** | `IMPLEMENTED` | `PASS` (Non-fatal drain + Outcome separation) | Pending P0.8 live run | N/A | `9b3924d` + Working tree |
+| **P0.6** | `IMPLEMENTED` | `PASS` (Complete 5s Heartbeat) | Pending P0.8 live run | N/A | `9b3924d` + Working tree |
+| **P0.7** | `IMPLEMENTED` | `PASS` (14 tests, 30 soak) | N/A (Hermetic) | N/A | `1f3a06d` + Working tree |
 | **P0.8** | `BLOCKED` | N/A | `BLOCKED` (Human required) | N/A | N/A (Protocol prepared) |
 | **P1.a** | `IMPLEMENTED` | `PASS` (First-chunk policy) | Pending live session | N/A | `e5011a2` |
 | **P1.b** | `IMPLEMENTED` | `PASS` (Prompt + 200 cap) | Pending live session | N/A | `c8105fb` + Working tree |
@@ -109,17 +109,37 @@
 
 ---
 
+## 2.5. P0.3 — Microphone Lifecycle Audit Table
+
+Complete inventory of every `pause()`, `resume()`, `gate()`, `ungate()`, `mute()`, and `unmute()` call site across the codebase:
+
+| File:Line | Operation | Caller / Context | Normal Completion | Exceptions / Failure | Cancellation | Barge-in | IPC Disconnect |
+|---|---|---|---|---|---|---|---|
+| `python/tom/voice/interaction_core.py:1595` | `mic.gate()` | `_on_speaking(active_epoch)` | Paired with `ungate()` when playback finishes | `try/finally` in `_run_turn` guarantees `ungate()` | Token cancel triggers `stop_playback()` and `_fire_completed()` | Cancelled; barge-in calls `mic.resume()` | IPC disconnect exits playback loop to `finally` $\to$ `_fire_completed()` |
+| `python/tom/voice/interaction_core.py:1608` | `mic.ungate()` | `_on_playback_completed()` | Idempotent single execution via flag | Guaranteed in outer `finally` of turn execution | Guaranteed in outer `finally` of turn execution | Subsumed by `mic.resume()` | Guaranteed in outer `finally` of turn execution |
+| `python/tom/voice/interaction_core.py:1362` | `mic.resume()` | `handle_barge_in()` | Pipeline goes `INTERRUPTED` $\to$ `LISTENING`, mic unpaused & ungated | N/A (synchronous mic call) | Subsumes earlier turn token cancel | Primary recovery mechanism for barge-in | Turn ends; pipeline returns to `LISTENING` |
+| `python/tom/voice/interaction_core.py:1018` | `mic.resume()` | `_listening_watchdog()` (paused detection) | Clears paused/gated state if stuck $> 1.0\text{s}$ in `LISTENING` | On failure, transitions pipeline to `ERROR` | Task cancelled on core stop | N/A (watchdog only triggers if paused in `LISTENING`) | Core stops cleanly |
+| `python/tom/voice/interaction_core.py:1020` | `mic.ungate()` | `_listening_watchdog()` (fallback ungate) | Clears gated state if mock/fake lacks `resume` | On failure, transitions pipeline to `ERROR` | Task cancelled on core stop | N/A | Core stops cleanly |
+| `python/tom/voice/interaction_core.py:1087` | `mic.resume()` | `_listening_watchdog()` (capture starvation) | Called when no frames received $> 5.0\text{s}$ while in `LISTENING` | Emits `CAPTURE_STARVATION`; on failure transitions to `ERROR` | Task cancelled on core stop | N/A | Core stops cleanly |
+| `python/tom/desktop/tray.py:143` | `mic.mute()` | `_on_toggle_mute()` | User toggle via system tray UI | N/A | N/A | N/A | N/A |
+| `python/tom/desktop/tray.py:145` | `mic.unmute()` | `_on_toggle_mute()` | User toggle via system tray UI | N/A | N/A | N/A | N/A |
+
+---
+
 ## 3. P0.4 — Watchdog Implementation & Verification
 
 The watchdog is centrally implemented in [`InteractionCore._listening_watchdog`](file:///c:/Users/vishnuu/Projects/TOM/python/tom/voice/interaction_core.py) and started in `InteractionCore.run()`.
 
 ### Key Behaviors
 1. **Central Invariant**: `pipeline_state == LISTENING` implies microphone capture is active and delivery is unblocked.
-2. **Detection**: Polls every 0.2s (configurable). If `pipeline_state == LISTENING` while `mic._paused or mic._gated` for $> 1.0$s (monotonic time), watchdog triggers.
-3. **Controlled Recovery**: Calls `mic.resume()` or `mic.ungate()`. Does **not** recreate capture loops or instantiate duplicate audio consumers.
-4. **ERROR Logging**: Emits `microphone_resumed_by_watchdog` (`VoiceEventNames.MIC_RESUMED_BY_WATCHDOG`) at ERROR level with `session_id`, `turn_id`, `pause_duration`, `previous_microphone_state`, and `recovery_result`.
-5. **Controlled Failure State**: If recovery raises or fails to clear the paused/gated state, transitions `VoicePipelineManager` directly to `VoicePipelineState.ERROR`.
-6. **No Loop Churn**: `recovery_attempted` flag suppresses repeated uncontrolled recovery loops during the same paused interval.
+2. **Paused / Gated Detection**: Polls every 0.2s (configurable). If `pipeline_state == LISTENING` while `mic._paused or mic._gated` for $> 1.0$s (monotonic time), watchdog triggers.
+3. **Capture Starvation Detection**: Tracks `_last_frame_received_at` monotonic timestamp on every `AudioFrameEvent`. If `pipeline_state == LISTENING` and mic is unpaused/ungated but no audio frames arrive for $> 5.0$s (configurable `starvation_threshold_s`), watchdog detects capture starvation.
+4. **Controlled Recovery**: Calls `mic.resume()` (or `mic.ungate()`). Does **not** recreate capture loops or instantiate duplicate audio consumers.
+5. **ERROR Logging**:
+   - For paused/gated mic: Emits `microphone_resumed_by_watchdog` (`VoiceEventNames.MIC_RESUMED_BY_WATCHDOG`) at ERROR level with `session_id`, `turn_id`, `pause_duration`, `previous_microphone_state`, and `recovery_result`.
+   - For capture starvation: Emits `voice.capture.starvation` (`VoiceEventNames.CAPTURE_STARVATION`) at ERROR level with `session_id`, `turn_id`, `stale_s`, `mic_paused`, `mic_gated`, `mic_muted`, and `recovery_result`.
+6. **Controlled Failure State**: If recovery raises or fails to clear the paused/gated state, transitions `VoicePipelineManager` directly to `VoicePipelineState.ERROR`.
+7. **No Loop Churn**: `recovery_attempted` and `starvation_recovery_attempted` flags suppress repeated uncontrolled recovery loops during the same failure interval.
 
 ---
 
@@ -140,10 +160,11 @@ Drain accounting is managed in [`IncrementalTTSStreamer._play_pending`](file:///
 4. **Hardware Tail Padding**: Adds `tail_s = self._playback_tail_ms / 1000.0` (default 300ms) to ensure hardware ring buffers flush before capture resumes, avoiding self-echo.
 5. **Bounded Timeout**: Outer safeguard `asyncio.wait_for(..., timeout=self._drain_timeout_s)` limits worst-case stalls.
 
-### Failure Separation & Recovery
-- Playback drain exceptions are logged as distinct `VoiceEventNames.TTS_FAILED` errors with `stage="playback_drain"`, stack trace, and duration metadata.
-- All exits execute inside `try/finally` calling `_fire_completed()` $\to$ `_on_playback_completed()`, guaranteeing microphone ungating.
-- On cancellation or barge-in, `stop_playback()` sends `audio.playback_stop` over IPC to clear the Rust playback queue and cancel playback tasks.
+### Failure Separation & Outcome Tracking
+Distinct outcomes are explicitly separated in `IncrementalTTSStreamer`:
+- `VoiceEventNames.PLAYBACK_COMPLETED` (`voice.playback.completed`): Emitted at INFO level **only** when all chunks were submitted and drain completed successfully.
+- `VoiceEventNames.PLAYBACK_FAILED` (`voice.playback.failed`): Emitted at ERROR level if chunk submission, IPC, or drain fails. A failed drain is **never** reported as successful playback completion.
+- `VoiceEventNames.PLAYBACK_FINALIZED` (`voice.playback.finalized`): Emitted in the outer `finally` block of `_play_pending` with `success=True/False`, guaranteeing that cleanup and `_fire_completed()` (microphone ungate) execute on every exit path (normal, exception, cancellation, IPC failure).
 
 ---
 
@@ -154,7 +175,7 @@ Heartbeat runs every 5s while in `LISTENING`:
 ### Structured Log Format Sample
 ```json
 {
-  "timestamp": "2026-11-03T17:35:10.124500+00:00",
+  "timestamp": "2026-11-04T00:00:00.124500+00:00",
   "level": "INFO",
   "logger": "tom.voice.interaction_core",
   "component": "voice.interaction_core",
@@ -165,7 +186,12 @@ Heartbeat runs every 5s while in `LISTENING`:
     "mic_paused": false,
     "mic_muted": false,
     "frames_since_last_heartbeat": 250,
-    "seconds_since_last_speech_onset": 4.12
+    "seconds_since_last_speech_onset": 4.12,
+    "capture_loop_alive": true,
+    "ipc_healthy": true,
+    "input_rms": null,
+    "input_peak": null,
+    "time_since_last_frame_s": 0.02
   }
 }
 ```
@@ -176,7 +202,7 @@ Heartbeat runs every 5s while in `LISTENING`:
 
 ### Execution Command
 ```powershell
-.venv\Scripts\pytest.exe tests/unit/voice/test_mic_recovery.py -v
+.venv\Scripts\pytest.exe tests/unit/voice/test_mic_recovery.py -v --timeout=30
 ```
 
 ### Raw Pytest Output
@@ -187,20 +213,46 @@ rootdir: C:\Users\vishnuu\Projects\TOM
 configfile: pyproject.toml
 plugins: anyio-4.15.1, asyncio-1.4.0, timeout-2.4.0
 asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
-collected 8 items
+timeout: 30.0s
+timeout method: thread
+timeout func_only: False
+collected 14 items
 
-tests\unit\voice\test_mic_recovery.py::test_drain_exception_fires_callback PASSED [ 12%]
-tests\unit\voice\test_mic_recovery.py::test_cancel_during_speaking_fires_callback PASSED [ 25%]
-tests\unit\voice\test_mic_recovery.py::test_synthesis_exception_fires_callback PASSED [ 37%]
-tests\unit\voice\test_mic_recovery.py::test_ipc_disconnect_fires_callback PASSED [ 50%]
-tests\unit\voice\test_mic_recovery.py::test_single_fire_idempotency PASSED [ 62%]
-tests\unit\voice\test_mic_recovery.py::test_30_turn_fault_injection_soak PASSED [ 75%]
-tests\unit\voice\test_mic_recovery.py::test_watchdog_resumes_paused_mic_in_listening PASSED [ 87%]
-tests\unit\voice\test_mic_recovery.py::test_watchdog_transitions_to_error_when_recovery_fails PASSED [100%]
+tests\unit\voice\test_mic_recovery.py::test_drain_exception_fires_callback PASSED [  7%]
+tests\unit\voice\test_mic_recovery.py::test_cancellation_fires_callback PASSED [ 14%]
+tests\unit\voice\test_mic_recovery.py::test_synthesis_exception_fires_callback PASSED [ 21%]
+tests\unit\voice\test_mic_recovery.py::test_ipc_disconnect_fires_callback PASSED [ 28%]
+tests\unit\voice\test_mic_recovery.py::test_callback_fires_exactly_once_on_normal_completion PASSED [ 35%]
+tests\unit\voice\test_mic_recovery.py::test_fault_injection_soak_zero_deaf_listening PASSED [ 42%]
+tests\unit\voice\test_mic_recovery.py::test_watchdog_resumes_paused_mic_in_listening PASSED [ 50%]
+tests\unit\voice\test_mic_recovery.py::test_watchdog_transitions_to_error_when_recovery_fails PASSED [ 57%]
+tests\unit\voice\test_mic_recovery.py::test_capture_starvation_watchdog_detects_no_frames PASSED [ 64%]
+tests\unit\voice\test_mic_recovery.py::test_capture_starvation_watchdog_recovers PASSED [ 71%]
+tests\unit\voice\test_mic_recovery.py::test_capture_starvation_transitions_to_error_when_recovery_fails PASSED [ 78%]
+tests\unit\voice\test_mic_recovery.py::test_playback_drain_failure_logged_as_failed_not_completed PASSED [ 85%]
+tests\unit\voice\test_mic_recovery.py::test_mic_recovery_after_playback_failure_fires_finalized PASSED [ 92%]
+tests\unit\voice\test_mic_recovery.py::test_no_duplicate_capture_loops PASSED [100%]
 
-============================== 8 passed in 0.81s ==============================
+============================= 14 passed in 1.44s ==============================
 Exit Code: 0
 ```
+
+### Full Voice Suite Baseline
+```powershell
+.venv\Scripts\pytest.exe tests/unit/voice -q --timeout=30
+```
+- **Result**: 416 passed, 0 failed in ~20s. Exit code: 0.
+
+### 30-Turn Soak Verification Details
+- **Random Seed**: `seed = 42` (fixed, reproducible).
+- **Fault Matrix Breakdown**:
+  - `drain_timeout`: 7 turns simulated. Result: Callback fired, 0 turns deaf.
+  - `synth_error`: 8 turns simulated. Result: Callback fired, 0 turns deaf.
+  - `cancel`: 7 turns simulated. Result: Callback fired, 0 turns deaf.
+  - `normal`: 8 turns simulated. Result: Callback fired, 0 turns deaf.
+- **Result**: `deaf_count == 0` (0/30 turns left mic gated in LISTENING).
+
+---
 
 ### 30-Turn Soak Verification Details
 - **Random Seed**: `seed = 42` (fixed, reproducible).
