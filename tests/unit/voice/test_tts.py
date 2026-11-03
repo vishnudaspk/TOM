@@ -427,6 +427,16 @@ class TestKokoroTTSProvider:
         assert info["device"] == "cpu"
         assert info["loaded"] is False
 
+    def test_tts_config_performance_options(self) -> None:
+        cfg = TTSConfig(
+            threads=6,
+            allow_spinning=False,
+            warmup=True,
+        )
+        assert cfg.threads == 6
+        assert cfg.allow_spinning is False
+        assert cfg.warmup is True
+
 
 # ===========================================================================
 # EngineClient Audio Output Seam integration test
