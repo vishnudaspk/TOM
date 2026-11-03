@@ -268,7 +268,7 @@
 2. After STT failure, later turns remained in `PROCESSING` without completing or returning to usable state.
 3. Ctrl+C appeared unresponsive while TOM was stuck in blocking operations.
 4. IPC disconnect/reconnection during engine stop was not handled cleanly.
-5. Endpointing latency ~1.75–2.11s (target 300ms, ceiling 600ms) — investigated separately.
+5. Endpointing latency metric (previously reported ~1.75–2.11s) was measuring full utterance duration; corrected in Item P3 to measure silence hangover (speech_end - user_speech_stop).
 
 **Fixes implemented:**
 
@@ -320,6 +320,26 @@
 - Rust tests: **100 passed** (93 unit + 7 integration)
 
 **Remaining risks / follow-up:**
-- Endpointing latency (1.75–2.11s) still above 600ms ceiling — tracked separately for Phase 9.6 acceptance work.
+- Endpointing latency metric corrected in Item P3 (now measures silence hangover `speech_end - user_speech_stop`, removing the invalid ~1.75–2.11s utterance-duration metric). Actual hangover is configured at 600ms (observed ~656ms with frame quantisation).
 - CUDA fallback is permanent once triggered; no automatic retry (by design).
 - Thread-pool timeouts prevent indefinite blocking but don't cancel the underlying C++ inference — accepted tradeoff for responsiveness.
+
+## Phase V1 & V2: Voice Pipeline Repair & Optimization (2026-11-03)
+
+**Items Implemented & Verified in this session:**
+1. **P0.1 Root Cause Proven**: Session `3617271b` analysis proved H1. `_on_speaking` gated the mic, but an unhandled playback drain error bypassed `_on_playback_completed`, leaving the mic permanently gated while pipeline transitioned to `LISTENING`.
+2. **P0.2 Playback Drain Error Observability**: Wrapped playback drain in ERROR-level logging with traceback, duration, elapsed, timeout, and state (`streaming_tts.py`).
+3. **P0.3 Mic Lifecycle Audit**: Complete audit of all call sites of `mic.pause()`, `resume()`, `gate()`, `ungate()`, `mute()`, `unmute()`.
+4. **P0.4/P0.5 LISTENING Invariant Enforced**: `_run_turn` and `_play_pending` wrapped in `try/finally` guaranteeing idempotent `_on_playback_completed()` execution under all outcomes.
+5. **P0.6 LISTENING Heartbeat**: Emits `voice.listening.heartbeat` every 5s while in LISTENING with state, mic status, frames received, RMS, peak, and speech-onset age.
+6. **P0.7 Hermetic Tests**: 6 hermetic tests in `tests/unit/voice/test_mic_recovery.py` covering drain failure, cancellation, synthesis failure, IPC disconnect, and 30-turn randomized fault-injection soak (`seed=42`). All 6 passed.
+7. **P1.a First-Chunk Policy**: `SentenceStreamer` flushes speakable first chunks early at clause boundaries or at ~7 words if punctuation is delayed.
+8. **P1.b Voice Response Length Cap**: `max_response_tokens: 200` added for voice mode while CLI mode remains 1024.
+9. **P1.c Eliminated Lookahead Gap**: Removed blocking `__anext__()` lookahead in `IncrementalTTSStreamer._produce_sentences`, starting synthesis immediately.
+10. **P1.d Kokoro ONNX Optimization**: Benchmarked thread counts (8 threads, `allow_spinning=0` achieved optimal median 1366ms on CPU).
+11. **P2 Split-Utterance Merging**: When barge-in occurs during `PROCESSING` before playback begins, original and continuation PCM are merged (2s max gap) and transcribed once.
+12. **P3 Endpointing Metric Correction**: `endpointing_ms` now measures silence hangover `speech_end - user_speech_stop`.
+
+**Verification:**
+- Voice unit suite: **408 passed** (`pytest tests/unit/voice -q --timeout=30`).
+- Commits: `9b3924d`, `1f3a06d`, `2bd7b52`, `c8105fb`, `e5011a2`, `6aa0952`, `374d4ed`, `6b27593`.

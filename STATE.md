@@ -15,13 +15,13 @@ Last updated: 2026-11-02 (Full Repository Audit & Root Cleanup Complete)
 | **Phase 13 (IPC Stabilization & Tool Grounding)** | **COMPLETE — Targeted stabilization** (IPC idle/reconnect reliability, engine health accuracy, tool grounding/anti-fabrication, startup constructor fix) |
 | **Phase 14 (Tray Mode & Desktop Integration)** | **COMPLETE — System tray daemon** (pystray integration, engine connection status, mute toggle, CLI/voice mode support, 33 unit tests) |
 | **Phase V1 (Voice Repair)** | **ITEMS 0–6 COMPLETE & VERIFIED** (Commits: `bac0a41`..`c014fc2`). Test baseline: 1771 passed, 8 skipped Python; 93 passed Rust. |
-| **Phase V2 (Response Time & Experience)** | **IN PROGRESS** (Step 0 Reconcile complete; next: Step 1 Live Baseline). |
+| **Phase V2 (Response Time & Experience / Voice Repair P0–P3)** | **COMPLETE & VERIFIED** (P0.1–P0.7, P1.a–d, P2, P3 implemented and hermetically tested). Commits: `9b3924d`..`6b27593`. Voice unit baseline: 408 passed. P0.8 live 15-turn test marked BLOCKED (requires physical speaker). |
 | **Full Repo Audit & Root Cleanup** | **COMPLETE — 2026-11-02** (Full codebase review across 15 subsystems, root directory consolidated into `logs/`, `docs/audits/`, `docs/environment/`, `tests/manual/`, and `scripts/`. Detailed report at `docs/audits/TOM_COMPREHENSIVE_AUDIT_2026-11-02.md`). |
 | **Model runtime** | llama.cpp at `http://127.0.0.1:65400/v1`; generic OpenAI-compatible HTTP provider is the active abstraction |
 | **Backend migration** | Bionic/LM Studio is removed from active architecture; no active backend-specific alias remains |
 | **Next Immediate Task** | Phase V2 Step 1: Live Baseline measurement with user_felt_latency_ms. |
 | **Full-repo baseline** | 2026-11-02 Phase V1 exit: **1771 passed, 8 skipped** Python unit tests (`pytest tests/unit -q --timeout=30`), **93 passed** Rust engine tests (86 unit + 7 integration). Ruff/Cargo fmt/clippy clean. |
-| **Voice suite baseline** | **377 passed, 1 warning** across voice unit tests; **100 passed** Rust engine tests. |
+| **Voice suite baseline** | **408 passed, 1 warning** across voice unit tests (`tests/unit/voice`); **100 passed** Rust engine tests. |
 | **9.0–9.4 incremental** | Targeted verification **833 passed** across voice, agents, core, and IPC tests. Voice alone: **317**. Full repo **not** re-run. |
 | **Phase 10 verification** | **34 tools registered & verified**; **246 affected-module tests passed** (45 Iteration 7 security tests + web/personal/vision/security/integration tests). Schema exports validated; YAML config aligned; `beautifulsoup4>=4.12.0` added to core deps. DNS rebinding mitigated via single-resolution IP pinning with multi-address fallback (connect-level errors only), Host header rewrite (port omitted for HTTPS/HTTP defaults), `sni_hostname` extension (`httpcore/_async/connection.py:107, 151` [EVIDENCE: verified, httpcore 1.0.9]), and `trust_env=False`. |
 | **Phase 11 verification** | **514 passed** in focused exit gate (243 security unit + 101 adversarial + 38 pipeline + 71 personal + 35 web + 26 vision), 1 warning (benign third-party `mss.mss` deprecation in `capture.py:70`). Zero failed, zero skipped. Ruff check/format clean; `git diff --check` clean. Secret scanner benchmark verified: 10 KB p50 = 0.4939 ms (< 1.0 ms SLA), throughput 19.77 MB/s. |
@@ -61,6 +61,7 @@ Tools (34): system 7, file 6, memory 5, voice 2 (`voice.announce`, `voice.status
 14. **Lease Lifecycle & Inference Safety Invariant**: Incompatible heavy inference roles (reasoning vs. VLM) are mutually exclusive. Reasoning leases are released before tool dispatch to prevent nested deadlocks. Streaming generation leases remain held until client generator `.aclose()` completes to avoid re-granting VRAM while the server process may still be active.
 15. **Software Reservation vs. Physical VRAM Invariant**: Resource budgeting is enforced against internal software reservation limits and counters (`_allocated_vram_mb`), with a 500 MB safety headroom margin. Physical VRAM cannot be guaranteed server-side.
 16. **Priority Arbitration & Fairness Invariant**: When capacity frees, queued waiters are admitted by effective priority (`TaskPriority`, with starving background tasks promoted after 15s intervals) and FIFO sequence order. Priority ordering never bypasses safety headroom or mutual exclusion. Cooperative preemption tokens signal background tasks to yield; preemption is never forced termination.
+17. **LISTENING Invariant**: Whenever TOM reports `LISTENING`, its microphone capture path must be active, not gated/paused/muted, and delivering audio frames. Playback drain failure or cancellation must never leave TOM deaf-in-LISTENING.
 
 ## Hardware / env
 
