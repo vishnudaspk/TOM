@@ -726,7 +726,7 @@ class InteractionCore:
         tracer_factory: Callable[[int | None], InteractionLatencyTracer] | None = None,
         latency_history: int = 8,
         turn_arbitrator: TurnArbiter | None | _DefaultArbiterSentinel = _DEFAULT_ARBITER,
-        startup_greeting: bool = True,
+        startup_greeting: bool = False,
         debug_trace: DebugTraceSession | None = None,
         smart_turn_max_incomplete_wait_ms: int | None = None,
         wakeword_enabled: bool = False,
@@ -788,6 +788,8 @@ class InteractionCore:
         self._wakeword_timeout_handle: asyncio.TimerHandle | None = None
         self._last_greeting_text: str | None = None
         self._last_wake_ack: str | None = None
+        self._first_activation: bool = True
+        self._woke_from_timeout: bool = False
 
         self._frames = bytearray()
         self._smart_turn_candidate: bytes | None = None
@@ -974,6 +976,8 @@ class InteractionCore:
                 ) / 1e9
 
             mic = self._mic
+            mic_frame_at = getattr(mic, "last_frame_received_at", None)
+            last_frame_ts = mic_frame_at if mic_frame_at is not None else self._last_frame_received_at
             logger.info(
                 VoiceEventNames.LISTENING_HEARTBEAT,
                 pipeline_state="listening",
@@ -986,7 +990,7 @@ class InteractionCore:
                 ipc_healthy=getattr(self._engine, "is_connected", None),
                 input_rms=getattr(mic, "_last_rms", None),
                 input_peak=getattr(mic, "_last_peak", None),
-                time_since_last_frame_s=(time.monotonic() - self._last_frame_received_at) if self._last_frame_received_at is not None else None,
+                time_since_last_frame_s=(time.monotonic() - last_frame_ts) if last_frame_ts is not None else None,
             )
 
     async def _listening_watchdog(
@@ -1092,7 +1096,8 @@ class InteractionCore:
 
                 # --- capture starvation detection ---
                 now = time.monotonic()
-                last_frame = self._last_frame_received_at
+                mic_frame_at = getattr(mic, "last_frame_received_at", None)
+                last_frame = mic_frame_at if mic_frame_at is not None else self._last_frame_received_at
                 if last_frame is None:
                     # No frames ever received since session start; use session start proxy.
                     continue
@@ -1163,6 +1168,7 @@ class InteractionCore:
         token = self._active_token
 
         # 1-2. Invalidate synchronously before any await so nothing stale starts.
+        self._cancel_wakeword_timeout()
         epoch = self._epochs.bump()
         if token is not None:
             token.cancel()
@@ -1270,7 +1276,13 @@ class InteractionCore:
                     error=str(exc),
                 )
                 return
+            sr = synth_res.sample_rate or 24000
+            duration_s = len(synth_res.samples) / max(sr, 1)
+            await asyncio.sleep(duration_s + 0.4)
             logger.info(VoiceEventNames.STARTUP_GREETING_PLAYBACK_COMPLETED)
+            if self._wakeword_enabled:
+                self._wakeword_active = True
+                self._arm_wakeword_timeout()
 
         except Exception as exc:
             logger.error(
@@ -1317,6 +1329,7 @@ class InteractionCore:
 
         try:
             # 1-2. Synchronous invalidation (no awaits between bump and cancel).
+            self._cancel_wakeword_timeout()
             epoch = self._epochs.bump()
             if token is not None:
                 token.cancel()
@@ -1423,6 +1436,12 @@ class InteractionCore:
         elif isinstance(event, SpeechEndEvent):
             audio = bytes(self._frames) or event.pcm_bytes
             self._frames.clear()
+            logger.info(
+                "speech_end_received",
+                audio_bytes=len(audio),
+                wakeword_enabled=self._wakeword_enabled,
+                wakeword_active=self._wakeword_active,
+            )
             await self._handle_speech_end(audio)
 
     async def _transcribe_audio(self, audio: bytes) -> str:
@@ -1433,20 +1452,34 @@ class InteractionCore:
 
         token = CancellationToken()
         final = ""
+        t0 = time.monotonic()
+        logger.info("stt_transcription_started", audio_bytes=len(audio))
         try:
             async for partial in self._stt.stream_transcribe(_pcm(), token):
                 if partial.is_final:
                     final = partial.text.strip()
         except Exception as exc:
-            logger.warning("transcribe_audio_failed", error=str(exc))
+            logger.warning("transcribe_audio_failed", error=str(exc), latency_ms=round((time.monotonic() - t0) * 1000))
             return ""
+        latency_ms = round((time.monotonic() - t0) * 1000)
+        if final:
+            logger.info("stt_transcription_completed", transcript_preview=final[:80], latency_ms=latency_ms)
+        else:
+            logger.info("stt_transcription_empty", audio_bytes=len(audio), latency_ms=latency_ms)
         return final
 
     async def _play_wake_ack(self) -> None:
-        """Play a short acknowledgement after wake-word detection."""
-        ack_text = pick_wake_ack(self._last_wake_ack)
+        """Play a greeting or acknowledgement after wake-word detection."""
+        if self._first_activation or self._woke_from_timeout:
+            ack_text = pick_greeting(datetime.now().hour, self._last_wake_ack)
+            self._first_activation = False
+            self._woke_from_timeout = False
+        else:
+            ack_text = pick_wake_ack(self._last_wake_ack)
         self._last_wake_ack = ack_text
         try:
+            self._transition(VoicePipelineState.SPEAKING)
+            self._mic.gate()
             synth_req = SynthesisRequest(text=ack_text)
             synth_res = await self._tts.synthesize(synth_req)
             if synth_res.samples:
@@ -1455,9 +1488,13 @@ class InteractionCore:
                     sample_rate=synth_res.sample_rate,
                     channels=synth_res.channels,
                 )
+                sr = synth_res.sample_rate or 24000
+                duration_s = len(synth_res.samples) / max(sr, 1)
+                await asyncio.sleep(duration_s + 0.4)
         except Exception as exc:
             logger.warning("wake_ack_playback_failed", error=str(exc))
         finally:
+            self._mic.ungate()
             self._transition(VoicePipelineState.LISTENING)
             self._arm_wakeword_timeout()
 
@@ -1474,6 +1511,10 @@ class InteractionCore:
             self._wakeword_enabled
             and self._wakeword_active
             and self._wakeword_timeout_seconds > 0
+            and self._pipeline.state is VoicePipelineState.LISTENING
+            and self._active_turn is None
+            and not self._playback_active
+            and (getattr(self._mic, "is_in_speech", False) is not True)
             and not self._stopping
             and not self._stopped
         ):
@@ -1501,6 +1542,7 @@ class InteractionCore:
                 timeout_s=self._wakeword_timeout_seconds,
             )
             self._wakeword_active = False
+            self._woke_from_timeout = True
 
     async def _handle_speech_end(self, audio: bytes) -> None:
         """Arbitrate a VAD-delimited candidate before committing a turn."""
@@ -1520,7 +1562,7 @@ class InteractionCore:
                 logger.info(
                     "wakeword_detected",
                     phrase=self._wakeword_phrase,
-                    transcript=transcript,
+                    transcript=transcript[:80] if transcript else "",
                 )
                 self._wakeword_active = True
                 self._smart_turn_candidate = None
@@ -1528,14 +1570,19 @@ class InteractionCore:
 
                 remainder = strip_wake_phrase(transcript, self._wakeword_phrase)
                 if remainder:
+                    self._first_activation = False
+                    self._woke_from_timeout = False
+                    logger.info("wakeword_gate_accepted_with_command", remainder=remainder[:80])
                     await self._begin_turn(candidate, override_transcript=remainder)
                     return
+                logger.info("wakeword_gate_accepted_ack_only")
                 await self._play_wake_ack()
                 return
             else:
-                logger.debug(
-                    "wakeword_not_detected_discarding",
-                    transcript=transcript,
+                logger.info(
+                    "wakeword_gate_rejected",
+                    transcript=transcript[:80] if transcript else "",
+                    wakeword_active=self._wakeword_active,
                 )
                 self._smart_turn_candidate = None
                 return
@@ -1626,6 +1673,7 @@ class InteractionCore:
             self._pipeline.transition_to(VoicePipelineState.IDLE)
             self._pipeline.transition_to(VoicePipelineState.LISTENING)
 
+        self._cancel_wakeword_timeout()
         epoch = self._epochs.bump()
         token = CancellationToken()
         progress = TurnProgress(epoch_id=epoch)

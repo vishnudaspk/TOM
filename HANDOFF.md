@@ -29,14 +29,11 @@ Invariants, hardware, and architecture: **`STATE.md`**. Phase ledger and ADRs 04
   - Cleaned redundant `tests/docs/perf/00-baseline.md`.
   - Next: Step 1 (Live Baseline).
 - **Done:** **Voice UX Phase (Wake Word, Identity, Greeting & Session Lifecycle) (2026-11-04)**:
-  - Feature A (Wake-Word Session Lifecycle): Implemented 4-state session model (inactive/armed -> activation -> active conversation -> automatic deactivation). Unactivated speech is ignored; standalone "Hey TOM" plays short ack ("Listening.", "Yeah?"); embedded command ("Hey TOM, explain...") activates and executes once with wake phrase stripped (`override_transcript`); follow-up queries proceed without repeating wake phrase across multiple turns; inactivity timeout (`wakeword_timeout_seconds: 30.0s`) deactivates session only in idle `LISTENING` (never during processing/playback) and refreshes on interactions.
-  - Feature B (Consistent Identity): Authoritative `python/tom/identity.py` (`ASSISTANT_NAME = "TOM"`, `USER_ROLE = "user"`, `ASSISTANT_ROLE = "assistant"`). Consumed directly by `VOICE_SYSTEM_PROMPT`, `CLI_SYSTEM_PROMPT`, `build_system_prompt()`, and default `AgentConfig`.
-  - Feature C (Natural, Varied Greetings): Local time-of-day templates (`_GREETINGS`) across morning/afternoon/evening/night with no consecutive repeats and one-shot non-replay guard.
-  - Verification: 19 new targeted unit tests (5 greetings, 9 wake-word lifecycle, 5 identity) and 40 regression tests in `test_interaction_core.py` passed (59 passed total in 7.70s). Ruff clean on all changed files. Physical microphone test unverified (local engine/model processes not running).
-  - Outstanding Issues Recorded:
-    1. **Wake-word timeout bug:** TOM still responds to ordinary speech after the configured 30-second inactivity timeout.
-    2. **Greeting quality:** Current greetings still sound robotic and need further improvement.
-    3. **Identity status:** Assistant identity now consistently recognizes itself as TOM across prompts, agent configurations, and session initialization.
+  - Silent startup: `startup_greeting=False` by default; TOM boots completely quiet and dormant until explicitly awakened.
+  - Robust wake-word gating: `python/tom/voice/wakeword.py` matches "Hey TOM", "TOM", "Hi TOM", "OK TOM" with full punctuation tolerance ("Hey, Tom.", "Tom.", "Tom,") and Whisper acoustic homophones ("Hey Dom", "Don?"), preventing Whisper transcription dropouts while rejecting unrelated speech. FasterWhisper STT seeded with `initial_prompt="Hey TOM. TOM."` to bias language model decoding toward "TOM".
+  - Dynamic greeting on wake-up: Standalone wake-up on first conversation or after 30s timeout break greets with natural, time-aware greeting ("Good evening. I'm listening.", etc.); embedded commands ("Hey TOM, what time is it?") wake and execute immediately without double ack.
+  - Inactivity sleep: Inactivity countdown (30s) puts TOM into dormant sleep; wake phrase reliably re-awakens TOM every time.
+  - Verification: 59 voice unit tests passed (14 wake-word, 5 greetings, 40 interaction core). Ruff clean; `git diff --check` clean.
 - **Runtime:** Generic HTTP provider with llama.cpp as the production endpoint; no backend-specific alias remains.
 - **Phase 12 Closeout Validation:**
   - Focused test suite: **488 passed, 8 skipped** (uninstalled optional deps `opencv-python`/`winocr`), zero failed across `tests/unit/resources/`, `tests/unit/agents/`, `tests/unit/vision/`, `tests/integration/tools/test_tool_pipeline.py`.

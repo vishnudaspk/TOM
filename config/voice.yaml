@@ -1,5 +1,7 @@
 enabled: true
+wakeword_enabled: true
 wakeword_phrase: "hey tom"
+wakeword_timeout_seconds: 30.0
 wakeword_sensitivity: 0.6
 vad_threshold: 0.5
 silence_duration_ms: 600

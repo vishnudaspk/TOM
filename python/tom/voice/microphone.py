@@ -207,10 +207,15 @@ class MicrophoneLoop:
         # Event distribution
         self._subscribers: list[asyncio.Queue[VoiceEvent | None]] = []
         self._poll_task: asyncio.Task[None] | None = None
+        self._last_frame_received_at: float | None = None
 
     # ------------------------------------------------------------------
     # Properties
     # ------------------------------------------------------------------
+
+    @property
+    def last_frame_received_at(self) -> float | None:
+        return self._last_frame_received_at
 
     @property
     def config(self) -> MicrophoneConfig:
@@ -405,6 +410,7 @@ class MicrophoneLoop:
 
     def _process_frame(self, frame_samples: list[float]) -> None:
         """Process a single fixed-size frame through VAD and turn state machine."""
+        self._last_frame_received_at = time.monotonic()
         pcm_bytes = samples_to_pcm16_bytes(frame_samples)
 
         # Calculate RMS for this frame

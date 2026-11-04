@@ -122,7 +122,7 @@ class VoiceConfig(BaseModel):
     """Voice pipeline configuration."""
 
     enabled: bool = Field(default=True, description="Enable voice interaction")
-    wakeword_enabled: bool = Field(default=False, description="Enable wake word gate")
+    wakeword_enabled: bool = Field(default=True, description="Enable wake word gate")
     wakeword_phrase: str = Field(default="hey tom", description="Trigger phrase")
     wakeword_sensitivity: float = Field(default=0.6, ge=0.0, le=1.0)
     wakeword_timeout_seconds: float = Field(

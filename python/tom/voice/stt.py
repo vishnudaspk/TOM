@@ -474,6 +474,7 @@ class FasterWhisperSTTProvider(STTProvider):
             beam_size=self._config.beam_size,
             vad_filter=self._config.vad_filter,
             condition_on_previous_text=False,
+            initial_prompt="Hey TOM. TOM.",
         )
 
         raw_segments: list[Any] = list(segments_iter)
