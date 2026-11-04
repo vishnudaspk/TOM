@@ -670,3 +670,236 @@ class TestSTTErrorHierarchy:
     def test_unavailable_not_transcription(self) -> None:
         err = STTUnavailableError("x")
         assert not isinstance(err, STTTranscriptionError)
+
+
+# ===========================================================================
+# CUDA fallback memoization
+# ===========================================================================
+
+
+def _make_mock_whisper_module_cuda_fail() -> MagicMock:
+    """Return a fake faster_whisper module that fails on CUDA but succeeds on CPU."""
+    mock_module = MagicMock()
+
+    # First call (CUDA) raises an exception, second call (CPU) succeeds
+    mock_segment = MagicMock()
+    mock_segment.start = 0.0
+    mock_segment.end = 1.0
+    mock_segment.text = " hello world"
+
+    mock_info = MagicMock()
+    mock_info.language = "en"
+
+    mock_model_instance = MagicMock()
+    mock_model_instance.transcribe.return_value = ([mock_segment], mock_info)
+
+    def whisper_model_side_effect(*args, **kwargs):
+        device = kwargs.get("device", "cpu")
+        if device == "cuda":
+            raise RuntimeError("Library cublas64_12.dll not found")
+        return mock_model_instance
+
+    mock_module.WhisperModel.side_effect = whisper_model_side_effect
+    return mock_module
+
+
+def _make_mock_numpy() -> MagicMock:
+    mock_np = MagicMock()
+    mock_np.frombuffer.return_value = MagicMock()
+    mock_np.array.return_value = MagicMock()
+    return mock_np
+
+
+class TestFasterWhisperCUDAFallback:
+    """Tests for CUDA failure memoization and CPU fallback behavior."""
+
+    def test_cuda_failure_memoized_and_cpu_fallback_used(self) -> None:
+        """CUDA failure should be memoized; subsequent loads skip CUDA and use CPU."""
+        async def _test() -> None:
+            mock_fw = _make_mock_whisper_module_cuda_fail()
+            mock_np = _make_mock_numpy()
+
+            provider = FasterWhisperSTTProvider(
+                config=STTConfig(device="cuda", compute_type="int8_float16")
+            )
+            sys.modules["faster_whisper"] = mock_fw
+            sys.modules["numpy"] = mock_np
+            try:
+                # First transcribe: should attempt CUDA, fail, fall back to CPU
+                result1 = await provider.transcribe(_make_request())
+                assert result1.text == "hello world"
+
+                # Check that CUDA was attempted and failed
+                info1 = provider.get_model_info()
+                assert info1["cuda_attempted"] is True
+                assert info1["cuda_failed"] is True
+                assert "cublas64_12.dll" in info1["cuda_failure_reason"]
+                assert info1["device"] == "cuda"  # config still says cuda
+                # The actual model is loaded on CPU with int8, but config retains original compute_type
+                assert info1["compute_type"] == "int8_float16"
+
+                # Second transcribe: should skip CUDA and go straight to CPU
+                result2 = await provider.transcribe(_make_request())
+                assert result2.text == "hello world"
+
+                # WhisperModel should have been called twice: once for CUDA (failed), once for CPU
+                # But because of memoization, the second call should use the already-loaded CPU model
+                # So WhisperModel should only be called twice total (once CUDA fail, once CPU success)
+                assert mock_fw.WhisperModel.call_count == 2
+
+                # Verify the calls: first with device="cuda", second with device="cpu"
+                calls = mock_fw.WhisperModel.call_args_list
+                assert calls[0].kwargs.get("device") == "cuda"
+                assert calls[1].kwargs.get("device") == "cpu"
+
+            finally:
+                sys.modules.pop("faster_whisper", None)
+                sys.modules.pop("numpy", None)
+
+        run_async(_test())
+
+    def test_cuda_failure_does_not_retry_on_subsequent_transcribe(self) -> None:
+        """After CUDA fails once, subsequent transcribe calls should not retry CUDA."""
+        async def _test() -> None:
+            mock_fw = _make_mock_whisper_module_cuda_fail()
+            mock_np = _make_mock_numpy()
+
+            provider = FasterWhisperSTTProvider(
+                config=STTConfig(device="cuda", compute_type="int8_float16")
+            )
+            sys.modules["faster_whisper"] = mock_fw
+            sys.modules["numpy"] = mock_np
+            try:
+                # First transcribe: CUDA fails, falls back to CPU
+                await provider.transcribe(_make_request())
+
+                # Reset mock to track new calls
+                mock_fw.WhisperModel.reset_mock()
+
+                # Second transcribe: should use cached CPU model, not call WhisperModel again
+                await provider.transcribe(_make_request())
+
+                # WhisperModel should NOT be called again because model is cached
+                mock_fw.WhisperModel.assert_not_called()
+
+                # Third transcribe: same
+                await provider.transcribe(_make_request())
+                mock_fw.WhisperModel.assert_not_called()
+
+            finally:
+                sys.modules.pop("faster_whisper", None)
+                sys.modules.pop("numpy", None)
+
+        run_async(_test())
+
+    def test_cpu_only_config_never_attempts_cuda(self) -> None:
+        """When device='cpu' in config, CUDA should never be attempted."""
+        async def _test() -> None:
+            mock_fw = _make_mock_whisper_module_cuda_fail()
+            mock_np = _make_mock_numpy()
+
+            provider = FasterWhisperSTTProvider(config=STTConfig(device="cpu"))
+            sys.modules["faster_whisper"] = mock_fw
+            sys.modules["numpy"] = mock_np
+            try:
+                await provider.transcribe(_make_request())
+
+                # WhisperModel should only be called once with device="cpu"
+                assert mock_fw.WhisperModel.call_count == 1
+                assert mock_fw.WhisperModel.call_args.kwargs.get("device") == "cpu"
+
+                info = provider.get_model_info()
+                assert info.get("cuda_attempted") is not True
+
+            finally:
+                sys.modules.pop("faster_whisper", None)
+                sys.modules.pop("numpy", None)
+
+        run_async(_test())
+
+    def test_register_nvidia_dll_dirs_does_not_crash(self) -> None:
+        """Nvidia DLL dir registration should find existing dirs safely."""
+        dirs = FasterWhisperSTTProvider._register_nvidia_dll_dirs()
+        assert isinstance(dirs, list)
+
+    def test_cuda_failure_logs_error_loudly(self, caplog: Any) -> None:
+        """When CUDA fails, it must log at ERROR level loudly."""
+        import logging
+
+        async def _test() -> None:
+            mock_fw = _make_mock_whisper_module_cuda_fail()
+            mock_np = _make_mock_numpy()
+
+            provider = FasterWhisperSTTProvider(config=STTConfig(device="cuda"))
+            sys.modules["faster_whisper"] = mock_fw
+            sys.modules["numpy"] = mock_np
+            try:
+                with caplog.at_level(logging.ERROR):
+                    await provider.transcribe(_make_request())
+
+                # Verify loud ERROR log
+                error_records = [r for r in caplog.records if r.levelno >= logging.ERROR]
+                assert any("CUDA initialization FAILED" in r.message for r in error_records)
+            finally:
+                sys.modules.pop("faster_whisper", None)
+                sys.modules.pop("numpy", None)
+
+        run_async(_test())
+
+
+class TestSTTHallucinationFilter:
+    """Item 4: Hallucination filter tests with fake segments."""
+
+    def test_high_no_speech_prob_drops_utterance(self) -> None:
+        provider = FasterWhisperSTTProvider()
+        fake_seg = MagicMock()
+        fake_seg.no_speech_prob = 0.85
+        fake_seg.avg_logprob = -0.2
+        fake_seg.compression_ratio = 1.2
+        fake_seg.text = "Hello world"
+        is_hal, reason = provider._is_hallucination([fake_seg], audio_duration_s=2.0)
+        assert is_hal is True
+        assert "no_speech_prob" in reason
+
+    def test_low_avg_logprob_drops_utterance(self) -> None:
+        provider = FasterWhisperSTTProvider()
+        fake_seg = MagicMock()
+        fake_seg.no_speech_prob = 0.1
+        fake_seg.avg_logprob = -1.5
+        fake_seg.compression_ratio = 1.2
+        fake_seg.text = "Uncertain text"
+        is_hal, reason = provider._is_hallucination([fake_seg], audio_duration_s=2.0)
+        assert is_hal is True
+        assert "avg_logprob" in reason
+
+    def test_high_compression_ratio_drops_utterance(self) -> None:
+        provider = FasterWhisperSTTProvider()
+        fake_seg = MagicMock()
+        fake_seg.no_speech_prob = 0.1
+        fake_seg.avg_logprob = -0.3
+        fake_seg.compression_ratio = 3.1
+        fake_seg.text = "Repetitive phrase Repetitive phrase"
+        is_hal, reason = provider._is_hallucination([fake_seg], audio_duration_s=2.0)
+        assert is_hal is True
+        assert "compression_ratio" in reason
+
+    def test_blocklist_phrase_on_short_audio_drops_utterance(self) -> None:
+        provider = FasterWhisperSTTProvider()
+        fake_seg = MagicMock()
+        fake_seg.no_speech_prob = 0.2
+        fake_seg.avg_logprob = -0.3
+        fake_seg.compression_ratio = 1.1
+        fake_seg.text = "Thank you for watching"
+        is_hal, reason = provider._is_hallucination([fake_seg], audio_duration_s=2.0)
+        assert is_hal is True
+        assert "blocklist_match" in reason
+
+    def test_normal_segment_passes(self) -> None:
+        provider = FasterWhisperSTTProvider()
+        fake_seg = MagicMock()
+        fake_seg.no_speech_prob = 0.05
+        fake_seg.avg_logprob = -0.25
+        fake_seg.compression_ratio = 1.3
+        fake_seg.text = "What is the current time?"
+        is_hal, reason = provider._is_hallucination([fake_seg], audio_duration_s=2.0)
+        assert is_hal is False

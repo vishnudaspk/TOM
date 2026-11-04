@@ -7,15 +7,15 @@ import time
 from tom.voice.sentence_streamer import SentenceStreamer
 
 
-def _push_all(text: str, min_chars: int = 20) -> list[str]:
-    s = SentenceStreamer(min_sentence_chars=min_chars)
+def _push_all(text: str, min_chars: int = 20, first_chunk_policy: bool = False) -> list[str]:
+    s = SentenceStreamer(min_sentence_chars=min_chars, first_chunk_policy=first_chunk_policy)
     out = s.push_chunk(text)
     out.extend(s.flush())
     return out
 
 
-def _push_incremental(text: str, min_chars: int = 20) -> list[str]:
-    s = SentenceStreamer(min_sentence_chars=min_chars)
+def _push_incremental(text: str, min_chars: int = 20, first_chunk_policy: bool = False) -> list[str]:
+    s = SentenceStreamer(min_sentence_chars=min_chars, first_chunk_policy=first_chunk_policy)
     out: list[str] = []
     for ch in text:
         out.extend(s.push_chunk(ch))
@@ -110,3 +110,69 @@ class TestLatency:
         elapsed_ms = (time.perf_counter() - t0) * 1000
         assert out == ["This is a complete sentence."]
         assert elapsed_ms < 50
+
+
+class TestFirstChunkPolicy:
+    """P1.a First-chunk policy benchmarks and edge cases."""
+
+    def test_clause_boundary_flushes_early(self) -> None:
+        """A natural clause boundary (, ; : —) flushes as the first chunk."""
+        s = SentenceStreamer(first_chunk_policy=True)
+        # 5 words, > 15 chars, followed by space
+        out1 = s.push_chunk("According to the system monitor, ")
+        assert out1 == ["According to the system monitor,"]
+
+        out2 = s.push_chunk("everything looks completely healthy.")
+        out2.extend(s.flush())
+        assert out2 == ["everything looks completely healthy."]
+
+    def test_tiny_clause_fragment_held(self) -> None:
+        """Tiny fragments (< 15 chars or < 3 words) are not flushed as isolated chunks."""
+        s = SentenceStreamer(first_chunk_policy=True)
+        # 'Yes, ' is only 4 chars and 1 word — avoid flushing tiny greeting fragment
+        out1 = s.push_chunk("Yes, ")
+        assert out1 == []
+
+        out2 = s.push_chunk("I can certainly help you with that.")
+        assert out2 == ["Yes, I can certainly help you with that."]
+
+    def test_delayed_punctuation_flushes_at_word_limit(self) -> None:
+        """If punctuation is delayed, flush at ~6-8 words (default 7)."""
+        s = SentenceStreamer(first_chunk_policy=True, first_chunk_words=7)
+        # Push 7 words without any punctuation
+        tokens = [
+            "The ", "local ", "language ", "model ", "server ", "is ", "currently ",
+            "processing ", "all ", "incoming ", "requests."
+        ]
+        emitted: list[str] = []
+        for token in tokens:
+            emitted.extend(s.push_chunk(token))
+        emitted.extend(s.flush())
+
+        assert len(emitted) == 2
+        assert emitted[0] == "The local language model server is currently"
+        assert emitted[1] == "processing all incoming requests."
+
+    def test_sentence_integrity_preserved_for_short_sentence(self) -> None:
+        """If a complete sentence finishes within 7 words, preserve sentence integrity."""
+        s = SentenceStreamer(first_chunk_policy=True, first_chunk_words=7)
+        out1 = s.push_chunk("The CPU is cool. ")
+        assert out1 == ["The CPU is cool."]
+
+        out2 = s.push_chunk("Usage is minimal.")
+        out2.extend(s.flush())
+        assert out2 == ["Usage is minimal."]
+
+    def test_first_chunk_latency_benchmark(self) -> None:
+        """Benchmark: First chunk is emitted at clause/word boundary in < 5 ms."""
+        s = SentenceStreamer(first_chunk_policy=True)
+        s.push_chunk("Looking at your local storage configuration, ")
+        t0 = time.perf_counter()
+        # Next token arrives
+        out = s.push_chunk("drive C has plenty of space.")
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+
+        assert elapsed_ms < 5.0
+        # Total chunks emitted across the stream
+        all_chunks = out + s.flush()
+        assert len(all_chunks) >= 1

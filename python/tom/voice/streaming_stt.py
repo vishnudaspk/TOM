@@ -10,9 +10,9 @@ Phase 9 Iteration 9.1:
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import AsyncGenerator, AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator, Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 from tom.core.context import CancellationToken
 from tom.schemas.voice import TranscriptionRequest, TranscriptionResult

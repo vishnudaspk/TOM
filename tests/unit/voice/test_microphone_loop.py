@@ -251,6 +251,7 @@ def test_trailing_silence_produces_speech_end_event():
             frame_duration_ms=20,
             silence_duration_ms=100,  # 5 frames of silence
             min_speech_frames=2,
+            min_speech_ms=50,  # Low for testing
         )
         loop = MicrophoneLoop(config=config)
         events_received: list[VoiceEvent] = []
@@ -298,6 +299,7 @@ def test_final_speech_audio_not_lost_at_endpoint():
             silence_duration_ms=60,  # 3 frames of silence
             pre_roll_frames=1,
             min_speech_frames=1,
+            min_speech_ms=50,  # Low for testing
         )
         loop = MicrophoneLoop(config=config)
         events_received: list[VoiceEvent] = []
@@ -444,6 +446,7 @@ def test_maximum_buffer_duration_enforced():
             silence_duration_ms=2000,  # High hangover so silence doesn't trigger
             max_utterance_seconds=0.1,  # 100ms = 5 frames max
             min_speech_frames=1,
+            min_speech_ms=50,  # Low for testing
         )
         loop = MicrophoneLoop(config=config)
         events_received: list[VoiceEvent] = []
@@ -593,6 +596,7 @@ def test_max_duration_keeps_remaining_frames_for_next_turn():
             max_utterance_seconds=0.1,  # 5 frames
             min_speech_frames=1,
             pre_roll_frames=0,
+            min_speech_ms=50,  # Low for testing
         )
         loop = MicrophoneLoop(config=config)
         events_received: list[VoiceEvent] = []

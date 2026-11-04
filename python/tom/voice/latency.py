@@ -48,8 +48,8 @@ Stage semantics (plan section 10.2)
  * ``perceived_response_ms``    = ``PLAYBACK_STARTED`` - ``SPEECH_END``
  * ``user_stop_to_first_audio_ms`` = ``FIRST_AUDIO``   - ``SPEECH_END``
  * ``barge_in_stop_ms``         = ``BARGE_IN_STOP``  - ``BARGE_IN_ONSET``
- * ``endpointing_ms``           = ``SPEECH_END``     - turn start (the
-   hangover the VAD waited before committing the utterance)
+ * ``endpointing_ms``           = ``SPEECH_END`` - ``USER_SPEECH_STOP`` (VAD
+   silence hangover: time from last speech frame to committed utterance)
 
 SLA table (plan section 10.2). Targets are the primary acceptance criteria;
 ceilings are the hard limits. :meth:`InteractionLatencyTracer.assert_slas`
@@ -93,6 +93,7 @@ class LatencyStage(StrEnum):
     STT_DECODE_END = "stt_decode_end"
     TTS_FIRST_SYNTH_START = "tts_first_synth_start"
     TTS_FIRST_SYNTH_END = "tts_first_synth_end"
+    USER_SPEECH_STOP = "user_speech_stop"
 
 
 @dataclass(frozen=True)
@@ -153,6 +154,7 @@ LATENCY_SLAS: dict[str, tuple[float, float]] = {
     "playback_latency_ms": (50.0, 150.0),
     "perceived_response_ms": (1500.0, 2200.0),
     "user_stop_to_first_audio_ms": (1500.0, 2200.0),
+    "user_felt_latency_ms": (2100.0, 3000.0),
     "barge_in_stop_ms": (150.0, 250.0),
 }
 
@@ -364,22 +366,32 @@ class InteractionLatencyTracer:
         last = self._marks_ns.get(end)
         if first is None or last is None:
             return None
+        # Identical marks for playback_latency and barge_in_stop produce fake passes;
+        # report not_measured instead. Never 0 = pass (Item 6).
+        if first == last and (start, end) in (
+            (LatencyStage.FIRST_AUDIO, LatencyStage.PLAYBACK_STARTED),
+            (LatencyStage.BARGE_IN_ONSET, LatencyStage.BARGE_IN_STOP),
+        ):
+            return None
         return (last - first) / 1_000_000.0
 
     def _endpointing_ms(self) -> float | None:
-        if self._turn_start_ns is None:
-            return None
+        # endpointing_ms = SPEECH_END - USER_SPEECH_STOP
+        # = silence hangover the VAD waited after the last speech frame.
+        # Previously measured SPEECH_END - turn_start_ns which spanned the
+        # entire utterance duration and was therefore always wrong.
+        stop = self._marks_ns.get(LatencyStage.USER_SPEECH_STOP)
         end = self._marks_ns.get(LatencyStage.SPEECH_END)
-        if end is None:
+        if stop is None or end is None or end <= stop:
             return None
-        return (end - self._turn_start_ns) / 1_000_000.0
+        return (end - stop) / 1_000_000.0
 
 
 # Metric name -> the two stage marks it is derived from.
 _METRIC_STAGES: dict[str, tuple[LatencyStage, LatencyStage]] = {
     "stt_first_partial_ms": (LatencyStage.SPEECH_END, LatencyStage.STT_PARTIAL1),
     "stt_finalization_ms": (LatencyStage.SPEECH_END, LatencyStage.STT_FINAL),
-    "stt_queue_wait_ms": (LatencyStage.STT_FINAL, LatencyStage.STT_DECODE_START),
+    "stt_queue_wait_ms": (LatencyStage.SPEECH_END, LatencyStage.STT_DECODE_START),
     "stt_decode_ms": (LatencyStage.STT_DECODE_START, LatencyStage.STT_DECODE_END),
     "llm_ttft_ms": (LatencyStage.STT_FINAL, LatencyStage.LLM_FIRST_TOKEN),
     "sentence1_ms": (LatencyStage.LLM_FIRST_TOKEN, LatencyStage.SENTENCE1),
@@ -388,5 +400,6 @@ _METRIC_STAGES: dict[str, tuple[LatencyStage, LatencyStage]] = {
     "playback_latency_ms": (LatencyStage.FIRST_AUDIO, LatencyStage.PLAYBACK_STARTED),
     "perceived_response_ms": (LatencyStage.SPEECH_END, LatencyStage.PLAYBACK_STARTED),
     "user_stop_to_first_audio_ms": (LatencyStage.SPEECH_END, LatencyStage.FIRST_AUDIO),
+    "user_felt_latency_ms": (LatencyStage.USER_SPEECH_STOP, LatencyStage.FIRST_AUDIO),
     "barge_in_stop_ms": (LatencyStage.BARGE_IN_ONSET, LatencyStage.BARGE_IN_STOP),
 }

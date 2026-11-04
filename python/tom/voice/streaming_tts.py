@@ -23,8 +23,10 @@ Phase 9 Iteration 9.3:
 from __future__ import annotations
 
 import asyncio
+import time
 import functools
 import inspect
+import traceback
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator, AsyncIterator, Callable
 from concurrent.futures import ThreadPoolExecutor
@@ -32,8 +34,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from tom.core.context import CancellationToken
+from tom.ipc.errors import ConnectionLostError, NotConnectedError
 from tom.schemas.voice import SynthesisRequest, SynthesisResult
-from tom.telemetry.logging import get_logger, VoiceEventNames
+from tom.telemetry.logging import VoiceEventNames, get_logger
 from tom.voice.audio_utils import samples_to_pcm16_bytes
 from tom.voice.tts import TTSProvider
 
@@ -116,12 +119,16 @@ class IncrementalTTSStreamer(StreamingTTSProvider):
         * ``stream_synthesize`` (the sequencer) awaits those tasks strictly in
           index order, so PCM is queued in sentence order regardless of which
           synthesis finishes first.
-    * ``_play_pending`` consumes the ordered queue concurrently and issues
+        * ``_play_pending`` consumes the ordered queue concurrently and issues
           ``EngineClient.play_audio_buffer()`` per chunk. It runs as a separate
           task, so a slow playback call never blocks the next synthesis.
         * ``playback_observer`` (Phase 9.6) is an optional zero-cost hook invoked
           immediately before the first ``play_audio_buffer()`` call, used for
           latency instrumentation. It changes no timing or ordering when unset.
+        * ``playback_tail_ms`` (Phase 9.6 correctness): time to wait after the
+          last chunk is submitted to the engine before considering playback
+          complete. This ensures SPEAKING state persists until audio actually
+          drains.
     """
 
     def __init__(
@@ -136,6 +143,7 @@ class IncrementalTTSStreamer(StreamingTTSProvider):
         max_concurrent_synthesis: int = 2,
         playback_drain_timeout_s: float = _PLAYBACK_DRAIN_TIMEOUT_S,
         playback_device: str | None = None,
+        playback_tail_ms: int = 400,
         # Latency callbacks (optional, for instrumentation)
         on_first_synth_start: Callable[[], None] | None = None,
         on_first_synth_end: Callable[[], None] | None = None,
@@ -153,6 +161,7 @@ class IncrementalTTSStreamer(StreamingTTSProvider):
         self._max_concurrent = max_concurrent_synthesis
         self._drain_timeout_s = playback_drain_timeout_s
         self._playback_device = playback_device
+        self._playback_tail_ms = playback_tail_ms
         self._executor: ThreadPoolExecutor | None = None
         # Latency callbacks
         self._on_first_synth_start = on_first_synth_start
@@ -188,6 +197,12 @@ class IncrementalTTSStreamer(StreamingTTSProvider):
             return
         try:
             await self._engine.stop_audio_playback()
+        except (ConnectionLostError, NotConnectedError) as exc:
+            logger.warning(
+                VoiceEventNames.TTS_FAILED,
+                stage="stop_playback_ipc_disconnected",
+                error=str(exc),
+            )
         except Exception as exc:
             logger.warning(
                 VoiceEventNames.TTS_FAILED,
@@ -285,61 +300,65 @@ class IncrementalTTSStreamer(StreamingTTSProvider):
     ) -> None:
         """Dispatch one synthesis task per sentence, in order, on a bounded pool.
 
-        Reads one sentence ahead so ``is_last`` is decided by the only stage
-        that can know it (the upstream generator) rather than guessed by the
-        consumer.
+        Dispatches synthesis immediately when a sentence arrives so synthesis of
+        chunk 0 starts without waiting for chunk 1 lookahead (eliminating the
+        ~187-203 ms sentence-to-synthesis gap). Resolution of ``is_last`` runs
+        concurrently with synthesis.
         """
         iterator = sentences.__aiter__()
         semaphore = asyncio.Semaphore(self._max_concurrent)
-        lookahead: str = ""
-        has_lookahead = False
         index = 0
+        prev_is_last_event: asyncio.Event | None = None
+        prev_is_last_box: list[bool] = [False]
 
         try:
             while True:
                 if token is not None and token.is_cancelled():
                     break
 
-                if has_lookahead:
-                    sentence = lookahead
-                else:
-                    try:
-                        sentence = await iterator.__anext__()
-                    except StopAsyncIteration:
-                        break
-
                 try:
-                    lookahead = await iterator.__anext__()
-                    has_lookahead = True
-                    is_last = False
+                    sentence = await iterator.__anext__()
                 except StopAsyncIteration:
-                    has_lookahead = False
-                    is_last = True
+                    if prev_is_last_event is not None:
+                        prev_is_last_box[0] = True
+                        prev_is_last_event.set()
+                    break
 
                 text = sentence.strip()
                 if not text:
-                    if is_last:
-                        break
                     continue
+
+                if prev_is_last_event is not None:
+                    prev_is_last_box[0] = False
+                    prev_is_last_event.set()
+
+                is_last_event = asyncio.Event()
+                is_last_box = [False]
+                prev_is_last_event = is_last_event
+                prev_is_last_box = is_last_box
 
                 await semaphore.acquire()
                 slots.put_nowait(
                     asyncio.create_task(
-                        self._synthesize_chunk(index, text, is_last, semaphore),
+                        self._synthesize_chunk(
+                            index, text, is_last_event, is_last_box, semaphore
+                        ),
                         name=f"tom.streaming_tts.synth.{index}",
                     )
                 )
                 index += 1
-                if is_last:
-                    break
         finally:
+            if prev_is_last_event is not None and not prev_is_last_event.is_set():
+                prev_is_last_box[0] = True
+                prev_is_last_event.set()
             slots.put_nowait(_EOF)
 
     async def _synthesize_chunk(
         self,
         index: int,
         sentence: str,
-        is_last: bool,
+        is_last_event: asyncio.Event,
+        is_last_box: list[bool],
         semaphore: asyncio.Semaphore,
     ) -> _Playable | None:
         """Synthesize one sentence off the event loop; None when synthesis fails."""
@@ -370,6 +389,10 @@ class IncrementalTTSStreamer(StreamingTTSProvider):
 
         if index == 0 and self._on_first_synth_end is not None:
             self._on_first_synth_end()
+
+        # Wait for lookahead to determine whether this chunk is the last
+        await is_last_event.wait()
+        is_last = is_last_box[0]
 
         return _Playable(
             chunk=SynthesisChunk(
@@ -437,33 +460,101 @@ class IncrementalTTSStreamer(StreamingTTSProvider):
         token: CancellationToken | None,
         playback_observer: Callable[[], None] | None = None,
     ) -> None:
-        """Play ordered PCM through EngineClient, one chunk at a time."""
+        """Play ordered PCM through EngineClient, one chunk at a time.
+
+        Tracks total audio duration and waits for playback to drain plus
+        a configurable tail before signaling completion. This ensures the
+        SPEAKING state persists until audio actually finishes playing.
+
+        ``_on_playback_completed`` is guaranteed to be called exactly once on
+        every exit path (normal, drain timeout, IPC disconnect, cancellation)
+        so the microphone is always ungated even when TTS fails.
+        """
         if self._engine is None:
             return
         observed = False
         first_chunk = True
-        while True:
-            item = await play_queue.get()
-            if item is _EOF:
-                if self._on_playback_completed is not None:
-                    self._on_playback_completed()
-                return
-            if token is not None and token.is_cancelled():
-                return
-            chunk = item.chunk
-            await self._engine.play_audio_buffer(
-                audio_data=chunk.audio_data,
-                sample_rate=item.sample_rate,
-                channels=item.channels,
-                device_name=self._playback_device,
-            )
-            if first_chunk:
-                first_chunk = False
-                if not observed and playback_observer is not None:
-                    observed = True
-                    playback_observer()
-                if not observed and self._on_playback_started is not None:
-                    self._on_playback_started()
+        total_audio_duration_s = 0.0
+        playback_start_time: float | None = None
+        completed_called = False
+        playback_succeeded = False
+
+        def _fire_completed() -> None:
+            nonlocal completed_called
+            if not completed_called and self._on_playback_completed is not None:
+                completed_called = True
+                self._on_playback_completed()
+
+        try:
+            while True:
+                item = await play_queue.get()
+                if item is _EOF:
+                    # All chunks submitted. Wait for audio to drain from engine
+                    # buffer + tail (Item 6). Drain sleep is inside try so that
+                    # a cancellation still reaches _fire_completed via finally.
+                    try:
+                        if playback_start_time is not None:
+                            elapsed = time.monotonic() - playback_start_time
+                            remaining = max(0.0, total_audio_duration_s - elapsed)
+                            tail_s = self._playback_tail_ms / 1000.0
+                            await asyncio.sleep(remaining + tail_s)
+                        playback_succeeded = True
+                        logger.info(VoiceEventNames.PLAYBACK_COMPLETED)
+                    except Exception as drain_exc:
+                        logger.error(
+                            VoiceEventNames.PLAYBACK_FAILED,
+                            stage="drain",
+                            error=str(drain_exc),
+                            exc_info=True,
+                        )
+                    finally:
+                        _fire_completed()
+                    return
+                if token is not None and token.is_cancelled():
+                    return
+                chunk = item.chunk
+                # Calculate chunk duration: audio_data is PCM16 (2 bytes/sample), mono
+                chunk_duration_s = len(chunk.audio_data) / 2 / item.sample_rate
+                total_audio_duration_s += chunk_duration_s
+                try:
+                    await self._engine.play_audio_buffer(
+                        audio_data=chunk.audio_data,
+                        sample_rate=item.sample_rate,
+                        channels=item.channels,
+                        device_name=self._playback_device,
+                    )
+                except (ConnectionLostError, NotConnectedError) as exc:
+                    logger.error(
+                        VoiceEventNames.PLAYBACK_FAILED,
+                        stage="playback_ipc_disconnected",
+                        error=str(exc),
+                        exc_info=True,
+                    )
+                    # Engine disconnected - stop trying to play remaining chunks.
+                    # _fire_completed() will run in the outer finally.
+                    return
+                except Exception as exc:
+                    logger.error(
+                        VoiceEventNames.PLAYBACK_FAILED,
+                        stage="playback",
+                        error=str(exc),
+                        exc_info=True,
+                    )
+                    # Continue with next chunk on other errors
+                    continue
+                if first_chunk:
+                    first_chunk = False
+                    playback_start_time = time.monotonic()
+                    if not observed and playback_observer is not None:
+                        observed = True
+                        playback_observer()
+                    if not observed and self._on_playback_started is not None:
+                        self._on_playback_started()
+        finally:
+            # Safety net: ensure mic is ungated on every exit (cancellation,
+            # IPC disconnect, exception, normal return without _EOF).
+            _fire_completed()
+            logger.info(VoiceEventNames.PLAYBACK_FINALIZED, success=playback_succeeded)
 
     async def _watch_cancellation(
         self,
@@ -481,10 +572,13 @@ class IncrementalTTSStreamer(StreamingTTSProvider):
         try:
             await asyncio.wait_for(asyncio.shield(player), timeout=self._drain_timeout_s)
         except Exception as exc:
-            logger.warning(
+            logger.error(
                 VoiceEventNames.TTS_FAILED,
                 stage="playback_drain",
                 error=str(exc),
+                exc_type=type(exc).__name__,
+                drain_timeout_s=self._drain_timeout_s,
+                traceback=traceback.format_exc(),
             )
 
     @staticmethod

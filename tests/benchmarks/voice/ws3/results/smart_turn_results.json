@@ -1,43 +1,952 @@
 {
   "lm_studio_loaded": false,
   "cpu_threads": 4,
-  "timestamp": "2026-10-07",
+  "timestamp": "2026-10-21 16:49:24",
   "results": {
-    "complete_turn": {
-      "total": 41,
-      "correct": 40,
-      "accuracy": 0.975609756097561,
-      "false_incomplete": 1,
-      "false_complete": 0,
-      "latency_p50_ms": 53,
-      "latency_p95_ms": 56
-    },
-    "hesitation_prefix": {
-      "total": 15,
-      "correct": 0,
-      "accuracy": 0,
-      "false_incomplete": 0,
-      "false_complete": 15,
-      "latency_p50_ms": 53,
-      "latency_p95_ms": 56
-    },
-    "hesitation_full": {
-      "total": 15,
-      "correct": 14,
-      "accuracy": 0.9333333333333333,
-      "false_incomplete": 1,
-      "false_complete": 0,
-      "latency_p50_ms": 53,
-      "latency_p95_ms": 56
-    },
-    "synthetic": {
-      "total": 41,
-      "correct": 6,
-      "accuracy": 0.14634146341463414,
-      "false_incomplete": 0,
-      "false_complete": 35,
-      "latency_p50_ms": 53,
-      "latency_p95_ms": 56
-    }
+    "complete_turn": [
+      {
+        "file": "001_open_the_settings_window.wav",
+        "prediction": 1,
+        "probability": 0.9854345321655273,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 50.793200003681704,
+        "latency_p95_ms": 56.62047999794595
+      },
+      {
+        "file": "002_close_the_current_tab.wav",
+        "prediction": 1,
+        "probability": 0.9880069494247437,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 39.540400000987574,
+        "latency_p95_ms": 53.79469999024877
+      },
+      {
+        "file": "003_minimize_all_windows.wav",
+        "prediction": 1,
+        "probability": 0.9870367050170898,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 51.02410000108648,
+        "latency_p95_ms": 54.40891000034753
+      },
+      {
+        "file": "004_take_a_screenshot.wav",
+        "prediction": 1,
+        "probability": 0.9875311851501465,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 46.152100010658614,
+        "latency_p95_ms": 57.906739998725236
+      },
+      {
+        "file": "005_set_a_timer_for_five_minutes.wav",
+        "prediction": 1,
+        "probability": 0.9854345321655273,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 48.15389998839237,
+        "latency_p95_ms": 56.52662999345921
+      },
+      {
+        "file": "006_turn_up_the_volume.wav",
+        "prediction": 1,
+        "probability": 0.9424859285354614,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 51.037700002780184,
+        "latency_p95_ms": 62.9189200073597
+      },
+      {
+        "file": "007_mute_the_microphone.wav",
+        "prediction": 1,
+        "probability": 0.9647200703620911,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 48.31980000017211,
+        "latency_p95_ms": 53.87993999902392
+      },
+      {
+        "file": "008_open_the_downloads_folder.wav",
+        "prediction": 1,
+        "probability": 0.9255857467651367,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 51.767800003290176,
+        "latency_p95_ms": 55.709409998962656
+      },
+      {
+        "file": "009_delete_the_temporary_files.wav",
+        "prediction": 1,
+        "probability": 0.9875311851501465,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 47.92759999691043,
+        "latency_p95_ms": 54.86853999609593
+      },
+      {
+        "file": "010_run_the_test_suite.wav",
+        "prediction": 1,
+        "probability": 0.9282535910606384,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 52.30779999692459,
+        "latency_p95_ms": 55.09955999878002
+      },
+      {
+        "file": "011_restart_the_application.wav",
+        "prediction": 1,
+        "probability": 0.91398024559021,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 38.740800009691156,
+        "latency_p95_ms": 54.89702999184374
+      },
+      {
+        "file": "012_show_me_the_task_manager.wav",
+        "prediction": 1,
+        "probability": 0.970842719078064,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 36.038400008692406,
+        "latency_p95_ms": 54.30224999727215
+      },
+      {
+        "file": "013_lock_the_screen.wav",
+        "prediction": 1,
+        "probability": 0.9859892129898071,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 52.82519999309443,
+        "latency_p95_ms": 59.40413000498665
+      },
+      {
+        "file": "014_empty_the_recycle_bin.wav",
+        "prediction": 1,
+        "probability": 0.9829913973808289,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 52.93449999589939,
+        "latency_p95_ms": 58.256759999494534
+      },
+      {
+        "file": "015_switch_to_dark_mode.wav",
+        "prediction": 1,
+        "probability": 0.8817123174667358,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 30.70980000484269,
+        "latency_p95_ms": 55.732809999608435
+      },
+      {
+        "file": "016_what_is_the_current_time.wav",
+        "prediction": 1,
+        "probability": 0.9875311851501465,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 34.46979999716859,
+        "latency_p95_ms": 57.25125999451848
+      },
+      {
+        "file": "017_how_much_disk_space_is_left.wav",
+        "prediction": 1,
+        "probability": 0.9865230321884155,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 53.432400003657676,
+        "latency_p95_ms": 59.33654999680584
+      },
+      {
+        "file": "018_what_version_of_python_is_installed.wav",
+        "prediction": 1,
+        "probability": 0.9445840716362,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 52.1636000048602,
+        "latency_p95_ms": 67.36788999405688
+      },
+      {
+        "file": "019_where_is_the_config_file_located.wav",
+        "prediction": 1,
+        "probability": 0.9859892129898071,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 44.37750000215601,
+        "latency_p95_ms": 53.42466000438435
+      },
+      {
+        "file": "020_why_is_the_build_failing.wav",
+        "prediction": 1,
+        "probability": 0.9808988571166992,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 54.04109999653883,
+        "latency_p95_ms": 57.69927999790525
+      },
+      {
+        "file": "021_which_process_is_using_the_most_memory.wav",
+        "prediction": 1,
+        "probability": 0.9865230321884155,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 52.20689999987371,
+        "latency_p95_ms": 58.6151500014239
+      },
+      {
+        "file": "022_when_was_the_last_backup_made.wav",
+        "prediction": 1,
+        "probability": 0.9660363793373108,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 49.971000000368804,
+        "latency_p95_ms": 56.57417999609606
+      },
+      {
+        "file": "023_can_you_explain_this_error_message.wav",
+        "prediction": 1,
+        "probability": 0.970842719078064,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 35.509399996954016,
+        "latency_p95_ms": 62.04534999851602
+      },
+      {
+        "file": "024_what_are_the_system_requirements.wav",
+        "prediction": 1,
+        "probability": 0.978554368019104,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 53.93259999982547,
+        "latency_p95_ms": 63.720859996101346
+      },
+      {
+        "file": "025_how_do_i_enable_the_dark_theme.wav",
+        "prediction": 1,
+        "probability": 0.978554368019104,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 53.38690000644419,
+        "latency_p95_ms": 61.0439500058419
+      },
+      {
+        "file": "026_tom_show_me_the_dashboard.wav",
+        "prediction": 1,
+        "probability": 0.9282535910606384,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 54.67230000067502,
+        "latency_p95_ms": 62.696159996266935
+      },
+      {
+        "file": "027_tom_what_is_the_status_of_the_build.wav",
+        "prediction": 1,
+        "probability": 0.9889053702354431,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 52.719300001626834,
+        "latency_p95_ms": 68.84165000083156
+      },
+      {
+        "file": "028_tom_open_the_project_settings.wav",
+        "prediction": 1,
+        "probability": 0.9884648323059082,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 40.024200003244914,
+        "latency_p95_ms": 60.347389995877165
+      },
+      {
+        "file": "029_tom_search_for_the_resource_manager.wav",
+        "prediction": 1,
+        "probability": 0.9793655872344971,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 53.792800012161024,
+        "latency_p95_ms": 63.82624000107171
+      },
+      {
+        "file": "030_tom_minimize_the_terminal_silently.wav",
+        "prediction": 1,
+        "probability": 0.9808988571166992,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 49.205500006792136,
+        "latency_p95_ms": 82.1135999940452
+      },
+      {
+        "file": "031_tom_read_the_last_commit_message.wav",
+        "prediction": 1,
+        "probability": 0.8498003482818604,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 51.97800000314601,
+        "latency_p95_ms": 67.99487999815028
+      },
+      {
+        "file": "032_tom_run_the_integration_tests.wav",
+        "prediction": 1,
+        "probability": 0.9823201894760132,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 36.328900008811615,
+        "latency_p95_ms": 81.69257999252295
+      },
+      {
+        "file": "033_tom_what_changed_in_the_last_commit.wav",
+        "prediction": 1,
+        "probability": 0.5490754842758179,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 37.72519998892676,
+        "latency_p95_ms": 60.17099999153285
+      },
+      {
+        "file": "034_set_an_alarm_for_seven_thirty_am.wav",
+        "prediction": 1,
+        "probability": 0.7201674580574036,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 41.13669999060221,
+        "latency_p95_ms": 55.574430005799506
+      },
+      {
+        "file": "035_remind_me_at_three_fifteen_pm.wav",
+        "prediction": 1,
+        "probability": 0.9808988571166992,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 56.77460000151768,
+        "latency_p95_ms": 68.53224999649682
+      },
+      {
+        "file": "036_schedule_a_meeting_for_next_tuesday.wav",
+        "prediction": 1,
+        "probability": 0.9889053702354431,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 50.25040000327863,
+        "latency_p95_ms": 63.19669000513384
+      },
+      {
+        "file": "037_delete_files_older_than_thirty_days.wav",
+        "prediction": 1,
+        "probability": 0.9880069494247437,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 48.17870000260882,
+        "latency_p95_ms": 57.39190000604139
+      },
+      {
+        "file": "038_show_logs_from_the_last_hour.wav",
+        "prediction": 0,
+        "probability": 0.30425208806991577,
+        "expected": 1,
+        "correct": false,
+        "latency_p50_ms": 49.845000001369044,
+        "latency_p95_ms": 68.36353999678977
+      },
+      {
+        "file": "039_calculate_fifteen_percent_of_two_hundred.wav",
+        "prediction": 1,
+        "probability": 0.9075815677642822,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 51.94550000305753,
+        "latency_p95_ms": 70.87617000361206
+      },
+      {
+        "file": "040_what_is_the_date_next_friday.wav",
+        "prediction": 1,
+        "probability": 0.9880069494247437,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 40.22669998812489,
+        "latency_p95_ms": 72.85630000260424
+      },
+      {
+        "file": "041_run_the_backup_at_midnight.wav",
+        "prediction": 1,
+        "probability": 0.9842595458030701,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 52.30540000775363,
+        "latency_p95_ms": 70.77335999492786
+      }
+    ],
+    "hesitation_prefix": [
+      {
+        "file": "001_turn_off_the_lights.wav",
+        "prediction": 1,
+        "probability": 0.9870367050170898,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 48.97839999466669
+      },
+      {
+        "file": "002_open_the_settings_window.wav",
+        "prediction": 1,
+        "probability": 0.9870367050170898,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 46.46300000604242
+      },
+      {
+        "file": "003_set_a_timer_for_ten_minutes.wav",
+        "prediction": 1,
+        "probability": 0.9870367050170898,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 45.95169999811333
+      },
+      {
+        "file": "004_take_a_screenshot.wav",
+        "prediction": 1,
+        "probability": 0.9870367050170898,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 44.008700002450496
+      },
+      {
+        "file": "005_close_the_current_tab.wav",
+        "prediction": 1,
+        "probability": 0.9870367050170898,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 51.139100003638305
+      },
+      {
+        "file": "006_what_is_the_current_time.wav",
+        "prediction": 1,
+        "probability": 0.9870367050170898,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 53.398600008222274
+      },
+      {
+        "file": "007_how_much_disk_space_is_left.wav",
+        "prediction": 1,
+        "probability": 0.9870367050170898,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 41.2433999881614
+      },
+      {
+        "file": "008_where_is_the_config_file_located.wav",
+        "prediction": 1,
+        "probability": 0.9870367050170898,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 39.458200000808574
+      },
+      {
+        "file": "009_when_was_the_last_backup_made.wav",
+        "prediction": 1,
+        "probability": 0.9870367050170898,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 44.38170000503305
+      },
+      {
+        "file": "010_can_you_explain_this_error_message.wav",
+        "prediction": 1,
+        "probability": 0.9870367050170898,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 49.60680000658613
+      },
+      {
+        "file": "011_tom_show_me_the_dashboard.wav",
+        "prediction": 1,
+        "probability": 0.9870367050170898,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 49.42019999725744
+      },
+      {
+        "file": "012_tom_what_is_the_status_of_the_build.wav",
+        "prediction": 1,
+        "probability": 0.9870367050170898,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 50.72099999233615
+      },
+      {
+        "file": "013_tom_open_the_project_settings.wav",
+        "prediction": 1,
+        "probability": 0.9870367050170898,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 51.65210000996012
+      },
+      {
+        "file": "014_set_an_alarm_for_seven_thirty_am.wav",
+        "prediction": 1,
+        "probability": 0.9870367050170898,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 40.98330000124406
+      },
+      {
+        "file": "015_remind_me_at_three_fifteen_pm.wav",
+        "prediction": 1,
+        "probability": 0.9870367050170898,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 47.46950000117067
+      }
+    ],
+    "hesitation_full": [
+      {
+        "file": "001_turn_off_the_lights.wav",
+        "prediction": 0,
+        "probability": 0.4901544749736786,
+        "expected": 1,
+        "correct": false,
+        "latency_p50_ms": 50.541300006443635
+      },
+      {
+        "file": "002_open_the_settings_window.wav",
+        "prediction": 1,
+        "probability": 0.834087073802948,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 34.03299998899456
+      },
+      {
+        "file": "003_set_a_timer_for_ten_minutes.wav",
+        "prediction": 1,
+        "probability": 0.9823201894760132,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 48.55490000045393
+      },
+      {
+        "file": "004_take_a_screenshot.wav",
+        "prediction": 1,
+        "probability": 0.9865230321884155,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 42.31100001197774
+      },
+      {
+        "file": "005_close_the_current_tab.wav",
+        "prediction": 1,
+        "probability": 0.9854345321655273,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 49.15110000001732
+      },
+      {
+        "file": "006_what_is_the_current_time.wav",
+        "prediction": 1,
+        "probability": 0.9816229343414307,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 42.23500000080094
+      },
+      {
+        "file": "007_how_much_disk_space_is_left.wav",
+        "prediction": 1,
+        "probability": 0.978554368019104,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 37.094300001626834
+      },
+      {
+        "file": "008_where_is_the_config_file_located.wav",
+        "prediction": 1,
+        "probability": 0.9897372126579285,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 49.82810000365134
+      },
+      {
+        "file": "009_when_was_the_last_backup_made.wav",
+        "prediction": 1,
+        "probability": 0.9540347456932068,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 52.88819999259431
+      },
+      {
+        "file": "010_can_you_explain_this_error_message.wav",
+        "prediction": 1,
+        "probability": 0.9854345321655273,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 44.916999991983175
+      },
+      {
+        "file": "011_tom_show_me_the_dashboard.wav",
+        "prediction": 1,
+        "probability": 0.9897372126579285,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 45.0596000009682
+      },
+      {
+        "file": "012_tom_what_is_the_status_of_the_build.wav",
+        "prediction": 1,
+        "probability": 0.9816229343414307,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 35.91059999598656
+      },
+      {
+        "file": "013_tom_open_the_project_settings.wav",
+        "prediction": 1,
+        "probability": 0.9848582744598389,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 50.024199998006225
+      },
+      {
+        "file": "014_set_an_alarm_for_seven_thirty_am.wav",
+        "prediction": 1,
+        "probability": 0.6066516041755676,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 51.50149999826681
+      },
+      {
+        "file": "015_remind_me_at_three_fifteen_pm.wav",
+        "prediction": 1,
+        "probability": 0.9823201894760132,
+        "expected": 1,
+        "correct": true,
+        "latency_p50_ms": 45.96519999904558
+      }
+    ],
+    "synthetic": [
+      {
+        "file": "001_open_the_settings_window.wav",
+        "prediction": 1,
+        "probability": 0.9749865531921387,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 43.73740000301041
+      },
+      {
+        "file": "002_close_the_current_tab.wav",
+        "prediction": 1,
+        "probability": 0.7790932655334473,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 32.547900002100505
+      },
+      {
+        "file": "003_minimize_all_windows.wav",
+        "prediction": 1,
+        "probability": 0.743350088596344,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 51.11590000160504
+      },
+      {
+        "file": "004_take_a_screenshot.wav",
+        "prediction": 1,
+        "probability": 0.6873466372489929,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 53.283000001101755
+      },
+      {
+        "file": "005_set_a_timer_for_five_minutes.wav",
+        "prediction": 1,
+        "probability": 0.9255857467651367,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 52.29069999768399
+      },
+      {
+        "file": "006_turn_up_the_volume.wav",
+        "prediction": 1,
+        "probability": 0.9829913973808289,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 50.415999998222105
+      },
+      {
+        "file": "007_mute_the_microphone.wav",
+        "prediction": 0,
+        "probability": 0.256649911403656,
+        "expected": 0,
+        "correct": true,
+        "latency_p50_ms": 54.4693000119878
+      },
+      {
+        "file": "008_open_the_downloads_folder.wav",
+        "prediction": 1,
+        "probability": 0.9647200703620911,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 46.72309999295976
+      },
+      {
+        "file": "009_delete_the_temporary_files.wav",
+        "prediction": 1,
+        "probability": 0.7121614813804626,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 51.74059999990277
+      },
+      {
+        "file": "010_run_the_test_suite.wav",
+        "prediction": 1,
+        "probability": 0.9777120351791382,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 50.79779999505263
+      },
+      {
+        "file": "011_restart_the_application.wav",
+        "prediction": 1,
+        "probability": 0.9170267581939697,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 42.6352000067709
+      },
+      {
+        "file": "012_show_me_the_task_manager.wav",
+        "prediction": 1,
+        "probability": 0.9573681354522705,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 47.66500000550877
+      },
+      {
+        "file": "013_lock_the_screen.wav",
+        "prediction": 1,
+        "probability": 0.9697068929672241,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 43.23870000371244
+      },
+      {
+        "file": "014_empty_the_recycle_bin.wav",
+        "prediction": 1,
+        "probability": 0.7580885291099548,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 41.15299999830313
+      },
+      {
+        "file": "015_switch_to_dark_mode.wav",
+        "prediction": 1,
+        "probability": 0.9673051834106445,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 52.14909999631345
+      },
+      {
+        "file": "016_what_is_the_current_time.wav",
+        "prediction": 1,
+        "probability": 0.975929319858551,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 39.51780000352301
+      },
+      {
+        "file": "017_how_much_disk_space_is_left.wav",
+        "prediction": 1,
+        "probability": 0.9619386196136475,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 50.2039999992121
+      },
+      {
+        "file": "018_what_version_of_python_is_installed.wav",
+        "prediction": 0,
+        "probability": 0.09241843223571777,
+        "expected": 0,
+        "correct": true,
+        "latency_p50_ms": 48.882599992793985
+      },
+      {
+        "file": "019_where_is_the_config_file_located.wav",
+        "prediction": 1,
+        "probability": 0.9749865531921387,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 49.77599999983795
+      },
+      {
+        "file": "020_why_is_the_build_failing.wav",
+        "prediction": 1,
+        "probability": 0.743350088596344,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 52.71530000027269
+      },
+      {
+        "file": "021_which_process_is_using_the_most_memory.wav",
+        "prediction": 1,
+        "probability": 0.9573681354522705,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 39.073599997209385
+      },
+      {
+        "file": "022_when_was_the_last_backup_made.wav",
+        "prediction": 0,
+        "probability": 0.4606940746307373,
+        "expected": 0,
+        "correct": true,
+        "latency_p50_ms": 49.19400000653695
+      },
+      {
+        "file": "023_can_you_explain_this_error_message.wav",
+        "prediction": 1,
+        "probability": 0.9333261251449585,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 50.435500001185574
+      },
+      {
+        "file": "024_what_are_the_system_requirements.wav",
+        "prediction": 1,
+        "probability": 0.95045405626297,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 48.08739999134559
+      },
+      {
+        "file": "025_how_do_i_enable_the_dark_theme.wav",
+        "prediction": 0,
+        "probability": 0.4803165793418884,
+        "expected": 0,
+        "correct": true,
+        "latency_p50_ms": 47.85239999182522
+      },
+      {
+        "file": "026_tom_show_me_the_dashboard.wav",
+        "prediction": 1,
+        "probability": 0.7201674580574036,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 45.88010000588838
+      },
+      {
+        "file": "027_tom_what_is_the_status_of_the_build.wav",
+        "prediction": 1,
+        "probability": 0.9854345321655273,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 34.079200006090105
+      },
+      {
+        "file": "028_tom_open_the_project_settings.wav",
+        "prediction": 1,
+        "probability": 0.9604700207710266,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 39.383399998769164
+      },
+      {
+        "file": "029_tom_search_for_the_resource_manager.wav",
+        "prediction": 1,
+        "probability": 0.9589470624923706,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 44.34700000274461
+      },
+      {
+        "file": "030_tom_minimize_the_terminal_silently.wav",
+        "prediction": 1,
+        "probability": 0.8111233115196228,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 50.98480000742711
+      },
+      {
+        "file": "031_tom_read_the_last_commit_message.wav",
+        "prediction": 1,
+        "probability": 0.7580885291099548,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 48.66600000241306
+      },
+      {
+        "file": "032_tom_run_the_integration_tests.wav",
+        "prediction": 1,
+        "probability": 0.9522762298583984,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 51.96019999857526
+      },
+      {
+        "file": "033_tom_what_changed_in_the_last_commit.wav",
+        "prediction": 1,
+        "probability": 0.8595805764198303,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 51.25200000475161
+      },
+      {
+        "file": "034_set_an_alarm_for_seven_thirty_am.wav",
+        "prediction": 1,
+        "probability": 0.8971817493438721,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 48.30799999763258
+      },
+      {
+        "file": "035_remind_me_at_three_fifteen_pm.wav",
+        "prediction": 1,
+        "probability": 0.7201674580574036,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 40.406400003121234
+      },
+      {
+        "file": "036_schedule_a_meeting_for_next_tuesday.wav",
+        "prediction": 1,
+        "probability": 0.9697068929672241,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 48.79390000132844
+      },
+      {
+        "file": "037_delete_files_older_than_thirty_days.wav",
+        "prediction": 0,
+        "probability": 0.04596525430679321,
+        "expected": 0,
+        "correct": true,
+        "latency_p50_ms": 45.035299990559
+      },
+      {
+        "file": "038_show_logs_from_the_last_hour.wav",
+        "prediction": 1,
+        "probability": 0.9485659599304199,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 39.930899991304614
+      },
+      {
+        "file": "039_calculate_fifteen_percent_of_two_hundred.wav",
+        "prediction": 1,
+        "probability": 0.7987582683563232,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 36.378499993588775
+      },
+      {
+        "file": "040_what_is_the_date_next_friday.wav",
+        "prediction": 1,
+        "probability": 0.7280358076095581,
+        "expected": 0,
+        "correct": false,
+        "latency_p50_ms": 34.48930000013206
+      },
+      {
+        "file": "041_run_the_backup_at_midnight.wav",
+        "prediction": 0,
+        "probability": 0.059686750173568726,
+        "expected": 0,
+        "correct": true,
+        "latency_p50_ms": 42.59640000236686
+      }
+    ]
   }
 }

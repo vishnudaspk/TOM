@@ -52,11 +52,13 @@ class AgentOrchestrator:
         router: IntentRouter,
         resource_manager: ResourceManager | None = None,
         config: TOMConfig | None = None,
+        max_response_tokens: int = 1024,
     ) -> None:
         self._agent = agent
         self._router = router
         self._resource_manager = resource_manager
         self._config = config
+        self._max_response_tokens = max_response_tokens
 
     @property
     def agent(self) -> Agent:
@@ -85,6 +87,18 @@ class AgentOrchestrator:
 
         # Route the request
         route: RoutingDecision = await self._router.classify(prompt)
+        logger.info(
+            "orchestrator_routed",
+            domain=route.domain.value,
+            route_tier=route.route_tier,
+            router_ms=round(route.latency_ms, 2),
+        )
+        logger.info(
+            "orchestrator_routed",
+            domain=route.domain.value,
+            route_tier=route.route_tier,
+            router_ms=round(route.latency_ms, 2),
+        )
 
         # Add user message to history
         self._agent.history.append(Message(role=Role.USER, content=prompt))
@@ -122,6 +136,12 @@ class AgentOrchestrator:
             return
 
         route: RoutingDecision = await self._router.classify(prompt)
+        logger.info(
+            "orchestrator_routed",
+            domain=route.domain.value,
+            route_tier=route.route_tier,
+            router_ms=round(route.latency_ms, 2),
+        )
         self._agent.history.append(Message(role=Role.USER, content=prompt))
 
         if route.target_tool is not None:
@@ -259,7 +279,7 @@ class AgentOrchestrator:
         req = ModelRequest(
             model="router",
             messages=messages,
-            max_tokens=1024,
+            max_tokens=self._max_response_tokens,
             temperature=self._agent.config.temperature,
         )
 
@@ -307,7 +327,7 @@ class AgentOrchestrator:
         req = ModelRequest(
             model="router",
             messages=messages,
-            max_tokens=1024,
+            max_tokens=self._max_response_tokens,
             temperature=self._agent.config.temperature,
             stream=True,
         )

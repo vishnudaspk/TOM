@@ -40,17 +40,18 @@ class FakeClock:
 def full_turn_tracer(clock: FakeClock) -> InteractionLatencyTracer:
     """Tracer marked with a healthy end-to-end turn (all targets met)."""
     tracer = InteractionLatencyTracer(clock=clock, turn_start_ns=0)
+    tracer.mark(LatencyStage.USER_SPEECH_STOP)
     clock.advance_ms(280)  # VAD hangover just inside the 300 ms target
     tracer.mark(LatencyStage.SPEECH_END)
-    clock.advance_ms(150)
-    tracer.mark(LatencyStage.STT_PARTIAL1)
-    clock.advance_ms(150)
-    tracer.mark(LatencyStage.STT_FINAL)
-    clock.advance_ms(50)  # STT queue wait
+    clock.advance_ms(50)  # STT queue wait (SPEECH_END -> STT_DECODE_START)
     tracer.mark(LatencyStage.STT_DECODE_START)
-    clock.advance_ms(200)  # STT decode
+    clock.advance_ms(100)  # (150 ms from SPEECH_END)
+    tracer.mark(LatencyStage.STT_PARTIAL1)
+    clock.advance_ms(100)  # (200 ms decode from STT_DECODE_START)
     tracer.mark(LatencyStage.STT_DECODE_END)
-    clock.advance_ms(400)  # LLM TTFT inside the 500 ms target (but slightly over)
+    clock.advance_ms(50)  # (300 ms from SPEECH_END)
+    tracer.mark(LatencyStage.STT_FINAL)
+    clock.advance_ms(650)  # LLM TTFT from STT_FINAL
     tracer.mark(LatencyStage.LLM_FIRST_TOKEN)
     clock.advance_ms(30)  # sentence chunking inside the 50 ms target
     tracer.mark(LatencyStage.SENTENCE1)
@@ -111,6 +112,7 @@ def test_report_derives_every_stage_delta_exactly() -> None:
         "playback_latency_ms": pytest.approx(40.0),
         "perceived_response_ms": pytest.approx(1370.0),
         "user_stop_to_first_audio_ms": pytest.approx(1330.0),
+        "user_felt_latency_ms": pytest.approx(1610.0),
     }
     assert report.unmeasured == ["barge_in_stop_ms"]
     assert report.failures == []
@@ -174,7 +176,7 @@ def test_marks_can_be_marked_out_of_order_without_corrupting_metrics() -> None:
 def test_empty_transcript_turn_reports_stt_latency_and_nothing_further() -> None:
     """A VAD false trigger measures STT, then stops: no fabricated LLM/TTS data."""
     clock = FakeClock()
-    tracer = InteractionLatencyTracer(clock=clock, turn_start_ns=0)
+    tracer = InteractionLatencyTracer(clock=clock)
     tracer.mark(LatencyStage.SPEECH_END)
     clock.advance_ms(120)
     tracer.mark(LatencyStage.STT_FINAL)
@@ -182,6 +184,7 @@ def test_empty_transcript_turn_reports_stt_latency_and_nothing_further() -> None
     report = tracer.get_report()
     assert report.measured["stt_finalization_ms"] == pytest.approx(120.0)
     assert set(report.unmeasured) == {
+        "endpointing_ms",
         "stt_first_partial_ms",
         "stt_queue_wait_ms",
         "stt_decode_ms",
@@ -192,6 +195,7 @@ def test_empty_transcript_turn_reports_stt_latency_and_nothing_further() -> None
         "playback_latency_ms",
         "perceived_response_ms",
         "user_stop_to_first_audio_ms",
+        "user_felt_latency_ms",
         "barge_in_stop_ms",
     }
     assert report.metrics["perceived_response_ms"].status == "not_measured"
@@ -210,9 +214,39 @@ def test_unmeasured_metric_is_excluded_from_pass_verdict() -> None:
     assert report.unmeasured == ["x"]
 
 
-def test_endpointing_unmeasured_without_turn_start() -> None:
-    report = InteractionLatencyTracer(clock=FakeClock()).get_report()
+def test_endpointing_unmeasured_without_user_speech_stop() -> None:
+    """endpointing_ms requires USER_SPEECH_STOP mark; turn_start_ns alone is not enough."""
+    clock = FakeClock()
+    # Mark SPEECH_END but no USER_SPEECH_STOP — old code used turn_start_ns,
+    # which would yield a non-None result; new code requires USER_SPEECH_STOP.
+    tracer = InteractionLatencyTracer(clock=clock, turn_start_ns=0)
+    clock.advance_ms(600)
+    tracer.mark(LatencyStage.SPEECH_END)
+    report = tracer.get_report()
+    # Under the old (wrong) calculation this would be 600 ms (measured).
+    # Under the correct calculation it must be unmeasured.
     assert "endpointing_ms" in report.unmeasured
+
+
+def test_endpointing_is_silence_hangover_not_utterance_duration() -> None:
+    """endpointing_ms = SPEECH_END - USER_SPEECH_STOP, not SPEECH_END - turn_start."""
+    clock = FakeClock()
+    tracer = InteractionLatencyTracer(clock=clock, turn_start_ns=0)
+    # 2-second utterance before USER_SPEECH_STOP
+    clock.advance_ms(2000)
+    tracer.mark(LatencyStage.USER_SPEECH_STOP)
+    # 600 ms silence hangover
+    clock.advance_ms(600)
+    tracer.mark(LatencyStage.SPEECH_END)
+
+    report = tracer.get_report()
+    # Correct: only the hangover (600 ms), NOT the full 2600 ms from turn start.
+    assert report.measured["endpointing_ms"] == pytest.approx(600.0), (
+        "endpointing_ms must measure only silence hangover, not utterance duration"
+    )
+    # Prove it would differ from the old (wrong) calculation:
+    wrong_old_value = 2600.0  # SPEECH_END - turn_start_ns
+    assert report.measured["endpointing_ms"] != pytest.approx(wrong_old_value)
 
 
 def test_require_stages_names_the_missing_marks() -> None:
@@ -442,3 +476,32 @@ def test_playback_latency_exceeds_target_but_within_ceiling() -> None:
     metric = report.metric("playback_latency_ms")
     assert metric.value_ms == pytest.approx(100.0)
     assert metric.status == "pass_ceiling_only"
+
+
+class TestMetricHonesty:
+    """Item 6: Metric honesty verification tests."""
+
+    def test_stt_queue_wait_ms_spans_speech_end_to_decode_start(self) -> None:
+        clock = FakeClock()
+        tracer = InteractionLatencyTracer(clock=clock)
+        tracer.mark(LatencyStage.SPEECH_END)
+        clock.advance_ms(45)
+        tracer.mark(LatencyStage.STT_DECODE_START)
+        report = tracer.get_report()
+        assert report.metric("stt_queue_wait_ms").value_ms == pytest.approx(45.0)
+
+    def test_identical_marks_report_not_measured_never_zero_pass(self) -> None:
+        clock = FakeClock()
+        tracer = InteractionLatencyTracer(clock=clock, turn_start_ns=0)
+        # Mark identical timestamps for playback and barge-in
+        tracer.mark(LatencyStage.FIRST_AUDIO)
+        tracer.mark(LatencyStage.PLAYBACK_STARTED)
+        tracer.mark(LatencyStage.BARGE_IN_ONSET)
+        tracer.mark(LatencyStage.BARGE_IN_STOP)
+        tracer.mark(LatencyStage.SPEECH_END)  # at turn_start_ns (0)
+
+        report = tracer.get_report()
+        assert report.metric("playback_latency_ms").status == "not_measured"
+        assert report.metric("barge_in_stop_ms").status == "not_measured"
+        assert report.metric("endpointing_ms").status == "not_measured"
+

@@ -13,6 +13,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
+from tom.identity import ASSISTANT_NAME
+
 
 class AgentState(StrEnum):
     """Deterministic 6-state lifecycle for TOM Agents."""
@@ -62,7 +64,7 @@ class AgentConfig(BaseModel):
         description="Maximum reasoning/acting steps before forced termination",
     )
     system_prompt: str = Field(
-        default="You are TOM, a helpful personal AI assistant.",
+        default=f"You are {ASSISTANT_NAME}, a helpful personal AI assistant.",
         description="System prompt defining agent persona and boundary",
     )
     temperature: float = Field(

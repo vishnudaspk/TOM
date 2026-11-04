@@ -135,3 +135,5 @@ temp/
 tests/benchmarks/voice/ws2/models_offline/
 tests/benchmarks/voice/**/recordings/
 tests/benchmarks/voice/_scratch/
+
+tests/benchmarks/voice/ws3/.venv-ws3-bench/

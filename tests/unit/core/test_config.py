@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 from tom.core.config import find_project_root, get_config, load_config
-from tom.schemas.config import ModelSpec, ResourcesConfig, TOMConfig
+from tom.schemas.config import ModelSpec, ResourcesConfig, TOMConfig, VoiceConfig
 
 
 def test_load_default_config():
@@ -62,3 +62,43 @@ def test_get_config_caching():
     cfg1 = get_config()
     cfg2 = get_config()
     assert cfg1 is cfg2
+
+
+def test_voice_config_new_fields():
+    """Verify VoiceConfig includes all new STEP 1 fields with correct defaults."""
+    voice = VoiceConfig()
+    assert voice.playback_tail_ms == 400
+    assert voice.barge_in_min_rms_multiplier == 4.0
+    assert voice.barge_in_min_duration_ms == 300
+    assert voice.min_speech_ms == 400
+    assert voice.smart_turn_max_incomplete_wait_ms == 1800
+
+    # Verify backward compatibility: omitting fields uses defaults
+    yaml_dict = {
+        "enabled": True,
+        "silence_duration_ms": 600,
+    }
+    voice2 = VoiceConfig(**yaml_dict)
+    assert voice2.playback_tail_ms == 400
+    assert voice2.barge_in_min_rms_multiplier == 4.0
+    assert voice2.barge_in_min_duration_ms == 300
+    assert voice2.min_speech_ms == 400
+    assert voice2.smart_turn_max_incomplete_wait_ms == 1800
+
+
+def test_voice_config_yaml_loads_new_fields():
+    """Verify loading from actual config/voice.yaml includes new fields."""
+    root = find_project_root()
+    voice_path = root / "config" / "voice.yaml"
+    assert voice_path.exists()
+
+    import yaml
+    with open(voice_path) as f:
+        data = yaml.safe_load(f)
+
+    voice = VoiceConfig(**data)
+    assert voice.playback_tail_ms == 400
+    assert voice.barge_in_min_rms_multiplier == 4.0
+    assert voice.barge_in_min_duration_ms == 300
+    assert voice.min_speech_ms == 400
+    assert voice.smart_turn_max_incomplete_wait_ms == 1800

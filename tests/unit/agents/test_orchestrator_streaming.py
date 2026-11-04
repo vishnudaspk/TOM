@@ -144,3 +144,25 @@ class TestStreamToolPause:
         assert "CPU usage normal" in "".join(deltas)
         assert any(m.role == Role.TOOL_RESULT for m in agent.history)
         assert agent.state == AgentState.IDLE
+
+
+class TestMaxResponseTokens:
+    def test_custom_max_response_tokens_passed_to_model_request(self) -> None:
+        provider = MockModelProvider(["Short answer"])
+        agent = Agent(dependencies=AgentDependencies(model_provider=provider))
+        orchestrator = AgentOrchestrator(
+            agent=agent,
+            router=FakeRouter([_tier2()]),
+            max_response_tokens=200,
+        )
+
+        deltas = asyncio.run(collect_stream(orchestrator, "tell me a fact"))
+        assert len(deltas) > 0
+        assert provider.last_request is not None
+        assert provider.last_request.max_tokens == 200
+
+    def test_voice_prompt_limits_ordinary_replies_to_two_short_sentences(self) -> None:
+        from tom.agents.prompts import VOICE_SYSTEM_PROMPT
+
+        assert "at most two short sentences" in VOICE_SYSTEM_PROMPT
+        assert "unless the user explicitly asks for detail" in VOICE_SYSTEM_PROMPT

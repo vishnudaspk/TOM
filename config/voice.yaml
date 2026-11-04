@@ -1,5 +1,7 @@
 enabled: true
+wakeword_enabled: true
 wakeword_phrase: "hey tom"
+wakeword_timeout_seconds: 30.0
 wakeword_sensitivity: 0.6
 vad_threshold: 0.5
 silence_duration_ms: 600
@@ -7,3 +9,19 @@ sample_rate: 16000
 playback_device: "Speakers (Realtek(R) Audio)"
 capture_device: "Microphone Array (Realtek(R) Audio)"
 energy_threshold: 0.003
+# Playback tail: extra time to wait after last audio chunk is submitted
+# to allow the engine to finish playing (default 400ms)
+playback_tail_ms: 400
+# Barge-in detection: minimum RMS threshold (default 4x energy_threshold)
+barge_in_min_rms_multiplier: 4.0
+# Barge-in detection: minimum sustained duration in ms
+barge_in_min_duration_ms: 300
+# Minimum speech segment duration in ms to accept (drop shorter)
+min_speech_ms: 400
+# Smart Turn: max wait after INCOMPLETE before forcing COMPLETE (ms)
+smart_turn_max_incomplete_wait_ms: 1800
+# Debug trace: enable detailed session logging and audio recording
+debug_trace: false
+# Max tokens for voice LLM responses (keeps spoken replies to ~2-3 sentences).
+# Set to 0 to rely on the system prompt instruction alone (no hard cap).
+max_response_tokens: 200

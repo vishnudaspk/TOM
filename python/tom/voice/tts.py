@@ -14,6 +14,7 @@ Architecture (Decision 041, Decision 042):
 from __future__ import annotations
 
 import asyncio
+import os
 import time
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
@@ -184,6 +185,9 @@ class TTSConfig:
         sample_rate: int = 24000,
         speed: float = 1.0,
         lang: str = "en-us",
+        threads: int = 8,
+        allow_spinning: bool = False,
+        warmup: bool = True,
     ) -> None:
         self.model_path = model_path
         self.voices_path = voices_path
@@ -192,6 +196,9 @@ class TTSConfig:
         self.sample_rate = sample_rate
         self.speed = speed
         self.lang = lang
+        self.threads = threads
+        self.allow_spinning = allow_spinning
+        self.warmup = warmup
 
 
 # ---------------------------------------------------------------------------
@@ -210,11 +217,14 @@ class KokoroTTSProvider(TTSProvider):
       blocking the event loop.
     - Raises TTSUnavailableError if kokoro-onnx is not installed or if
       the model files cannot be loaded.
+    - Serialization lock prevents concurrent model access when timeouts
+      leave worker threads running (asyncio.wait_for() doesn't terminate them).
     """
 
     def __init__(self, config: TTSConfig | None = None) -> None:
         self._config = config or TTSConfig()
         self._model: Any = None  # Kokoro instance, typed as Any to avoid import
+        self._serialization_lock = asyncio.Lock()
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -235,10 +245,40 @@ class KokoroTTSProvider(TTSProvider):
                 "kokoro-onnx is not installed. Install it with: pip install kokoro-onnx"
             ) from exc
         try:
-            self._model = kokoro_onnx.Kokoro(
-                self._config.model_path,
-                self._config.voices_path,
-            )
+            # If model path exists on disk, create session with optimal thread/spinning settings
+            if os.path.exists(self._config.model_path):
+                import onnxruntime as ort  # noqa: PLC0415
+
+                sess_options = ort.SessionOptions()
+                sess_options.intra_op_num_threads = self._config.threads
+                sess_options.inter_op_num_threads = 1
+                sess_options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+                if not self._config.allow_spinning:
+                    sess_options.add_session_config_entry("session.intra_op.allow_spinning", "0")
+
+                session = ort.InferenceSession(
+                    self._config.model_path,
+                    sess_options=sess_options,
+                    providers=["CPUExecutionProvider"],
+                )
+                self._model = kokoro_onnx.Kokoro.__new__(kokoro_onnx.Kokoro)
+                self._model._setup(
+                    session=session,
+                    model_path=self._config.model_path,
+                    voices_path=self._config.voices_path,
+                    espeak_config=None,
+                    vocab_config=None,
+                )
+                if self._config.warmup:
+                    try:
+                        self._model.create("warmup", voice=self._config.default_voice)
+                    except Exception as w_exc:
+                        logger.debug("kokoro_warmup_ignored", error=str(w_exc))
+            else:
+                self._model = kokoro_onnx.Kokoro(
+                    self._config.model_path,
+                    self._config.voices_path,
+                )
         except Exception as exc:
             raise TTSUnavailableError(
                 f"Failed to load Kokoro model from '{self._config.model_path}': {exc}"
@@ -281,14 +321,24 @@ class KokoroTTSProvider(TTSProvider):
 
     async def synthesize(self, request: SynthesisRequest) -> SynthesisResult:
         t0 = time.monotonic()
-        try:
-            samples, sr, duration_s = await asyncio.to_thread(self._synthesize_sync, request)
-        except TTSError:
-            raise
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            raise TTSSynthesisError(f"TTS synthesis failed: {exc}") from exc
+        # Serialize calls to prevent concurrent model access when timeouts
+        # leave worker threads running (asyncio.wait_for() doesn't terminate them).
+        async with self._serialization_lock:
+            try:
+                # Add timeout to prevent indefinite blocking in thread pool (CPU inference)
+                # Typical synthesis is fast, but cap at 30s for safety
+                samples, sr, duration_s = await asyncio.wait_for(
+                    asyncio.to_thread(self._synthesize_sync, request),
+                    timeout=30.0,
+                )
+            except TTSError:
+                raise
+            except asyncio.CancelledError:
+                raise
+            except TimeoutError as exc:
+                raise TTSSynthesisError(f"TTS synthesis timed out after 30s: {exc}") from exc
+            except Exception as exc:
+                raise TTSSynthesisError(f"TTS synthesis failed: {exc}") from exc
 
         latency_ms = int((time.monotonic() - t0) * 1000)
 

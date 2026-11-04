@@ -11,15 +11,19 @@ Phase 9 Iteration 9.0:
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
-import uuid
 from collections import deque
 from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from tom.telemetry.logging import get_logger, get_utterance_id, set_utterance_id, VoiceEventNames, log_rate_limited
+from tom.telemetry.logging import (
+    VoiceEventNames,
+    get_logger,
+    log_rate_limited,
+)
 from tom.voice.audio_utils import pcm16_bytes_to_samples, samples_to_pcm16_bytes
 from tom.voice.events import AudioFrameEvent, SpeechEndEvent, SpeechStartEvent, VoiceEvent
 from tom.voice.vad import EnergyVADDetector, VADDetector
@@ -83,6 +87,34 @@ class MicrophoneConfig(BaseModel):
         default=None,
         description="Audio input device name to pass to the engine (None = engine default)",
     )
+    # Barge-in detection: minimum RMS threshold multiplier (default 4x energy_threshold)
+    barge_in_min_rms_multiplier: float = Field(
+        default=4.0,
+        ge=1.0,
+        le=20.0,
+        description="Multiplier for energy_threshold to determine barge-in RMS threshold",
+    )
+    # Barge-in detection: minimum sustained duration in ms
+    barge_in_min_duration_ms: int = Field(
+        default=300,
+        ge=50,
+        le=2000,
+        description="Minimum sustained duration in ms for barge-in detection",
+    )
+    # Minimum speech segment duration in ms to accept (drop shorter)
+    min_speech_ms: int = Field(
+        default=400,
+        ge=50,
+        le=5000,
+        description="Minimum speech segment duration in ms to accept (drop shorter)",
+    )
+    # Smart Turn: max wait after INCOMPLETE before forcing COMPLETE (ms)
+    smart_turn_max_incomplete_wait_ms: int = Field(
+        default=1800,
+        ge=500,
+        le=10000,
+        description="Max wait after Smart Turn INCOMPLETE before forcing COMPLETE",
+    )
 
 
 class EventSubscription:
@@ -145,6 +177,19 @@ class MicrophoneLoop:
         self._paused = False
         self._in_speech = False
 
+        # Mic gating: when True, ignore all input (during SPEAKING + tail)
+        self._gated = False
+
+        # Barge-in detection state
+        self._barge_in_rms_threshold: float | None = None
+        self._barge_in_sustained_ms = 0
+        self._barge_in_candidate_frames: list[tuple[list[float], bytes]] = []
+
+        # Noise floor calibration
+        self._noise_floor_calibrated = False
+        self._noise_floor_samples: list[float] = []
+        self._noise_floor_frames_needed = self._config.sample_rate // self._frame_samples  # 1 second
+
         # Ingestion buffer
         self._sample_buffer: list[float] = []
 
@@ -162,10 +207,15 @@ class MicrophoneLoop:
         # Event distribution
         self._subscribers: list[asyncio.Queue[VoiceEvent | None]] = []
         self._poll_task: asyncio.Task[None] | None = None
+        self._last_frame_received_at: float | None = None
 
     # ------------------------------------------------------------------
     # Properties
     # ------------------------------------------------------------------
+
+    @property
+    def last_frame_received_at(self) -> float | None:
+        return self._last_frame_received_at
 
     @property
     def config(self) -> MicrophoneConfig:
@@ -288,10 +338,12 @@ class MicrophoneLoop:
     def pause(self) -> None:
         """Temporarily pause audio ingestion."""
         self._paused = True
+        self._gated = True
 
     def resume(self) -> None:
         """Resume paused audio ingestion and clear any buffered audio."""
         self._paused = False
+        self._gated = False
         # Clear any audio captured during pause to avoid processing stale data
         if self._engine is not None:
             try:
@@ -300,6 +352,14 @@ class MicrophoneLoop:
                 pass  # Engine buffer is cleared on next poll with clear=True
             except Exception:
                 pass
+
+    def gate(self) -> None:
+        """Gate the microphone (ignore all input). Used during playback + tail."""
+        self._gated = True
+
+    def ungate(self) -> None:
+        """Ungate the microphone (resume normal processing)."""
+        self._gated = False
 
     # ------------------------------------------------------------------
     # Event subscription
@@ -324,7 +384,7 @@ class MicrophoneLoop:
 
     async def push_samples(self, samples: list[float] | bytes) -> None:
         """Ingest raw audio samples or PCM bytes into the processing loop."""
-        if self._stopped or self._muted or self._paused:
+        if self._stopped or self._muted or self._gated:
             return
 
         if isinstance(samples, bytes):
@@ -350,9 +410,64 @@ class MicrophoneLoop:
 
     def _process_frame(self, frame_samples: list[float]) -> None:
         """Process a single fixed-size frame through VAD and turn state machine."""
+        self._last_frame_received_at = time.monotonic()
         pcm_bytes = samples_to_pcm16_bytes(frame_samples)
+
+        # Calculate RMS for this frame
+        rms = 0.0
+        if hasattr(self._vad, "calculate_rms"):
+            rms = self._vad.calculate_rms(frame_samples)
+
+        # Noise floor calibration: collect samples for ~1 second at startup
+        if not self._noise_floor_calibrated:
+            self._noise_floor_samples.append(rms)
+            if len(self._noise_floor_samples) >= self._noise_floor_frames_needed:
+                avg_noise_floor = sum(self._noise_floor_samples) / len(self._noise_floor_samples)
+                # Set threshold to max(0.003, 3x noise floor)
+                calibrated_threshold = max(0.003, 3.0 * avg_noise_floor)
+                if hasattr(self._vad, "set_threshold"):
+                    self._vad.set_threshold(calibrated_threshold)
+                else:
+                    self._vad.threshold = calibrated_threshold
+                self._noise_floor_calibrated = True
+                logger.info(
+                    "noise_floor_calibrated",
+                    noise_floor=round(avg_noise_floor, 6),
+                    threshold=round(calibrated_threshold, 6),
+                )
+                # Initialize barge-in threshold (4x energy threshold by default)
+                self._barge_in_rms_threshold = calibrated_threshold * self._config.barge_in_min_rms_multiplier
+
         is_speech = self._vad.is_speech(frame_samples, self._config.sample_rate)
         now = time.time()
+
+        # If gated (during SPEAKING + tail), check for barge-in instead of normal VAD
+        if self._gated:
+            # Barge-in detection: require RMS >= barge_in_threshold sustained for min_duration_ms
+            if self._barge_in_rms_threshold is not None and rms >= self._barge_in_rms_threshold:
+                self._barge_in_sustained_ms += self._config.frame_duration_ms
+                self._barge_in_candidate_frames.append((frame_samples, pcm_bytes))
+                if self._barge_in_sustained_ms >= self._config.barge_in_min_duration_ms:
+                    # Barge-in confirmed!
+                    logger.info(
+                        "barge_in_detected",
+                        rms=round(rms, 6),
+                        threshold=round(self._barge_in_rms_threshold, 6),
+                        sustained_ms=self._barge_in_sustained_ms,
+                    )
+                    # The InteractionCore will handle the barge-in via SpeechStartEvent
+                    self._gated = False
+                    self._barge_in_sustained_ms = 0
+                    # Clear candidate frames and start fresh speech detection
+                    self._barge_in_candidate_frames.clear()
+                    # Re-process this frame as normal speech onset
+                    self._process_frame(frame_samples)
+                    return
+            else:
+                # Below threshold - reset barge-in state
+                self._barge_in_sustained_ms = 0
+                self._barge_in_candidate_frames.clear()
+            return  # Ignore all other input while gated
 
         if not self._in_speech:
             if is_speech:
@@ -366,10 +481,6 @@ class MicrophoneLoop:
                     self._utterance_pcm_bytes = bytearray()
                     self._utterance_frame_index = 0
                     self._trailing_silence_ms = 0
-
-                    rms = 0.0
-                    if hasattr(self._vad, "calculate_rms"):
-                        rms = self._vad.calculate_rms(frame_samples)
 
                     logger.info(
                         "speech_onset_detected",
@@ -443,6 +554,30 @@ class MicrophoneLoop:
             max_duration_endpoint = duration_s >= self._config.max_utterance_seconds
 
             if silence_endpoint or max_duration_endpoint:
+                # Filter: drop segments shorter than min_speech_ms
+                if duration_s * 1000 < self._config.min_speech_ms:
+                    logger.info(
+                        "segment_dropped_short",
+                        duration_ms=round(duration_s * 1000, 1),
+                        min_speech_ms=self._config.min_speech_ms,
+                    )
+                    self._reset_turn_state()
+                    return
+
+                # Filter: drop segments with mean RMS below threshold
+                if self._utterance_samples:
+                    mean_rms = sum(x * x for x in self._utterance_samples) / len(self._utterance_samples)
+                    mean_rms = mean_rms ** 0.5
+                    vad_threshold = getattr(self._vad, "threshold", self._config.energy_threshold)
+                    if mean_rms < vad_threshold:
+                        logger.info(
+                            "segment_dropped_low_rms",
+                            mean_rms=round(mean_rms, 6),
+                            threshold=round(vad_threshold, 6),
+                        )
+                        self._reset_turn_state()
+                        return
+
                 logger.info(
                     "speech_endpoint_detected",
                     duration_s=round(duration_s, 2),
@@ -454,7 +589,7 @@ class MicrophoneLoop:
                     pcm_bytes=bytes(self._utterance_pcm_bytes),
                     duration_s=duration_s,
                     frame_count=self._utterance_frame_index,
-                    timestamp=now,
+                    timestamp=time.time(),
                 )
                 self._dispatch_event(end_event)
                 self._reset_turn_state()
@@ -477,6 +612,9 @@ class MicrophoneLoop:
         self._utterance_frame_index = 0
         self._pre_roll_buffer.clear()
         self._onset_frames.clear()
+        # Barge-in detection state
+        self._barge_in_sustained_ms = 0
+        self._barge_in_candidate_frames.clear()
         if clear_ingest:
             self._sample_buffer.clear()
         if hasattr(self._vad, "reset"):

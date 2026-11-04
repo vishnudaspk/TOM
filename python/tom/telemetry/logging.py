@@ -210,11 +210,15 @@ class VoiceEventNames:
     PLAYBACK_STARTED = "voice.playback.started"
     PLAYBACK_COMPLETED = "voice.playback.completed"
     PLAYBACK_FAILED = "voice.playback.failed"
-    
+    PLAYBACK_FINALIZED = "voice.playback.finalized"
+
     # Pipeline
     PIPELINE_CANCELLED = "voice.pipeline.cancelled"
     PIPELINE_TIMEOUT = "voice.pipeline.timeout"
     LATENCY_REPORT = "voice.latency.report"
+    LISTENING_HEARTBEAT = "voice.listening.heartbeat"
+    MIC_RESUMED_BY_WATCHDOG = "microphone_resumed_by_watchdog"
+    CAPTURE_STARVATION = "voice.capture.starvation"
     
     # IPC
     IPC_REQUEST_SENT = "ipc.request.sent"

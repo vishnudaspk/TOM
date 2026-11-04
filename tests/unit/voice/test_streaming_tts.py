@@ -600,3 +600,41 @@ def test_first_chunk_emitted_without_waiting_for_remaining_sentences() -> None:
         assert first.is_last is False
 
     run_async(_test())
+
+
+def test_first_chunk_synthesis_starts_without_waiting_for_second_sentence() -> None:
+    """P1.c: sentence 0 synthesis starts immediately without waiting for sentence 1."""
+
+    async def _test() -> None:
+        synth_started_sentence_0 = asyncio.Event()
+        sentence_2_can_proceed = asyncio.Event()
+
+        class FastMockProvider(MockTTSProvider):
+            async def synthesize(self, request: SynthesisRequest) -> SynthesisResult:
+                if "First" in request.text:
+                    synth_started_sentence_0.set()
+                return await super().synthesize(request)
+
+        async def slow_sentence_generator():
+            yield "First sentence is ready immediately."
+            # Second sentence is intentionally delayed
+            await sentence_2_can_proceed.wait()
+            yield "Second sentence comes later."
+
+        streamer = IncrementalTTSStreamer(provider=FastMockProvider())
+
+        async def consume():
+            async for chunk in streamer.stream_synthesize(slow_sentence_generator()):
+                return chunk
+
+        task = asyncio.create_task(consume())
+        # Synthesis of sentence 0 must start without waiting for sentence 2
+        await asyncio.wait_for(synth_started_sentence_0.wait(), timeout=1.0)
+        assert synth_started_sentence_0.is_set(), (
+            "Sentence 0 synthesis must start immediately without waiting for sentence 1"
+        )
+        # Now unblock sentence 2 so task can complete
+        sentence_2_can_proceed.set()
+        await task
+
+    run_async(_test())

@@ -98,14 +98,16 @@ class FlakyEngine:
     async def stop_audio_capture(self) -> None:
         return None
 
-    async def get_system_time(self) -> dict:
-        return {
-            "timestamp_secs": 1700000000,
-            "timestamp_nanos": 0,
-            "offset_seconds": -28800,
-            "timezone_name": "PST",
-            "iso8601": "2023-11-14T12:00:00-08:00",
-        }
+    async def get_system_time(self):
+        class TimeInfo:
+            def __init__(self):
+                self.timestamp_secs = 1700000000
+                self.timestamp_nanos = 0
+                self.offset_seconds = -28800
+                self.timezone_name = "PST"
+                self.iso8601 = "2023-11-14T12:00:00-08:00"
+                self.local_time_str = "2:00 PM"
+        return TimeInfo()
 
     async def play_audio_buffer(
         self,
@@ -252,6 +254,7 @@ class Session:
                 silence_duration_ms=50,
                 min_speech_frames=2,
                 frame_duration_ms=20,
+                min_speech_ms=50,  # Lower for testing (default 400ms)
             ),
             vad=ThresholdVAD(),
         )
@@ -384,14 +387,16 @@ def test_eight_turn_session_survives_every_failure_and_stays_measurable() -> Non
         assert record1.response_action is ResponseAction.SPEAK_DIRECT
         assert record1.assistant_text == DIRECT_ANSWER
         assert_healthy(turn1)
-        assert len(session.engine.play_calls) == 1
+        # 2 play calls: 1 for startup greeting + 1 for turn 1 answer
+        assert len(session.engine.play_calls) == 2
 
         # -- Turn 2: VAD false trigger, silent, STT-only telemetry ------------
         session.stt.script("")
         turn2 = await utter_and_wait(session, reports=2)
         assert_silent_turn(turn2)
         assert turn2.measured.get("stt_finalization_ms") is not None
-        assert len(session.engine.play_calls) == 1, "silence must not reach the speaker"
+        # 2 play calls still (startup greeting + turn 1); silence adds none
+        assert len(session.engine.play_calls) == 2, "silence must not reach the speaker"
         assert len(manager.history) == 1, (
             "an empty transcript starts no turn",
             spoken_history(manager),
@@ -403,7 +408,8 @@ def test_eight_turn_session_survives_every_failure_and_stays_measurable() -> Non
         turn3 = await utter_and_wait(session, reports=3)
         record3 = manager.history[1]
         assert record3.response_action is ResponseAction.FAST_ACK_THEN_WORK
-        assert len(session.engine.play_calls) == 3, "ack plus answer must both be spoken"
+        # 4 play calls: startup greeting + turn 1 + turn 3 ack + turn 3 answer
+        assert len(session.engine.play_calls) == 4, "ack plus answer must both be spoken"
         assert_healthy(turn3)
 
         # -- Turn 4: barge-in while audio is live -----------------------------
@@ -558,7 +564,8 @@ def test_silence_directive_turn_is_recorded_but_never_spoken() -> None:
         assert record.response_action is ResponseAction.SILENT_ACT
         assert record.status is TurnStatus.COMPLETED
         assert record.assistant_text == ""
-        assert session.engine.play_calls == []
+        # 1 play call: startup greeting only (SILENT_ACT produces no audio)
+        assert len(session.engine.play_calls) == 1
         assert_silent_turn(report)
 
         await session.core.stop()
