@@ -535,6 +535,9 @@ class TomApp:
         policy = ResponsePolicy()
         if self._injected_turn_arbitrator is not _DEFAULT_ARBITER:
             turn_arbitrator = self._injected_turn_arbitrator
+        elif not getattr(self._config.voice, "smart_turn_enabled", True):
+            logger.info("smart_turn_disabled_by_config_using_vad_endpointing")
+            turn_arbitrator = None
         else:
             arbiter = SmartTurnV3Arbiter()
             if arbiter.is_available:

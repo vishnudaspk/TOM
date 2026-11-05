@@ -20,6 +20,8 @@ barge_in_min_duration_ms: 300
 min_speech_ms: 400
 # Smart Turn: max wait after INCOMPLETE before forcing COMPLETE (ms)
 smart_turn_max_incomplete_wait_ms: 1800
+# Smart Turn enabled: set false to use pure VAD 600ms hangover (faster, more reliable)
+smart_turn_enabled: false
 # Debug trace: enable detailed session logging and audio recording
 debug_trace: false
 # Max tokens for voice LLM responses (keeps spoken replies to ~2-3 sentences).

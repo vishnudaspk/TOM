@@ -153,6 +153,8 @@ class VoiceConfig(BaseModel):
     min_speech_ms: int = Field(default=400, ge=50, le=5000)
     # Smart Turn: max wait after INCOMPLETE before forcing COMPLETE (ms)
     smart_turn_max_incomplete_wait_ms: int = Field(default=1800, ge=500, le=10000)
+    # Smart Turn enabled: False = pure VAD 600ms hangover (faster, more reliable on this hardware)
+    smart_turn_enabled: bool = Field(default=True, description="Enable Smart Turn V3 endpointing")
     # Debug trace: enable detailed session logging and audio recording
     debug_trace: bool = Field(default=False, description="Enable detailed debug trace with audio recording and timeline")
     # Voice response token cap. Keeps spoken replies short (2-3 sentences).
