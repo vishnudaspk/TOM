@@ -23,9 +23,9 @@ Phase 9 Iteration 9.3:
 from __future__ import annotations
 
 import asyncio
-import time
 import functools
 import inspect
+import time
 import traceback
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator, AsyncIterator, Callable
@@ -47,8 +47,8 @@ logger = get_logger(__name__)
 
 # Upper bound on how long stream_synthesize() waits for the final in-flight
 # playback call to drain. Prevents an unresponsive engine from deadlocking the
-# turn while leaving normal (sub-second) playback untouched.
-_PLAYBACK_DRAIN_TIMEOUT_S = 10.0
+# turn while leaving normal playback untouched.
+_PLAYBACK_DRAIN_TIMEOUT_S = 30.0
 
 
 @dataclass(frozen=True)
@@ -105,30 +105,30 @@ class _Playable:
 class IncrementalTTSStreamer(StreamingTTSProvider):
     """Pipelined sentence-at-a-time synthesis with ordered incremental playback.
 
-        Wraps any batch ``TTSProvider`` (production: ``KokoroTTSProvider``; tests:
-        ``MockTTSProvider`` or a fake) and, when supplied, an ``EngineClient`` for
-        playback. Both are optional seams — omitting ``engine_client`` yields a
-        synthesis-only pipeline.
+    Wraps any batch ``TTSProvider`` (production: ``KokoroTTSProvider``; tests:
+    ``MockTTSProvider`` or a fake) and, when supplied, an ``EngineClient`` for
+    playback. Both are optional seams — omitting ``engine_client`` yields a
+    synthesis-only pipeline.
 
-        Execution model:
+    Execution model:
 
-        * ``_produce_sentences`` pulls sentences from the upstream
-          ``SentenceStreamer`` and creates one synthesis task per sentence, bounded
-          by ``max_concurrent_synthesis`` so the worker pool stays small on a
-          16-core CPU (plan §12.2).
-        * ``stream_synthesize`` (the sequencer) awaits those tasks strictly in
-          index order, so PCM is queued in sentence order regardless of which
-          synthesis finishes first.
-        * ``_play_pending`` consumes the ordered queue concurrently and issues
-          ``EngineClient.play_audio_buffer()`` per chunk. It runs as a separate
-          task, so a slow playback call never blocks the next synthesis.
-        * ``playback_observer`` (Phase 9.6) is an optional zero-cost hook invoked
-          immediately before the first ``play_audio_buffer()`` call, used for
-          latency instrumentation. It changes no timing or ordering when unset.
-        * ``playback_tail_ms`` (Phase 9.6 correctness): time to wait after the
-          last chunk is submitted to the engine before considering playback
-          complete. This ensures SPEAKING state persists until audio actually
-          drains.
+    * ``_produce_sentences`` pulls sentences from the upstream
+      ``SentenceStreamer`` and creates one synthesis task per sentence, bounded
+      by ``max_concurrent_synthesis`` so the worker pool stays small on a
+      16-core CPU (plan §12.2).
+    * ``stream_synthesize`` (the sequencer) awaits those tasks strictly in
+      index order, so PCM is queued in sentence order regardless of which
+      synthesis finishes first.
+    * ``_play_pending`` consumes the ordered queue concurrently and issues
+      ``EngineClient.play_audio_buffer()`` per chunk. It runs as a separate
+      task, so a slow playback call never blocks the next synthesis.
+    * ``playback_observer`` (Phase 9.6) is an optional zero-cost hook invoked
+      immediately before the first ``play_audio_buffer()`` call, used for
+      latency instrumentation. It changes no timing or ordering when unset.
+    * ``playback_tail_ms`` (Phase 9.6 correctness): time to wait after the
+      last chunk is submitted to the engine before considering playback
+      complete. This ensures SPEAKING state persists until audio actually
+      drains.
     """
 
     def __init__(
@@ -340,9 +340,7 @@ class IncrementalTTSStreamer(StreamingTTSProvider):
                 await semaphore.acquire()
                 slots.put_nowait(
                     asyncio.create_task(
-                        self._synthesize_chunk(
-                            index, text, is_last_event, is_last_box, semaphore
-                        ),
+                        self._synthesize_chunk(index, text, is_last_event, is_last_box, semaphore),
                         name=f"tom.streaming_tts.synth.{index}",
                     )
                 )

@@ -9,7 +9,9 @@ from tom.tools.web import (
     CompositeSearchProvider,
     DuckDuckGoSearchProvider,
     SearchResult,
+    WeatherSearchProvider,
     WikipediaSearchProvider,
+    extract_weather_location,
     refine_search_query,
 )
 
@@ -226,3 +228,154 @@ class TestEnhancedHtmlExtraction:
         assert "Please accept all tracking cookies" not in text
         assert "Sponsored Ad Content" not in text
         assert "Copyright 2026" not in text
+
+
+class TestWeatherSearchProvider:
+    """Verify zero-cost real-time weather querying and fallback mechanisms."""
+
+    def test_extract_weather_location(self) -> None:
+        assert extract_weather_location("what is the weather in New York?") == "New York"
+        assert extract_weather_location("weather of New York") == "New York"
+        assert extract_weather_location("how is the weather in London?") == "London"
+        assert extract_weather_location("is it raining in Seattle right now?") == "Seattle"
+        assert extract_weather_location("weather forecast for Paris tomorrow") == "Paris"
+        assert extract_weather_location("temperature in Tokyo") == "Tokyo"
+        assert extract_weather_location("who won the 2024 ICC T20 World Cup?") is None
+        assert extract_weather_location("what is quantum computing?") is None
+        assert extract_weather_location("python tutorial") is None
+
+    @pytest.mark.asyncio
+    async def test_weather_search_wttr_success(self) -> None:
+        wttr_data = {
+            "current_condition": [
+                {
+                    "temp_C": "22",
+                    "temp_F": "71",
+                    "FeelsLikeC": "21",
+                    "FeelsLikeF": "70",
+                    "humidity": "74",
+                    "windspeedMiles": "8",
+                    "winddir16Point": "S",
+                    "weatherDesc": [{"value": "Partly cloudy"}],
+                }
+            ],
+            "weather": [
+                {
+                    "maxtempC": "24",
+                    "maxtempF": "75",
+                    "mintempC": "16",
+                    "mintempF": "61",
+                }
+            ],
+        }
+
+        def mock_handler(request: httpx.Request) -> httpx.Response:
+            if "wttr.in" in str(request.url):
+                return httpx.Response(status_code=200, json=wttr_data)
+            return httpx.Response(status_code=404)
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(mock_handler))
+        provider = WeatherSearchProvider(client=client)
+
+        resp = await provider.search("weather in New York")
+        assert resp.count == 1
+        res = resp.results[0]
+        assert "New York" in res.title
+        assert "Partly cloudy" in res.summary
+        assert "71°F (22°C)" in res.summary
+        assert "74%" in res.summary
+        assert res.source == "wttr.in"
+        assert res.provider == "weather"
+
+    @pytest.mark.asyncio
+    async def test_weather_search_open_meteo_fallback(self) -> None:
+        geo_data = {
+            "results": [
+                {
+                    "name": "London",
+                    "latitude": 51.5074,
+                    "longitude": -0.1278,
+                    "country": "United Kingdom",
+                }
+            ]
+        }
+        forecast_data = {
+            "current": {
+                "temperature_2m": 15.0,
+                "apparent_temperature": 14.0,
+                "relative_humidity_2m": 65,
+                "wind_speed_10m": 12.0,
+                "weather_code": 2,  # Partly cloudy
+            },
+            "daily": {
+                "temperature_2m_max": [18.0],
+                "temperature_2m_min": [10.0],
+            },
+        }
+
+        def mock_handler(request: httpx.Request) -> httpx.Response:
+            url_str = str(request.url)
+            if "wttr.in" in url_str:
+                return httpx.Response(status_code=503)
+            if "geocoding-api.open-meteo.com" in url_str:
+                return httpx.Response(status_code=200, json=geo_data)
+            if "api.open-meteo.com" in url_str:
+                return httpx.Response(status_code=200, json=forecast_data)
+            return httpx.Response(status_code=404)
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(mock_handler))
+        provider = WeatherSearchProvider(client=client)
+
+        resp = await provider.search("weather in London")
+        assert resp.count == 1
+        res = resp.results[0]
+        assert "London" in res.title
+        assert "Partly cloudy" in res.summary
+        assert "15.0°C" in res.summary
+        assert res.source == "open-meteo.com"
+        assert res.provider == "weather"
+
+    @pytest.mark.asyncio
+    async def test_composite_weather_placed_first(self) -> None:
+        weather_item = SearchResult(
+            title="Current Weather in New York",
+            url="https://wttr.in/New%20York",
+            summary="Partly cloudy, 71°F (22°C)",
+            source="wttr.in",
+            provider="weather",
+        )
+        ddg_item = SearchResult(
+            title="Weather Channel New York",
+            url="https://weather.com/new-york",
+            summary="Today's weather forecast",
+            source="weather.com",
+            provider="duckduckgo",
+        )
+
+        class MockWeatherProvider(WeatherSearchProvider):
+            async def search(self, query: str, *, max_results: int = 1) -> Any:
+                from tom.tools.web import SearchResponse
+
+                return SearchResponse(
+                    query=query, count=1, results=[weather_item], provider="weather"
+                )
+
+        class MockDDGProvider(DuckDuckGoSearchProvider):
+            async def search(self, query: str, *, max_results: int = 5) -> Any:
+                from tom.tools.web import SearchResponse
+
+                return SearchResponse(
+                    query=query, count=1, results=[ddg_item], provider="duckduckgo"
+                )
+
+        composite = CompositeSearchProvider(
+            weather_provider=MockWeatherProvider(),
+            ddg_provider=MockDDGProvider(),
+        )
+
+        resp = await composite.search("what is the weather in New York?", max_results=5)
+        assert resp.count == 2
+        # Weather result must be placed first
+        assert resp.results[0].provider == "weather"
+        assert "Partly cloudy, 71°F (22°C)" in resp.results[0].summary
+        assert resp.results[1].provider == "duckduckgo"

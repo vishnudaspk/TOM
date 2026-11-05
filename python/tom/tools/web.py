@@ -18,7 +18,7 @@ import socket
 import ssl
 import time
 from typing import Any
-from urllib.parse import parse_qs, urljoin, urlparse, urlunparse
+from urllib.parse import parse_qs, quote, urljoin, urlparse, urlunparse
 
 import httpx
 from bs4 import BeautifulSoup
@@ -1012,13 +1012,219 @@ class WikipediaSearchProvider(SearchProvider):
                 await client.aclose()
 
 
+_WEATHER_PATTERN = re.compile(
+    r"\b(weather|temperature|forecast|temp|rain|raining|snow|snowing|humidity|wind|hot|cold|freezing)\b",
+    re.IGNORECASE,
+)
+_LOCATION_EXTRACTION = re.compile(
+    r"\b(?:in|for|at|of)\s+([a-zA-Z\s,]+?)(?:\s+(?:today|tomorrow|now|tonight|right now))?$",
+    re.IGNORECASE,
+)
+
+_WMO_WEATHER_CODES: dict[int, str] = {
+    0: "Clear sky",
+    1: "Mainly clear",
+    2: "Partly cloudy",
+    3: "Overcast",
+    45: "Foggy",
+    48: "Depositing rime fog",
+    51: "Light drizzle",
+    53: "Moderate drizzle",
+    55: "Dense drizzle",
+    61: "Slight rain",
+    63: "Moderate rain",
+    65: "Heavy rain",
+    71: "Slight snow fall",
+    73: "Moderate snow fall",
+    75: "Heavy snow fall",
+    77: "Snow grains",
+    80: "Slight rain showers",
+    81: "Moderate rain showers",
+    82: "Violent rain showers",
+    85: "Slight snow showers",
+    86: "Heavy snow showers",
+    95: "Thunderstorm",
+    96: "Thunderstorm with slight hail",
+    99: "Thunderstorm with heavy hail",
+}
+
+
+def extract_weather_location(query: str) -> str | None:
+    """Extract location name from a weather-related search query, or None if not weather."""
+    clean_q = query.strip().rstrip("?.!, ")
+    if not _WEATHER_PATTERN.search(clean_q):
+        return None
+    m = _LOCATION_EXTRACTION.search(clean_q)
+    if m:
+        loc = m.group(1).strip()
+        if loc:
+            return loc
+    cleaned = _WEATHER_PATTERN.sub("", clean_q).strip()
+    cleaned = re.sub(
+        r"^(what\s+is|what\'s|how\s+is|current|the|show\s+me)\s+", "", cleaned, flags=re.I
+    ).strip()
+    return cleaned if cleaned else None
+
+
+class WeatherSearchProvider(SearchProvider):
+    """Zero-cost, no-API-key real-time weather provider using wttr.in and open-meteo."""
+
+    def __init__(
+        self,
+        *,
+        client: httpx.AsyncClient | None = None,
+        timeout_seconds: float = 6.0,
+    ) -> None:
+        self.client = client
+        self.timeout_seconds = timeout_seconds
+
+    async def _fetch_wttr(self, client: httpx.AsyncClient, location: str) -> SearchResult | None:
+        try:
+            resp = await client.get(
+                f"https://wttr.in/{quote(location)}?format=j1",
+                headers={"User-Agent": "TOM-Assistant/1.0", "Accept": "application/json"},
+                timeout=self.timeout_seconds,
+            )
+            if resp.status_code != 200:
+                return None
+            data = resp.json()
+            cur = data.get("current_condition", [{}])[0]
+            desc = cur.get("weatherDesc", [{}])[0].get("value", "Clear")
+            tf = cur.get("temp_F", "")
+            tc = cur.get("temp_C", "")
+            ff = cur.get("FeelsLikeF", tf)
+            fc = cur.get("FeelsLikeC", tc)
+            hum = cur.get("humidity", "")
+            wind = cur.get("windspeedMiles", "")
+            wdir = cur.get("winddir16Point", "")
+            forecast = data.get("weather", [{}])[0]
+            max_f = forecast.get("maxtempF", "")
+            min_f = forecast.get("mintempF", "")
+            max_c = forecast.get("maxtempC", "")
+            min_c = forecast.get("mintempC", "")
+
+            summary = (
+                f"Current weather in {location.title()}: {desc}, {tf}°F ({tc}°C), feels like {ff}°F ({fc}°C). "
+                f"Humidity: {hum}%, Wind: {wind} mph {wdir}. "
+                f"Today's forecast: High {max_f}°F ({max_c}°C), Low {min_f}°F ({min_c}°C)."
+            )
+            return SearchResult(
+                title=f"Current Weather & Forecast for {location.title()}",
+                url=f"https://wttr.in/{quote(location)}",
+                summary=summary,
+                source="wttr.in",
+                provider="weather",
+            )
+        except Exception:
+            return None
+
+    async def _fetch_open_meteo(
+        self, client: httpx.AsyncClient, location: str
+    ) -> SearchResult | None:
+        try:
+            geo_resp = await client.get(
+                "https://geocoding-api.open-meteo.com/v1/search",
+                params={"name": location, "count": 1},
+                timeout=self.timeout_seconds,
+            )
+            if geo_resp.status_code != 200:
+                return None
+            geo_data = geo_resp.json()
+            results = geo_data.get("results")
+            if not results:
+                return None
+
+            res = results[0]
+            lat = res.get("latitude")
+            lon = res.get("longitude")
+            place_name = res.get("name", location)
+            country = res.get("country", "")
+
+            weather_resp = await client.get(
+                "https://api.open-meteo.com/v1/forecast",
+                params={
+                    "latitude": lat,
+                    "longitude": lon,
+                    "current": "temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m",
+                    "daily": "temperature_2m_max,temperature_2m_min",
+                    "timezone": "auto",
+                },
+                timeout=self.timeout_seconds,
+            )
+            if weather_resp.status_code != 200:
+                return None
+
+            w_data = weather_resp.json()
+            cur = w_data.get("current", {})
+            daily = w_data.get("daily", {})
+
+            temp_c = cur.get("temperature_2m", 0)
+            temp_f = round(temp_c * 9 / 5 + 32, 1)
+            app_c = cur.get("apparent_temperature", temp_c)
+            app_f = round(app_c * 9 / 5 + 32, 1)
+            hum = cur.get("relative_humidity_2m", 0)
+            wind_kmh = cur.get("wind_speed_10m", 0)
+            wind_mph = round(wind_kmh * 0.621371, 1)
+            code = cur.get("weather_code", 0)
+            desc = _WMO_WEATHER_CODES.get(code, "Clear")
+
+            max_c = daily.get("temperature_2m_max", [temp_c])[0]
+            min_c = daily.get("temperature_2m_min", [temp_c])[0]
+            max_f = round(max_c * 9 / 5 + 32, 1)
+            min_f = round(min_c * 9 / 5 + 32, 1)
+
+            display_name = f"{place_name}, {country}" if country else place_name
+            summary = (
+                f"Current weather in {display_name}: {desc}, {temp_f}°F ({temp_c}°C), feels like {app_f}°F ({app_c}°C). "
+                f"Humidity: {hum}%, Wind: {wind_mph} mph. "
+                f"Today's forecast: High {max_f}°F ({max_c}°C), Low {min_f}°F ({min_c}°C)."
+            )
+            return SearchResult(
+                title=f"Current Weather & Forecast for {display_name}",
+                url=f"https://open-meteo.com/en/docs#latitude={lat}&longitude={lon}",
+                summary=summary,
+                source="open-meteo.com",
+                provider="weather",
+            )
+        except Exception:
+            return None
+
+    async def search(self, query: str, *, max_results: int = 1) -> SearchResponse:
+        location = extract_weather_location(query)
+        if not location:
+            return SearchResponse(query=query, count=0, results=[], provider="weather")
+
+        created_client = False
+        client = self.client
+        if client is None:
+            client = httpx.AsyncClient(timeout=self.timeout_seconds, follow_redirects=True)
+            created_client = True
+
+        try:
+            result = await self._fetch_wttr(client, location)
+            if result is None:
+                result = await self._fetch_open_meteo(client, location)
+
+            results = [result] if result is not None else []
+            return SearchResponse(
+                query=query,
+                count=len(results),
+                results=results,
+                provider="weather",
+            )
+        finally:
+            if created_client:
+                await client.aclose()
+
+
 class CompositeSearchProvider(SearchProvider):
     """High-accuracy, multi-tier, zero-cost search provider.
 
     Tiers:
-    1. Local SearXNG (if configured and responding).
-    2. DuckDuckGo HTML / Lite (100% free web search, no API key).
-    3. Wikipedia instant knowledge enrichment.
+    1. Instant weather for real-time meteorological conditions.
+    2. Local SearXNG (if configured and responding).
+    3. DuckDuckGo HTML / Lite (100% free web search, no API key).
+    4. Wikipedia instant knowledge enrichment.
     """
 
     def __init__(
@@ -1027,15 +1233,26 @@ class CompositeSearchProvider(SearchProvider):
         searxng_provider: SearXNGSearchProvider | None = None,
         ddg_provider: DuckDuckGoSearchProvider | None = None,
         wiki_provider: WikipediaSearchProvider | None = None,
+        weather_provider: WeatherSearchProvider | None = None,
     ) -> None:
         self.searxng = searxng_provider
         self.ddg = ddg_provider or DuckDuckGoSearchProvider()
         self.wiki = wiki_provider or WikipediaSearchProvider()
+        self.weather = weather_provider or WeatherSearchProvider()
 
     async def search(self, query: str, *, max_results: int) -> SearchResponse:
         refined = refine_search_query(query)
 
-        # 1. Try SearXNG if configured
+        # 1. Check real-time weather instant answer
+        weather_results: list[SearchResult] = []
+        if self.weather is not None and extract_weather_location(query):
+            try:
+                w_resp = await self.weather.search(query, max_results=1)
+                weather_results = w_resp.results
+            except Exception:
+                pass
+
+        # 2. Try SearXNG if configured
         if self.searxng is not None:
             try:
                 res = await self.searxng.search(refined, max_results=max_results)
@@ -1044,7 +1261,7 @@ class CompositeSearchProvider(SearchProvider):
             except Exception:
                 pass  # Fall through to zero-cost free providers
 
-        # 2. Query DuckDuckGo
+        # 3. Query DuckDuckGo
         ddg_results: list[SearchResult] = []
         try:
             ddg_resp = await self.ddg.search(refined, max_results=max_results)
@@ -1052,9 +1269,9 @@ class CompositeSearchProvider(SearchProvider):
         except Exception:
             pass
 
-        # 3. Enrich with Wikipedia if results are sparse or query is encyclopedic
+        # 4. Enrich with Wikipedia if results are sparse or query is encyclopedic
         wiki_results: list[SearchResult] = []
-        if len(ddg_results) < max_results:
+        if len(ddg_results) < max_results and not weather_results:
             try:
                 wiki_resp = await self.wiki.search(refined, max_results=2)
                 wiki_results = wiki_resp.results
@@ -1064,6 +1281,11 @@ class CompositeSearchProvider(SearchProvider):
         # Combine, rank, and deduplicate by URL
         combined: list[SearchResult] = []
         seen_urls: set[str] = set()
+
+        for r in weather_results:
+            if r.url not in seen_urls:
+                seen_urls.add(r.url)
+                combined.append(r)
 
         for r in wiki_results:
             if r.url not in seen_urls:
@@ -1129,11 +1351,14 @@ def create_web_tools(
         wiki_provider=WikipediaSearchProvider(
             timeout_seconds=tools_config.web_search_timeout_seconds
         ),
+        weather_provider=WeatherSearchProvider(
+            timeout_seconds=tools_config.web_search_timeout_seconds
+        ),
     )
     search_handler = _create_handler(search_provider)
     search_definition = ToolDefinition(
         name="web.search",
-        description="Search the web using zero-cost DuckDuckGo, Wikipedia, and local search; returns bounded structured metadata with high-relevance summaries.",
+        description="Search the web using zero-cost real-time weather, DuckDuckGo, Wikipedia, and local search; returns bounded structured metadata with high-relevance summaries.",
         category="web",
         input_schema=SearchRequest,
         output_schema=SearchResponse,
