@@ -564,19 +564,6 @@ class MicrophoneLoop:
                     self._reset_turn_state()
                     return
 
-                # Filter: drop segments with mean RMS below threshold
-                if self._utterance_samples:
-                    mean_rms = sum(x * x for x in self._utterance_samples) / len(self._utterance_samples)
-                    mean_rms = mean_rms ** 0.5
-                    vad_threshold = getattr(self._vad, "threshold", self._config.energy_threshold)
-                    if mean_rms < vad_threshold:
-                        logger.info(
-                            "segment_dropped_low_rms",
-                            mean_rms=round(mean_rms, 6),
-                            threshold=round(vad_threshold, 6),
-                        )
-                        self._reset_turn_state()
-                        return
 
                 logger.info(
                     "speech_endpoint_detected",

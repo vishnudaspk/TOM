@@ -61,6 +61,7 @@ VALID_PIPELINE_TRANSITIONS: dict[VoicePipelineState, set[VoicePipelineState]] = 
     },
     VoicePipelineState.LISTENING: {
         VoicePipelineState.PROCESSING,
+        VoicePipelineState.SPEAKING,
         VoicePipelineState.IDLE,
         VoicePipelineState.INTERRUPTED,
         VoicePipelineState.ERROR,
@@ -73,6 +74,7 @@ VALID_PIPELINE_TRANSITIONS: dict[VoicePipelineState, set[VoicePipelineState]] = 
     },
     VoicePipelineState.SPEAKING: {
         VoicePipelineState.IDLE,
+        VoicePipelineState.LISTENING,
         VoicePipelineState.INTERRUPTED,
         VoicePipelineState.ERROR,
     },
