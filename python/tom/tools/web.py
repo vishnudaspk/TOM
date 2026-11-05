@@ -13,11 +13,12 @@ from __future__ import annotations
 import asyncio
 import ipaddress
 import json
+import re
 import socket
 import ssl
 import time
 from typing import Any
-from urllib.parse import urljoin, urlparse, urlunparse
+from urllib.parse import parse_qs, urljoin, urlparse, urlunparse
 
 import httpx
 from bs4 import BeautifulSoup
@@ -63,6 +64,45 @@ def _format_tls_error_reason(tls_err: ssl.SSLError) -> str:
     return (
         getattr(tls_err, "verify_message", None) or getattr(tls_err, "reason", None) or str(tls_err)
     )
+
+
+_CONVERSATIONAL_PREFIXES: list[re.Pattern[str]] = [
+    re.compile(r"^(hey\s+)?tom[\s,\.:]+", re.IGNORECASE),
+    re.compile(
+        r"^(can\s+you\s+|could\s+you\s+|would\s+you\s+)?(please\s+)?(search(\s+for|\s+online|\s+the\s+web\s+for)?|look\s+up|find\s+out(\s+about)?|tell\s+me(\s+about)?|google|browse)(\s+for|\s+about)?\s+",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"^(what\s+is|who\s+is|where\s+is|how\s+much\s+is|when\s+is|who\s+was|what\s+are|who\s+are|who\s+won(\s+the)?)\s+(the\s+)?",
+        re.IGNORECASE,
+    ),
+]
+
+_CONVERSATIONAL_SUFFIXES: list[re.Pattern[str]] = [
+    re.compile(
+        r"[\s,\.\?!]+(please|thanks|thank\s+you|asap|right\s+now)\s*[\.\?!]*$", re.IGNORECASE
+    ),
+    re.compile(r"[\.\?!]+$"),
+]
+
+
+def refine_search_query(query: str) -> str:
+    """Distill raw user utterance into a high-signal search query.
+
+    Strips conversational greetings, polite phrasing, and query wrappers,
+    leaving clean keywords for maximum relevance and fast search retrieval.
+    """
+    cleaned = query.strip()
+    changed = True
+    while changed:
+        before = cleaned
+        for pattern in _CONVERSATIONAL_SUFFIXES:
+            cleaned = pattern.sub("", cleaned).strip()
+        for pattern in _CONVERSATIONAL_PREFIXES:
+            cleaned = pattern.sub("", cleaned).strip()
+        changed = cleaned != before
+
+    return cleaned if cleaned else query.strip()
 
 
 class SearchRequest(BaseModel):
@@ -377,7 +417,21 @@ class BuiltinFetchProvider(FetchProvider):
             default_port = 443 if parsed.scheme == "https" else 80
             has_non_default_port = parsed.port is not None and parsed.port != default_port
             host_header = f"{host_name}:{parsed.port}" if has_non_default_port else host_name
-            req_headers = {"Host": host_header}
+            ua = (
+                "TOMPersonalAssistant/1.0 (https://github.com/vishnudaspk/TOM; contact@tom.local)"
+                if "wikipedia.org" in current_host
+                else (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/124.0.0.0 Safari/537.36"
+                )
+            )
+            req_headers = {
+                "Host": host_header,
+                "User-Agent": ua,
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9",
+            }
             req_extensions: dict[str, Any] = {}
             if parsed.scheme == "https":
                 # sni_hostname tells httpcore to use this as the TLS server_hostname
@@ -532,28 +586,88 @@ class BuiltinFetchProvider(FetchProvider):
         return text[:1_000_000], ""
 
     def _extract_html(self, html: str) -> tuple[str, str]:
-        """Extract text content from HTML using BeautifulSoup."""
+        """Extract high-quality readable text content from HTML using BeautifulSoup."""
         try:
             soup = BeautifulSoup(html, "html.parser")
 
-            # Remove script and style elements
-            for elem in soup(["script", "style", "noscript", "iframe", "embed", "object"]):
+            # 1. Remove non-content, script, navigation, and advertisement tags
+            noise_tags = [
+                "script",
+                "style",
+                "noscript",
+                "iframe",
+                "embed",
+                "object",
+                "nav",
+                "footer",
+                "header",
+                "aside",
+                "form",
+                "svg",
+            ]
+            for elem in soup(noise_tags):
                 elem.decompose()
 
-            # Get title
+            # 2. Decompose common cookie banners and ad overlays by class / id
+            for elem in soup.find_all(True):
+                classes = " ".join(elem.get("class", [])) if elem.get("class") else ""
+                elem_id = str(elem.get("id", ""))
+                ident = f"{classes} {elem_id}".lower()
+                if any(
+                    x in ident
+                    for x in [
+                        "cookie",
+                        "consent-banner",
+                        "ad-container",
+                        "advertisement",
+                        "newsletter-signup",
+                    ]
+                ):
+                    elem.decompose()
+
+            # 3. Extract title
             title_elem = soup.find("title")
             title = title_elem.get_text(strip=True) if title_elem else ""
 
-            # Get main content - prefer article, main, or body
-            main_content = soup.find("article") or soup.find("main") or soup.find("body") or soup
+            # 4. Extract meta description for high-signal summary
+            meta_desc = ""
+            desc_elem = soup.find("meta", attrs={"name": re.compile(r"^description$", re.I)})
+            if desc_elem and desc_elem.get("content"):
+                meta_desc = str(desc_elem["content"]).strip()
+
+            # 5. Locate semantic content container
+            main_content = (
+                soup.find("article")
+                or soup.find("main")
+                or soup.find(attrs={"role": "main"})
+                or soup.find(class_=re.compile(r"(post|article|entry|main)[-_]content", re.I))
+                or soup.find("body")
+                or soup
+            )
+
+            # Format headings and paragraphs cleanly
+            for h in main_content.find_all(["h1", "h2", "h3", "h4", "h5", "h6"]):
+                level = int(h.name[1]) if len(h.name) == 2 and h.name[1].isdigit() else 2
+                h.string = f"\n\n{'#' * level} {h.get_text(strip=True)}\n"
+
+            for li in main_content.find_all("li"):
+                li.string = f"\n- {li.get_text(strip=True)}"
+
             text = main_content.get_text(separator="\n", strip=True)
+
+            # Collapse redundant blank lines
+            text = re.sub(r"\n{3,}", "\n\n", text).strip()
+
+            # If content is sparse but meta description exists, prepend it
+            if meta_desc and (len(text) < 200 or meta_desc[:50] not in text):
+                text = f"Summary: {meta_desc}\n\n{text}".strip()
 
             # Limit length
             text = text[:1_000_000]
 
             return text, title[:500]
         except Exception:
-            return text[:1_000_000], ""
+            return html[:1_000_000], ""
 
 
 class SearchProviderError(RuntimeError):
@@ -643,6 +757,335 @@ class SearXNGSearchProvider(SearchProvider):
         )
 
 
+class DuckDuckGoSearchProvider(SearchProvider):
+    """Zero-cost, no-API web search provider using DuckDuckGo HTML and Lite."""
+
+    _HTML_ENDPOINT = "https://html.duckduckgo.com/html/"
+    _LITE_ENDPOINT = "https://lite.duckduckgo.com/lite/"
+    _USER_AGENT = (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    )
+
+    def __init__(
+        self,
+        *,
+        client: httpx.AsyncClient | None = None,
+        timeout_seconds: float = 8.0,
+    ) -> None:
+        self.client = client
+        self.timeout_seconds = timeout_seconds
+
+    @staticmethod
+    def _clean_ddg_url(raw_href: str) -> str:
+        """Extract the true destination URL from DuckDuckGo redirect link."""
+        if not raw_href:
+            return ""
+        if "uddg=" in raw_href:
+            try:
+                parsed = urlparse(raw_href)
+                qs = parse_qs(parsed.query)
+                if "uddg" in qs and qs["uddg"]:
+                    return qs["uddg"][0]
+            except Exception:
+                pass
+        if raw_href.startswith("//"):
+            return "https:" + raw_href
+        return raw_href
+
+    async def _search_html(
+        self, client: httpx.AsyncClient, query: str, max_results: int
+    ) -> list[SearchResult]:
+        try:
+            resp = await client.post(
+                self._HTML_ENDPOINT,
+                data={"q": query},
+                headers={
+                    "User-Agent": self._USER_AGENT,
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    "Accept-Language": "en-US,en;q=0.5",
+                },
+                timeout=self.timeout_seconds,
+            )
+            if resp.status_code != 200:
+                return []
+
+            soup = BeautifulSoup(resp.text, "html.parser")
+            results: list[SearchResult] = []
+            seen_urls: set[str] = set()
+
+            for r in soup.find_all("div", class_="result"):
+                title_el = r.find("a", class_="result__a")
+                snippet_el = r.find("a", class_="result__snippet")
+                if not title_el:
+                    continue
+
+                raw_url = title_el.get("href", "")
+                clean_url = self._clean_ddg_url(raw_url)
+                if not clean_url or clean_url in seen_urls:
+                    continue
+
+                title = title_el.get_text(strip=True)
+                snippet = snippet_el.get_text(strip=True) if snippet_el else ""
+                if not title:
+                    continue
+
+                try:
+                    domain = urlparse(clean_url).netloc
+                    results.append(
+                        SearchResult(
+                            title=title[:500],
+                            url=clean_url[:2048],
+                            summary=snippet[:2000],
+                            source=domain or "duckduckgo",
+                            provider="duckduckgo",
+                        )
+                    )
+                    seen_urls.add(clean_url)
+                except ValueError:
+                    continue
+
+                if len(results) >= max_results:
+                    break
+
+            return results
+        except Exception:
+            return []
+
+    async def _search_lite(
+        self, client: httpx.AsyncClient, query: str, max_results: int
+    ) -> list[SearchResult]:
+        try:
+            resp = await client.post(
+                self._LITE_ENDPOINT,
+                data={"q": query},
+                headers={"User-Agent": self._USER_AGENT},
+                timeout=self.timeout_seconds,
+            )
+            if resp.status_code != 200:
+                return []
+
+            soup = BeautifulSoup(resp.text, "html.parser")
+            results: list[SearchResult] = []
+            seen_urls: set[str] = set()
+
+            links = soup.find_all("a", class_="result-link")
+            snippets = soup.find_all("td", class_="result-snippet")
+
+            for link, snip in zip(links, snippets, strict=False):
+                raw_url = link.get("href", "")
+                clean_url = self._clean_ddg_url(raw_url)
+                if not clean_url or clean_url in seen_urls:
+                    continue
+
+                title = link.get_text(strip=True)
+                snippet = snip.get_text(strip=True)
+                if not title:
+                    continue
+
+                try:
+                    domain = urlparse(clean_url).netloc
+                    results.append(
+                        SearchResult(
+                            title=title[:500],
+                            url=clean_url[:2048],
+                            summary=snippet[:2000],
+                            source=domain or "duckduckgo",
+                            provider="duckduckgo",
+                        )
+                    )
+                    seen_urls.add(clean_url)
+                except ValueError:
+                    continue
+
+                if len(results) >= max_results:
+                    break
+
+            return results
+        except Exception:
+            return []
+
+    async def search(self, query: str, *, max_results: int) -> SearchResponse:
+        refined = refine_search_query(query)
+        if not refined:
+            raise SearchProviderError("Search query cannot be empty")
+        if max_results < 1:
+            raise SearchProviderError("max_results must be at least 1")
+
+        created_client = False
+        client = self.client
+        if client is None:
+            client = httpx.AsyncClient(timeout=self.timeout_seconds, follow_redirects=True)
+            created_client = True
+
+        try:
+            results = await self._search_html(client, refined, max_results)
+            if not results:
+                results = await self._search_lite(client, refined, max_results)
+
+            if not results:
+                raise SearchProviderError(f"No DuckDuckGo results found for '{refined}'")
+
+            return SearchResponse(
+                query=refined,
+                count=len(results),
+                results=results,
+                provider="duckduckgo",
+            )
+        except SearchProviderError:
+            raise
+        except Exception as exc:
+            raise SearchProviderError(f"DuckDuckGo search failed: {exc}") from exc
+        finally:
+            if created_client:
+                await client.aclose()
+
+
+class WikipediaSearchProvider(SearchProvider):
+    """Zero-cost Wikipedia search and summary provider for factual queries."""
+
+    _OPENSEARCH_ENDPOINT = "https://en.wikipedia.org/w/api.php"
+    _USER_AGENT = "TOM-Assistant/1.0 (https://github.com/vishnudaspk/TOM)"
+
+    def __init__(
+        self,
+        *,
+        client: httpx.AsyncClient | None = None,
+        timeout_seconds: float = 6.0,
+    ) -> None:
+        self.client = client
+        self.timeout_seconds = timeout_seconds
+
+    async def search(self, query: str, *, max_results: int) -> SearchResponse:
+        refined = refine_search_query(query)
+        if not refined:
+            raise SearchProviderError("Search query cannot be empty")
+
+        created_client = False
+        client = self.client
+        if client is None:
+            client = httpx.AsyncClient(
+                timeout=self.timeout_seconds,
+                headers={"User-Agent": self._USER_AGENT},
+                follow_redirects=True,
+            )
+            created_client = True
+
+        try:
+            resp = await client.get(
+                self._OPENSEARCH_ENDPOINT,
+                params={
+                    "action": "opensearch",
+                    "search": refined,
+                    "limit": min(max_results, 5),
+                    "namespace": 0,
+                    "format": "json",
+                },
+            )
+            results: list[SearchResult] = []
+            if resp.status_code == 200:
+                data = resp.json()
+                if len(data) >= 4 and isinstance(data[1], list):
+                    titles, descs, urls = data[1], data[2], data[3]
+                    for title, desc, url in zip(titles, descs, urls, strict=False):
+                        if url and title:
+                            results.append(
+                                SearchResult(
+                                    title=title[:500],
+                                    url=url[:2048],
+                                    summary=desc[:2000] if desc else f"Wikipedia entry for {title}",
+                                    source="wikipedia.org",
+                                    provider="wikipedia",
+                                )
+                            )
+            return SearchResponse(
+                query=refined,
+                count=len(results),
+                results=results,
+                provider="wikipedia",
+            )
+        except Exception as exc:
+            raise SearchProviderError(f"Wikipedia search failed: {exc}") from exc
+        finally:
+            if created_client:
+                await client.aclose()
+
+
+class CompositeSearchProvider(SearchProvider):
+    """High-accuracy, multi-tier, zero-cost search provider.
+
+    Tiers:
+    1. Local SearXNG (if configured and responding).
+    2. DuckDuckGo HTML / Lite (100% free web search, no API key).
+    3. Wikipedia instant knowledge enrichment.
+    """
+
+    def __init__(
+        self,
+        *,
+        searxng_provider: SearXNGSearchProvider | None = None,
+        ddg_provider: DuckDuckGoSearchProvider | None = None,
+        wiki_provider: WikipediaSearchProvider | None = None,
+    ) -> None:
+        self.searxng = searxng_provider
+        self.ddg = ddg_provider or DuckDuckGoSearchProvider()
+        self.wiki = wiki_provider or WikipediaSearchProvider()
+
+    async def search(self, query: str, *, max_results: int) -> SearchResponse:
+        refined = refine_search_query(query)
+
+        # 1. Try SearXNG if configured
+        if self.searxng is not None:
+            try:
+                res = await self.searxng.search(refined, max_results=max_results)
+                if res.results:
+                    return res
+            except Exception:
+                pass  # Fall through to zero-cost free providers
+
+        # 2. Query DuckDuckGo
+        ddg_results: list[SearchResult] = []
+        try:
+            ddg_resp = await self.ddg.search(refined, max_results=max_results)
+            ddg_results = ddg_resp.results
+        except Exception:
+            pass
+
+        # 3. Enrich with Wikipedia if results are sparse or query is encyclopedic
+        wiki_results: list[SearchResult] = []
+        if len(ddg_results) < max_results:
+            try:
+                wiki_resp = await self.wiki.search(refined, max_results=2)
+                wiki_results = wiki_resp.results
+            except Exception:
+                pass
+
+        # Combine, rank, and deduplicate by URL
+        combined: list[SearchResult] = []
+        seen_urls: set[str] = set()
+
+        for r in wiki_results:
+            if r.url not in seen_urls:
+                seen_urls.add(r.url)
+                combined.append(r)
+
+        for r in ddg_results:
+            if r.url not in seen_urls:
+                seen_urls.add(r.url)
+                combined.append(r)
+
+        if not combined:
+            raise SearchProviderError(f"No search results found for: {refined}")
+
+        return SearchResponse(
+            query=refined,
+            count=len(combined[:max_results]),
+            results=combined[:max_results],
+            provider="composite",
+        )
+
+
 def _create_handler(
     provider: SearchProvider,
 ) -> Any:
@@ -674,15 +1117,23 @@ def create_web_tools(
     tools_config = config or ToolsConfig()
 
     # Register web.search
-    search_provider = search_provider or SearXNGSearchProvider(
-        endpoint=tools_config.web_search_endpoint,
-        max_response_bytes=tools_config.web_search_max_response_bytes,
-        timeout_seconds=tools_config.web_search_timeout_seconds,
+    search_provider = search_provider or CompositeSearchProvider(
+        searxng_provider=SearXNGSearchProvider(
+            endpoint=tools_config.web_search_endpoint,
+            max_response_bytes=tools_config.web_search_max_response_bytes,
+            timeout_seconds=tools_config.web_search_timeout_seconds,
+        ),
+        ddg_provider=DuckDuckGoSearchProvider(
+            timeout_seconds=tools_config.web_search_timeout_seconds
+        ),
+        wiki_provider=WikipediaSearchProvider(
+            timeout_seconds=tools_config.web_search_timeout_seconds
+        ),
     )
     search_handler = _create_handler(search_provider)
     search_definition = ToolDefinition(
         name="web.search",
-        description="Search a configured local or self-hosted SearXNG-compatible endpoint; returns bounded structured metadata only.",
+        description="Search the web using zero-cost DuckDuckGo, Wikipedia, and local search; returns bounded structured metadata with high-relevance summaries.",
         category="web",
         input_schema=SearchRequest,
         output_schema=SearchResponse,

@@ -58,7 +58,8 @@ _KEYWORD_MAP: list[tuple[list[str], IntentDomain]] = [
             "directory",
             "folder",
             "path",
-            "search",
+            "search for files",
+            "search files",
         ],
         IntentDomain.FILES,
     ),
@@ -85,7 +86,28 @@ _KEYWORD_MAP: list[tuple[list[str], IntentDomain]] = [
         IntentDomain.CHAT,
     ),
     (
-        ["explain", "why", "how", "analyze", "compare", "reason", "think", "evaluate", "what is"],
+        [
+            "explain",
+            "why",
+            "how",
+            "analyze",
+            "compare",
+            "reason",
+            "think",
+            "evaluate",
+            "what is",
+            "search",
+            "web",
+            "online",
+            "google",
+            "browse",
+            "look up",
+            "latest",
+            "news",
+            "weather",
+            "who is",
+            "when is",
+        ],
         IntentDomain.REASONING,
     ),
 ]
@@ -134,7 +156,7 @@ _CLASSIFY_PROMPT = (
 )
 
 _CLASSIFY_GRAMMAR = (
-    "root ::= \"SYSTEM\" | \"FILES\" | \"REASONING\" | \"MEMORY\" | \"VISION\" | \"CHAT\" | \"UNKNOWN\""
+    'root ::= "SYSTEM" | "FILES" | "REASONING" | "MEMORY" | "VISION" | "CHAT" | "UNKNOWN"'
 )
 
 _VALID_DOMAINS = {d.value for d in IntentDomain}

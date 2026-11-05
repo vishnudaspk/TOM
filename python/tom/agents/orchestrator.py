@@ -276,19 +276,30 @@ class AgentOrchestrator:
         provider: LLMProvider = self._agent.model_provider
 
         messages = self._agent.history.get_messages()
+        tools_schema = (
+            self._agent.dependencies.registry.export_json_schemas()
+            if hasattr(self._agent, "dependencies")
+            and hasattr(self._agent.dependencies, "registry")
+            else None
+        )
         req = ModelRequest(
             model="router",
             messages=messages,
             max_tokens=self._max_response_tokens,
             temperature=self._agent.config.temperature,
+            tools=tools_schema,
         )
 
         if self._resource_manager is not None:
             # Get VRAM requirement from loaded config (single source of truth)
             # for BOTH resident registration and lease acquisition
-            reasoning_vram_mb = self._config.models.reasoning.vram_required_mb if self._config else 4531
+            reasoning_vram_mb = (
+                self._config.models.reasoning.vram_required_mb if self._config else 4531
+            )
             await self._maybe_register_resident_model(ModelRole.REASONING, reasoning_vram_mb)
-            async with self._resource_manager.acquire(ModelRole.REASONING, required_vram_mb=reasoning_vram_mb):
+            async with self._resource_manager.acquire(
+                ModelRole.REASONING, required_vram_mb=reasoning_vram_mb
+            ):
                 return await provider.generate(req)
         return await provider.generate(req)
 
@@ -324,12 +335,19 @@ class AgentOrchestrator:
         """
         provider: LLMProvider = self._agent.model_provider
         messages = self._agent.history.get_messages()
+        tools_schema = (
+            self._agent.dependencies.registry.export_json_schemas()
+            if hasattr(self._agent, "dependencies")
+            and hasattr(self._agent.dependencies, "registry")
+            else None
+        )
         req = ModelRequest(
             model="router",
             messages=messages,
             max_tokens=self._max_response_tokens,
             temperature=self._agent.config.temperature,
             stream=True,
+            tools=tools_schema,
         )
         return provider.stream(req)
 
@@ -357,8 +375,12 @@ class AgentOrchestrator:
             tool_calls: list[ToolCallRequest] = []
             try:
                 if self._resource_manager is not None:
-                    reasoning_vram_mb = self._config.models.reasoning.vram_required_mb if self._config else 4531
-                    await self._maybe_register_resident_model(ModelRole.REASONING, reasoning_vram_mb)
+                    reasoning_vram_mb = (
+                        self._config.models.reasoning.vram_required_mb if self._config else 4531
+                    )
+                    await self._maybe_register_resident_model(
+                        ModelRole.REASONING, reasoning_vram_mb
+                    )
                     async with self._resource_manager.acquire(
                         ModelRole.REASONING, required_vram_mb=reasoning_vram_mb
                     ):
