@@ -142,9 +142,27 @@ class ConversationHistory(BaseModel):
         gt=0,
         description="Upper bound on stored messages; older messages trimmed when exceeded",
     )
+    max_tokens: int | None = Field(
+        default=2048,
+        gt=0,
+        description="Upper bound on estimated tokens in history; older messages trimmed when exceeded",
+    )
+
+    @staticmethod
+    def estimate_message_tokens(msg: Message | None) -> int:
+        """Estimate tokens for a single message (~4 chars/token + 4 overhead)."""
+        if msg is None:
+            return 0
+        content_len = len(msg.content or "")
+        meta_len = len(str(msg.tool_metadata)) if msg.tool_metadata else 0
+        return 4 + max(1, (content_len + meta_len) // 4 + 1)
+
+    def total_tokens(self) -> int:
+        """Estimate total tokens in conversation history."""
+        return sum(self.estimate_message_tokens(m) for m in self.messages)
 
     def append(self, message: Message | dict[str, Any]) -> None:
-        """Append a message to history, validating and enforcing bounds."""
+        """Append a message to history, validating and enforcing count and token bounds."""
         if isinstance(message, dict):
             validated_msg = Message.model_validate(message)
         elif isinstance(message, Message):
@@ -153,40 +171,68 @@ class ConversationHistory(BaseModel):
             raise TypeError(f"Expected Message or dict, got {type(message).__name__}")
 
         self.messages.append(validated_msg)
-        if self.max_messages is not None and len(self.messages) > self.max_messages:
-            self.trim(self.max_messages)
+        if (self.max_messages is not None and len(self.messages) > self.max_messages) or (
+            self.max_tokens is not None and self.total_tokens() > self.max_tokens
+        ):
+            self.trim()
 
-    def trim(self, max_count: int) -> int:
-        """Trim history to max_count messages, preserving system prompt if present.
+    def trim(
+        self,
+        max_count: int | None = None,
+        max_tokens: int | None = None,
+    ) -> int:
+        """Trim history preserving system prompt, tool relationships, and token bounds.
 
         Returns the count of removed messages.
         """
-        if max_count <= 0:
-            removed = len(self.messages)
-            self.messages.clear()
-            return removed
+        limit_count = max_count if max_count is not None else self.max_messages
+        limit_tokens = max_tokens if max_tokens is not None else self.max_tokens
 
-        if len(self.messages) <= max_count:
+        if not self.messages:
             return 0
 
-        excess = len(self.messages) - max_count
+        initial_len = len(self.messages)
+        if limit_count is not None and limit_count <= 0:
+            self.messages.clear()
+            return initial_len
 
-        # Check if first message is a SYSTEM message
-        if self.messages and self.messages[0].role == Role.SYSTEM:
-            if max_count == 1:
-                removed = len(self.messages) - 1
-                self.messages = [self.messages[0]]
-                return removed
-            # Preserve system message, trim oldest non-system messages
-            system_msg = self.messages[0]
-            non_system = self.messages[1:]
-            trimmed_non_system = non_system[excess:]
-            removed = len(non_system) - len(trimmed_non_system)
-            self.messages = [system_msg] + trimmed_non_system
-            return removed
-        else:
-            self.messages = self.messages[excess:]
-            return excess
+        system_msg: Message | None = None
+        work_messages = list(self.messages)
+
+        if work_messages and work_messages[0].role == Role.SYSTEM:
+            system_msg = work_messages.pop(0)
+
+        # 1. Enforce message count limit
+        if limit_count is not None:
+            target_non_system = limit_count - (1 if system_msg else 0)
+            if target_non_system <= 0:
+                self.messages = [system_msg] if system_msg else []
+                return initial_len - len(self.messages)
+            if len(work_messages) > target_non_system:
+                work_messages = work_messages[-target_non_system:]
+
+        # 2. Enforce token budget limit
+        if limit_tokens is not None and limit_tokens > 0:
+            sys_tokens = self.estimate_message_tokens(system_msg)
+            available_tokens = max(0, limit_tokens - sys_tokens)
+
+            # Walk backwards from newest to oldest to keep what fits in budget
+            accumulated: list[Message] = []
+            used_tokens = 0
+            for msg in reversed(work_messages):
+                t = self.estimate_message_tokens(msg)
+                if used_tokens + t > available_tokens and accumulated:
+                    break
+                accumulated.append(msg)
+                used_tokens += t
+            work_messages = list(reversed(accumulated))
+
+        # 3. Preserve tool relationship integrity (never orphan tool results)
+        while work_messages and work_messages[0].role == Role.TOOL_RESULT:
+            work_messages.pop(0)
+
+        self.messages = ([system_msg] if system_msg else []) + work_messages
+        return initial_len - len(self.messages)
 
     def clear(self, keep_system: bool = True) -> None:
         """Clear messages, optionally preserving the initial SYSTEM message."""

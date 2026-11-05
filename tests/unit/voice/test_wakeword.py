@@ -24,6 +24,7 @@ def test_is_wake_phrase() -> None:
     assert is_wake_phrase("I don't.") is False
     assert is_wake_phrase("Tom") is True
     assert is_wake_phrase("Tom.") is True
+    assert is_wake_phrase("TOM. What is 2 plus 2?") is True
     assert is_wake_phrase("Tom, what time is it?") is True
     assert is_wake_phrase("Hey Dom, what time is it?") is True
     assert is_wake_phrase("HEY TOM, what's up?") is True
@@ -45,7 +46,11 @@ def test_strip_wake_phrase() -> None:
     assert strip_wake_phrase("Hey, Tom, can you help?", "hey tom") == "can you help"
     assert strip_wake_phrase("Hey Dom, what time is it?", "hey tom") == "what time is it"
     assert strip_wake_phrase("Tom, what time is it?", "hey tom") == "what time is it"
-    assert strip_wake_phrase("random text without wake word", "hey tom") == "random text without wake word"
+    assert strip_wake_phrase("TOM. What is 2 plus 2?", "hey tom") == "What is 2 plus 2"
+    assert (
+        strip_wake_phrase("random text without wake word", "hey tom")
+        == "random text without wake word"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -239,6 +244,7 @@ async def test_multiple_followup_turns_without_repeating_wakeword() -> None:
     assert core._wakeword_active is True
     core._cancel_wakeword_timeout()
 
+
 @pytest.mark.asyncio
 async def test_inactivity_timeout_returns_to_inactive_mode() -> None:
     """Inactivity timeout in LISTENING state deactivates session; ordinary speech is then ignored."""
@@ -382,7 +388,9 @@ async def test_timeout_does_not_arm_during_processing_or_speaking() -> None:
 async def test_wake_ack_gates_mic_and_drains_before_timeout() -> None:
     """_play_wake_ack gates mic during playback, sleeps duration, ungates mic, and arms timeout."""
     mic = MagicMock()
-    synth_res = MagicMock(samples=[0.1] * 2400, audio_data=b"\x00\x00" * 2400, sample_rate=24000, channels=1)
+    synth_res = MagicMock(
+        samples=[0.1] * 2400, audio_data=b"\x00\x00" * 2400, sample_rate=24000, channels=1
+    )
     tts = MagicMock(synthesize=AsyncMock(return_value=synth_res))
     engine = MagicMock(play_audio_buffer=AsyncMock())
 
@@ -417,11 +425,13 @@ async def test_wake_ack_gates_mic_and_drains_before_timeout() -> None:
 @pytest.mark.asyncio
 async def test_speech_after_timeout_is_discarded_unless_wakeword() -> None:
     """After 30s timeout, non-wake speech is discarded until wake word activates again."""
-    stt = MockScriptedSTT([
-        "hey tom",                  # 1. initial activation
-        "ordinary query after timeout",  # 2. should be discarded
-        "hey tom explain recursion",     # 3. re-activates and executes turn
-    ])
+    stt = MockScriptedSTT(
+        [
+            "hey tom",  # 1. initial activation
+            "ordinary query after timeout",  # 2. should be discarded
+            "hey tom explain recursion",  # 3. re-activates and executes turn
+        ]
+    )
     synth_res = MagicMock(samples=[0.1], audio_data=b"\x00\x00", sample_rate=24000, channels=1)
     tts = MagicMock(synthesize=AsyncMock(return_value=synth_res))
     engine = MagicMock(play_audio_buffer=AsyncMock())
@@ -458,17 +468,21 @@ async def test_speech_after_timeout_is_discarded_unless_wakeword() -> None:
     # 4. Wake word with command re-activates session and executes turn
     await core._handle_speech_end(b"\x00\x00" * 1600)
     assert core._wakeword_active is True
-    core._begin_turn.assert_awaited_once_with(b"\x00\x00" * 1600, override_transcript="explain recursion")
+    core._begin_turn.assert_awaited_once_with(
+        b"\x00\x00" * 1600, override_transcript="explain recursion"
+    )
     core._cancel_wakeword_timeout()
 
 
 @pytest.mark.asyncio
 async def test_startup_greeting_activates_session_followup_window() -> None:
     """Startup greeting proactively activates session; speech without wake phrase is accepted within window."""
-    stt = MockScriptedSTT([
-        "what time is it",  # 1. Accepted within active window right after greeting
-        "can you hear me",  # 2. Rejected after timeout expires
-    ])
+    stt = MockScriptedSTT(
+        [
+            "what time is it",  # 1. Accepted within active window right after greeting
+            "can you hear me",  # 2. Rejected after timeout expires
+        ]
+    )
     synth_res = MagicMock(samples=[0.1], audio_data=b"\x00\x00", sample_rate=24000, channels=1)
     tts = MagicMock(synthesize=AsyncMock(return_value=synth_res))
     engine = MagicMock(play_audio_buffer=AsyncMock())
@@ -523,10 +537,12 @@ async def test_wake_ack_greets_on_first_wake_and_after_timeout() -> None:
     for period_greetings in _GREETINGS.values():
         all_greetings.update(period_greetings)
 
-    stt = MockScriptedSTT([
-        "Tom.",             # 1. First wake up: should use full greeting
-        "Hey, Tom.",        # 2. Wake up after timeout: should greet again
-    ])
+    stt = MockScriptedSTT(
+        [
+            "Tom.",  # 1. First wake up: should use full greeting
+            "Hey, Tom.",  # 2. Wake up after timeout: should greet again
+        ]
+    )
     synth_res = MagicMock(samples=[0.1], audio_data=b"\x00\x00", sample_rate=24000, channels=1)
     tts = MagicMock(synthesize=AsyncMock(return_value=synth_res))
     engine = MagicMock(play_audio_buffer=AsyncMock())
@@ -574,3 +590,44 @@ async def test_wake_ack_greets_on_first_wake_and_after_timeout() -> None:
     assert third_ack in all_greetings
     assert core._wakeword_active is True
     core._cancel_wakeword_timeout()
+
+
+@pytest.mark.asyncio
+async def test_watchdog_inactivity_timeout_recovers_after_ambient_noise() -> None:
+    """When SpeechStartEvent cancels the timer on dropped noise, the watchdog still deactivates."""
+    core = InteractionCore(
+        mic_loop=MagicMock(),
+        stt=MockScriptedSTT([]),
+        tts=MagicMock(),
+        orchestrator=MagicMock(),
+        turn_manager=MagicMock(),
+        policy=MagicMock(),
+        engine=MagicMock(),
+        turn_arbitrator=None,
+        wakeword_enabled=True,
+        wakeword_phrase="hey tom",
+        wakeword_timeout_seconds=0.05,
+    )
+    core._wakeword_active = True
+    core._pipeline.transition_to(VoicePipelineState.LISTENING)
+    core._arm_wakeword_timeout()
+    assert core._wakeword_timeout_handle is not None
+
+    # Simulate ambient noise triggering SpeechStartEvent (cancelling timer handle)
+    await core._handle_event(SpeechStartEvent(timestamp=0.0))
+    assert core._wakeword_timeout_handle is None
+
+    # Run the listening watchdog for a brief period
+    watchdog_task = asyncio.create_task(
+        core._listening_watchdog(poll_interval_s=0.01, timeout_s=1.0)
+    )
+    await asyncio.sleep(0.08)
+    watchdog_task.cancel()
+    try:
+        await watchdog_task
+    except asyncio.CancelledError:
+        pass
+
+    # The session must have timed out and deactivated via watchdog!
+    assert core._wakeword_active is False
+    assert core._woke_from_timeout is True

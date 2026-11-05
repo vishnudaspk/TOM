@@ -36,8 +36,8 @@ def is_wake_phrase(text: str, phrase: str = "hey tom") -> bool:
     # 2. Standalone name with optional punctuation (e.g. "Tom", "Tom.", "TOM!", "Don?")
     p_standalone = rf"^\s*[\W_]*\b{name}\b[\W_]*$"
 
-    # 3. Direct address at start (e.g. "Tom, what time is it?", "Hey Dom, can you help?")
-    p_direct = rf"^\s*[\W_]*\b{name}\b\s*[,:]"
+    # 3. Direct address at start with punctuation (e.g. "Tom, what time is it?", "TOM. What is 2+2?", "Tom!")
+    p_direct = rf"^\s*[\W_]*\b{name}\b\s*[,:.!?]"
 
     # 4. Exact phrase match with whitespace/punctuation tolerance between words
     p_phrase = r"\s*[\W_]*\s*".join(re.escape(w) for w in words)

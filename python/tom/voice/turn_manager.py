@@ -297,10 +297,10 @@ class ConversationTurnManager:
             "background_tasks": [task.model_dump(mode="json") for task in self._background],
         }
 
-    def render_model_context(self) -> str:
+    def render_model_context(self, include_turns: bool = True) -> str:
         """Render the structured context as a compact prompt block for the model."""
         lines: list[str] = []
-        if self._history:
+        if include_turns and self._history:
             lines.append("Recent conversation:")
             for record in self._history:
                 suffix = " [interrupted]" if record.interrupted else ""

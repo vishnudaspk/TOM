@@ -790,6 +790,7 @@ class InteractionCore:
         self._last_wake_ack: str | None = None
         self._first_activation: bool = True
         self._woke_from_timeout: bool = False
+        self._last_interaction_time: float = time.monotonic()
 
         self._frames = bytearray()
         self._smart_turn_candidate: bytes | None = None
@@ -923,6 +924,12 @@ class InteractionCore:
                 self._listening_watchdog(), name="tom.listening_watchdog"
             )
 
+            # Pre-synthesize greeting pool in background for instant wake-ack latency.
+            # ponytail: fire-and-forget via executor; no await, no crash if TTS offline.
+            from tom.voice.greetings import pre_synthesize_greeting_pool as _pre_synth
+            _tts_ref = self._tts
+            asyncio.get_event_loop().run_in_executor(None, _pre_synth, _tts_ref)
+
             # Run startup greeting once per voice session (if enabled)
             if self._startup_greeting:
                 await self._run_startup_greeting()
@@ -1027,6 +1034,21 @@ class InteractionCore:
                     continue
 
                 mic = self._mic
+
+                # --- session inactivity timeout watchdog ---
+                now = time.monotonic()
+                if (
+                    self._wakeword_enabled
+                    and self._wakeword_active
+                    and self._wakeword_timeout_seconds > 0
+                    and self._pipeline.state is VoicePipelineState.LISTENING
+                    and self._active_turn is None
+                    and not self._playback_active
+                    and (getattr(mic, "is_in_speech", False) is not True)
+                ):
+                    if (now - self._last_interaction_time) >= self._wakeword_timeout_seconds:
+                        self._on_wakeword_timeout()
+
                 is_paused = getattr(mic, "_paused", False) or getattr(mic, "_gated", False)
 
                 # --- paused/gated detection (existing) ---
@@ -1241,15 +1263,20 @@ class InteractionCore:
 
             # 2. Synthesize and play via TTS
             logger.info(VoiceEventNames.STARTUP_GREETING_TTS_STARTED)
-            synth_req = SynthesisRequest(text=greeting_text.strip())
-            try:
-                synth_res = await self._tts.synthesize(synth_req)
-            except (ConnectionLostError, NotConnectedError) as exc:
-                logger.warning(
-                    "startup_greeting_tts_ipc_disconnected",
-                    error=str(exc),
-                )
-                return
+            from tom.voice.greetings import get_pre_synthesized
+            cached = get_pre_synthesized(greeting_text.strip())
+            if cached is not None:
+                synth_res = cached
+            else:
+                synth_req = SynthesisRequest(text=greeting_text.strip())
+                try:
+                    synth_res = await self._tts.synthesize(synth_req)
+                except (ConnectionLostError, NotConnectedError) as exc:
+                    logger.warning(
+                        "startup_greeting_tts_ipc_disconnected",
+                        error=str(exc),
+                    )
+                    return
 
             if not synth_res.samples:
                 logger.warning("startup_greeting_empty_tts_output")
@@ -1480,8 +1507,13 @@ class InteractionCore:
         try:
             self._transition(VoicePipelineState.SPEAKING)
             self._mic.gate()
-            synth_req = SynthesisRequest(text=ack_text)
-            synth_res = await self._tts.synthesize(synth_req)
+            from tom.voice.greetings import get_pre_synthesized
+            cached = get_pre_synthesized(ack_text)
+            if cached is not None:
+                synth_res = cached
+            else:
+                synth_req = SynthesisRequest(text=ack_text)
+                synth_res = await self._tts.synthesize(synth_req)
             if synth_res.samples:
                 await self._engine.play_audio_buffer(
                     audio_data=synth_res.audio_data,
@@ -1507,6 +1539,7 @@ class InteractionCore:
     def _arm_wakeword_timeout(self) -> None:
         """Arm the inactivity timeout countdown once TOM returns to LISTENING."""
         self._cancel_wakeword_timeout()
+        self._last_interaction_time = time.monotonic()
         if (
             self._wakeword_enabled
             and self._wakeword_active
@@ -1565,6 +1598,7 @@ class InteractionCore:
                     transcript=transcript[:80] if transcript else "",
                 )
                 self._wakeword_active = True
+                self._last_interaction_time = time.monotonic()
                 self._smart_turn_candidate = None
                 from tom.voice.wakeword import strip_wake_phrase
 
@@ -1728,13 +1762,6 @@ class InteractionCore:
                 if self._pipeline.state not in (VoicePipelineState.SPEAKING, VoicePipelineState.PROCESSING):
                     await asyncio.sleep(0.05)
                     continue
-                # Get mic RMS (approximate from microphone loop)
-                mic_rms = 0.0
-                if hasattr(self._mic, '_vad') and hasattr(self._mic._vad, 'threshold'):
-                    # Can't easily get current RMS without access to frame buffer
-                    pass
-                # Get playback RMS (approximate from TTS streamer)
-                playback_rms = 0.0
                 # Decision logic
                 mic_active = self._mic.is_in_speech if hasattr(self._mic, 'is_in_speech') else False
                 barge_in_threshold = getattr(self._mic, '_barge_in_rms_threshold', 0.0)

@@ -262,10 +262,6 @@ class ResourcesConfig(BaseModel):
         description="Upper limit on host RAM allocation",
     )
     gpu_device_id: int = Field(default=0, ge=0)
-    whisper_on_gpu: bool = Field(
-        default=False,
-        description="False = run Whisper on CPU to prevent VRAM contention with LLM",
-    )
 
 
 class TaskConfig(BaseModel):
