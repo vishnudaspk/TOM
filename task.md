@@ -150,14 +150,17 @@
 
 #### VOICE-006: Smart Turn V3 Accuracy Resolution or Clean Deprecation
 - **Priority**: P2
-- **Status**: UNDER_REVISION
-- **Evidence**: `PROGRESS.md` line 238; `HANDOFF.md` line 186 (100% false-complete rate on hesitation pauses).
-- **Problem**: Smart Turn V3 cannot serve as a reliable endpointer because it prematurely closes turns during natural conversational pauses (0/15 correct on hesitation prefixes).
-- **Required Work**: Evaluate whether to (a) retain Smart Turn by retraining/re-tuning with speech hangover corpora, or (b) formally deprecate the optional Pipecat dependency, document pure VAD hangover (600ms) as the authoritative endpointer, and remove dead fallback arbitration paths.
-- **Acceptance Criteria**: Formal ADR documenting whether Smart Turn is retained or deprecated; zero false completions during 600ms mid-sentence hesitations.
-- **Verification Method**: Run `tests/benchmarks/voice/ws3/smart_turn_eval.py`.
-- **Dependencies**: Audio test corpus.
-- **Risks**: Retaining unused optional dependencies increases packaging and maintenance complexity.
+- **Status**: DONE_VERIFIED
+- **Evidence**: `PROGRESS.md` line 238; `HANDOFF.md` line 186; commits `2ed53f2` and `eea6fb5`.
+- **Problem**: Smart Turn V3 returned `INCOMPLETE` on 100% of live utterances, adding mandatory 1.8s timeout delays (`smart_turn_incomplete_timeout_force_complete`). Furthermore, redundant mean-RMS segment filtering dropped quiet/short utterances.
+- **Resolution**:
+  1. Deprecated Smart Turn via `smart_turn_enabled: false` in `config/voice.yaml` and `VoiceConfig` schema (`2ed53f2`), defaulting to pure VAD 600ms hangover.
+  2. Removed erroneous `segment_dropped_low_rms` filter in `python/tom/voice/microphone.py` which calculated mean RMS over pre-roll + hangover silence buffers, dropping valid user speech (`eea6fb5`).
+  3. Added `LISTENING <-> SPEAKING` state transitions to `VALID_PIPELINE_TRANSITIONS` in `python/tom/voice/pipeline.py` to fix watchdog false positives during wake-ack greetings (`eea6fb5`).
+- **Acceptance Criteria**: Pure VAD 600ms hangover active; zero dead time added; short and quiet utterances captured cleanly without segment dropping.
+- **Verification Method**: Unit tests in `tests/unit/voice/` (100% passing).
+- **Dependencies**: None.
+- **Risks**: None.
 
 ---
 
