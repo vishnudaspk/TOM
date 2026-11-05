@@ -229,7 +229,13 @@ class AgentOrchestrator:
                 return f"Model error: {exc}"
 
             # Record model response in history
-            self._agent.history.append(Message(role=Role.ASSISTANT, content=response.content))
+            self._agent.history.append(
+                Message(
+                    role=Role.ASSISTANT,
+                    content=response.content,
+                    tool_calls=response.tool_calls if response.has_tool_calls else None,
+                )
+            )
 
             # If model requested tool calls, execute them
             if response.has_tool_calls:
@@ -437,7 +443,13 @@ class AgentOrchestrator:
                 yield f"Model error: {exc}"
                 return
 
-            self._agent.history.append(Message(role=Role.ASSISTANT, content="".join(collected)))
+            self._agent.history.append(
+                Message(
+                    role=Role.ASSISTANT,
+                    content="".join(collected),
+                    tool_calls=tool_calls if tool_calls else None,
+                )
+            )
 
             if tool_calls:
                 for tool_call in tool_calls:

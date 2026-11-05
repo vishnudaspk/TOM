@@ -699,6 +699,105 @@ class TestHttpProviderStreaming:
         content = "".join(c.content for c in chunks if not c.is_final)
         assert "Hi" in content
 
+    def test_stream_streaming_tool_calls_accumulated_properly(self) -> None:
+        provider = HttpModelProvider()
+        req = _make_request()
+
+        raw_chunks = [
+            {
+                "id": "chatcmpl-stream-tc",
+                "object": "chat.completion.chunk",
+                "choices": [
+                    {
+                        "index": 0,
+                        "delta": {
+                            "tool_calls": [
+                                {
+                                    "index": 0,
+                                    "id": "call_weather_1",
+                                    "type": "function",
+                                    "function": {"name": "web_search", "arguments": ""},
+                                }
+                            ]
+                        },
+                        "finish_reason": None,
+                    }
+                ],
+            },
+            {
+                "id": "chatcmpl-stream-tc",
+                "object": "chat.completion.chunk",
+                "choices": [
+                    {
+                        "index": 0,
+                        "delta": {
+                            "tool_calls": [
+                                {
+                                    "index": 0,
+                                    "function": {"arguments": '{"query": "weather '},
+                                }
+                            ]
+                        },
+                        "finish_reason": None,
+                    }
+                ],
+            },
+            {
+                "id": "chatcmpl-stream-tc",
+                "object": "chat.completion.chunk",
+                "choices": [
+                    {
+                        "index": 0,
+                        "delta": {
+                            "tool_calls": [
+                                {
+                                    "index": 0,
+                                    "function": {"arguments": 'in New York"}'},
+                                }
+                            ]
+                        },
+                        "finish_reason": "tool_calls",
+                    }
+                ],
+            },
+        ]
+
+        sse_lines = self._make_sse_response(raw_chunks)
+        chunks = run_async(self._collect_stream(provider, req, sse_lines))
+
+        tool_chunks = [c for c in chunks if c.tool_call_delta is not None]
+        assert len(tool_chunks) == 1
+        tc = tool_chunks[0].tool_call_delta
+        assert tc is not None
+        assert tc.id == "call_weather_1"
+        assert tc.name == "web_search"
+        assert tc.arguments == {"query": "weather in New York"}
+
+        final_chunks = [c for c in chunks if c.is_final]
+        assert len(final_chunks) == 1
+        assert final_chunks[0].finish_reason == FinishReason.TOOL_CALL
+
+    def test_message_to_wire_formats_assistant_tool_calls(self) -> None:
+        msg = Message(
+            role=Role.ASSISTANT,
+            content="",
+            tool_calls=[
+                ToolCallRequest(
+                    id="call_999",
+                    name="web_search",
+                    arguments={"query": "test query"},
+                )
+            ],
+        )
+        wire = _message_to_wire(msg)
+        assert wire["role"] == "assistant"
+        assert wire["content"] is None
+        assert "tool_calls" in wire
+        assert len(wire["tool_calls"]) == 1
+        assert wire["tool_calls"][0]["id"] == "call_999"
+        assert wire["tool_calls"][0]["function"]["name"] == "web_search"
+        assert json.loads(wire["tool_calls"][0]["function"]["arguments"]) == {"query": "test query"}
+
 
 # ---------------------------------------------------------------------------
 # Health Check

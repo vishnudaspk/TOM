@@ -45,6 +45,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+import uuid
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -90,14 +91,45 @@ def _role_to_wire(role: Role) -> str:
 
 def _message_to_wire(msg: Message) -> dict[str, Any]:
     """Convert a TOM Message to an OpenAI-compatible wire dict."""
+    has_tools = bool(getattr(msg, "tool_calls", None))
     wire: dict[str, Any] = {
         "role": _role_to_wire(msg.role),
-        "content": msg.content or "",
+        "content": msg.content if msg.content else (None if has_tools else ""),
     }
     if msg.name:
         wire["name"] = msg.name
     if msg.tool_call_id and msg.role == Role.TOOL_RESULT:
         wire["tool_call_id"] = msg.tool_call_id
+    if has_tools:
+        raw_tools: list[dict[str, Any]] = []
+        for tc in msg.tool_calls or []:
+            if isinstance(tc, dict) and "function" in tc:
+                raw_tools.append(tc)
+            else:
+                tc_id = getattr(tc, "id", None) or (tc.get("id") if isinstance(tc, dict) else "")
+                tc_name = getattr(tc, "name", None) or (
+                    tc.get("name") if isinstance(tc, dict) else ""
+                )
+                tc_args = getattr(tc, "arguments", None) or (
+                    tc.get("arguments") if isinstance(tc, dict) else {}
+                )
+                if isinstance(tc_args, dict):
+                    tc_args_str = json.dumps(tc_args)
+                elif isinstance(tc_args, str):
+                    tc_args_str = tc_args
+                else:
+                    tc_args_str = "{}"
+                raw_tools.append(
+                    {
+                        "id": tc_id or f"call_{uuid.uuid4().hex[:8]}",
+                        "type": "function",
+                        "function": {
+                            "name": tc_name,
+                            "arguments": tc_args_str,
+                        },
+                    }
+                )
+        wire["tool_calls"] = raw_tools
     return wire
 
 
@@ -392,6 +424,7 @@ class HttpModelProvider(LLMProvider):
         chunks_yielded = 0
         final_usage: TokenUsage | None = None
         final_finish: FinishReason = FinishReason.UNKNOWN
+        accumulated_tools: dict[int, dict[str, str]] = {}
 
         try:
             async with self._client(stream=True) as client:
@@ -448,18 +481,69 @@ class HttpModelProvider(LLMProvider):
                         if chunk_data.get("usage"):
                             final_usage = _parse_usage(chunk_data["usage"])
 
+                        # Accumulate streaming tool calls safely
+                        for tc in raw_tool_calls:
+                            idx = tc.get("index", 0)
+                            if idx not in accumulated_tools:
+                                accumulated_tools[idx] = {
+                                    "id": tc.get("id") or "",
+                                    "name": "",
+                                    "arguments": "",
+                                }
+                            elif tc.get("id"):
+                                accumulated_tools[idx]["id"] = tc["id"]
+
+                            fn = tc.get("function") or {}
+                            if fn.get("name"):
+                                accumulated_tools[idx]["name"] += fn["name"]
+                            fn_args = fn.get("arguments")
+                            if fn_args:
+                                if isinstance(fn_args, str):
+                                    accumulated_tools[idx]["arguments"] += fn_args
+                                elif isinstance(fn_args, dict):
+                                    accumulated_tools[idx]["arguments"] = json.dumps(fn_args)
+
                         # Yield intermediate chunk (non-final)
-                        if content_delta or reasoning_delta or raw_tool_calls:
+                        if content_delta or reasoning_delta:
                             chunks_yielded += 1
                             yield StreamChunk(
                                 content=content_delta,
                                 reasoning_content=reasoning_delta,
-                                tool_call_delta=_parse_tool_calls(raw_tool_calls)[0]
-                                if raw_tool_calls
-                                else None,
                                 finish_reason=None,
                                 is_final=False,
                             )
+
+                    # Emit any accumulated tool calls as complete ToolCallRequests
+                    for idx in sorted(accumulated_tools.keys()):
+                        tc_info = accumulated_tools[idx]
+                        args_raw = tc_info["arguments"].strip()
+                        args: dict[str, Any] = {}
+                        if args_raw:
+                            try:
+                                parsed = json.loads(args_raw)
+                                if isinstance(parsed, dict):
+                                    args = parsed
+                                else:
+                                    args = {"value": parsed}
+                            except json.JSONDecodeError as exc:
+                                logger.warning(
+                                    "http_provider_stream_tool_args_parse_failed",
+                                    tool=tc_info["name"],
+                                    args_raw=args_raw[:200],
+                                    error=str(exc),
+                                )
+                                args = {"raw": args_raw}
+
+                        chunks_yielded += 1
+                        yield StreamChunk(
+                            tool_call_delta=ToolCallRequest(
+                                id=tc_info["id"] or f"call_{uuid.uuid4().hex[:8]}",
+                                name=tc_info["name"],
+                                arguments=args,
+                            ),
+                            finish_reason=None,
+                            is_final=False,
+                        )
 
         except asyncio.CancelledError:
             logger.info(
@@ -470,8 +554,11 @@ class HttpModelProvider(LLMProvider):
             raise
         except (ModelAPIError, ModelConnectionError, ModelTimeoutError, ModelResponseError):
             raise
-        except Exception as exc:
+        except httpx.HTTPError as exc:
             raise self._wrap_http_error(exc, "stream") from exc
+        except Exception as exc:
+            logger.error("http_provider_stream_unexpected_error", error=str(exc), exc_info=True)
+            raise ModelResponseError(f"Stream error: {exc}") from exc
 
         # Final sentinel chunk
         latency_ms = int((time.perf_counter() - t_start) * 1000)

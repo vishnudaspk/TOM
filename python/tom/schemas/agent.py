@@ -117,6 +117,10 @@ class Message(BaseModel):
         default=None,
         description="Correlation ID for tool call / tool result pairing",
     )
+    tool_calls: list[Any] | None = Field(
+        default=None,
+        description="Tool calls emitted by the assistant in this message",
+    )
     tool_metadata: ToolCallMetadata | dict[str, Any] | None = Field(
         default=None,
         description="Tool execution metadata where applicable",
