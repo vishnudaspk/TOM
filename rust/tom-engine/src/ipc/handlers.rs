@@ -15,18 +15,11 @@ use crate::{ENGINE_NAME, ENGINE_VERSION};
 
 /// Register the foundational engine handlers, system telemetry handlers, and audio handlers.
 pub fn register_baseline_handlers(dispatcher: &mut IpcDispatcher) {
-    let monitor = Arc::new(SystemMonitor::new());
-    let audio = Arc::new(crate::audio::AudioManager::new());
-    register_baseline_handlers_with_components(dispatcher, monitor, audio);
-}
-
-/// Register baseline and system telemetry handlers using an injected `SystemMonitor`.
-pub fn register_baseline_handlers_with_monitor(
-    dispatcher: &mut IpcDispatcher,
-    monitor: Arc<SystemMonitor>,
-) {
-    let audio = Arc::new(crate::audio::AudioManager::new());
-    register_baseline_handlers_with_components(dispatcher, monitor, audio);
+    register_baseline_handlers_with_components(
+        dispatcher,
+        Arc::new(SystemMonitor::new()),
+        Arc::new(crate::audio::AudioManager::new()),
+    );
 }
 
 /// Register baseline, system telemetry, and audio handlers using injected components.
@@ -219,7 +212,7 @@ pub fn register_audio_handlers(
         }
     });
 
-    // audio.capture_start -> begins audio capture session into ring buffer
+    // audio.capture_start -\u003e begins audio capture session into ring buffer
     let a_cap_start = audio.clone();
     dispatcher.register("audio.capture_start", move |params| {
         let a = a_cap_start.clone();
@@ -245,7 +238,7 @@ pub fn register_audio_handlers(
                     .map(|v| v as usize)
                     .unwrap_or(1600),
             };
-            a.start_capture(config).map_err(|e| {
+            a.start_capture(config).await.map_err(|e| {
                 IpcError::new(
                     error_code::INTERNAL,
                     format!("Failed to start audio capture: {e}"),
@@ -295,8 +288,10 @@ pub fn register_audio_handlers(
     dispatcher.register("audio.play_buffer", move |params| {
         let a = a_play.clone();
         async move {
-            let samples: Vec<f32> = if let Some(base64_str) = params.get("audio_data_base64").and_then(|v| v.as_str()) {
-                use base64::{Engine as _, engine::general_purpose};
+            let samples: Vec<f32> = if let Some(base64_str) =
+                params.get("audio_data_base64").and_then(|v| v.as_str())
+            {
+                use base64::{engine::general_purpose, Engine as _};
                 let bytes = general_purpose::STANDARD.decode(base64_str).map_err(|e| {
                     IpcError::new(
                         error_code::INVALID_PARAMS,
@@ -304,7 +299,9 @@ pub fn register_audio_handlers(
                     )
                 })?;
                 bytes
-                    .chunks_exact(2)
+                    .as_chunks::<2>()
+                    .0
+                    .iter()
                     .map(|chunk| {
                         let sample = i16::from_le_bytes([chunk[0], chunk[1]]);
                         sample as f32 / 32767.0
@@ -363,10 +360,74 @@ pub fn register_audio_handlers(
     });
 }
 
-/// Create a new `IpcDispatcher` pre-configured with default timeout, baseline, system, and audio handlers.
+/// Register input / hotkey subsystem IPC handlers.
+pub fn register_input_handlers(
+    dispatcher: &mut IpcDispatcher,
+    hotkeys: Arc<crate::input::HotkeyManager>,
+) {
+    // input.register_hotkey
+    let hk_reg = hotkeys.clone();
+    dispatcher.register("input.register_hotkey", move |params| {
+        let hk = hk_reg.clone();
+        async move {
+            let binding: crate::input::HotkeyBinding =
+                serde_json::from_value(params).map_err(|e| {
+                    IpcError::new(
+                        error_code::INVALID_PARAMS,
+                        format!("Invalid hotkey binding parameters: {e}"),
+                    )
+                })?;
+            hk.register_hotkey(binding)
+                .await
+                .map_err(|e| IpcError::new(error_code::INTERNAL, e.to_string()))?;
+            Ok(json!({ "success": true }))
+        }
+    });
+
+    // input.unregister_hotkey
+    let hk_unreg = hotkeys.clone();
+    dispatcher.register("input.unregister_hotkey", move |params| {
+        let hk = hk_unreg.clone();
+        async move {
+            let id = params.get("id").and_then(|v| v.as_str()).ok_or_else(|| {
+                IpcError::new(
+                    error_code::INVALID_PARAMS,
+                    "Missing or invalid 'id' parameter",
+                )
+            })?;
+            hk.unregister_hotkey(id)
+                .await
+                .map_err(|e| IpcError::new(error_code::NOT_FOUND, e.to_string()))?;
+            Ok(json!({ "success": true }))
+        }
+    });
+
+    // input.list_hotkeys
+    let hk_list = hotkeys;
+    dispatcher.register("input.list_hotkeys", move |_params| {
+        let hk = hk_list.clone();
+        async move {
+            let list = hk.list_hotkeys().await;
+            let total = list.len();
+            let bindings = serde_json::to_value(list).map_err(|e| {
+                IpcError::new(
+                    error_code::INTERNAL,
+                    format!("Failed to serialize hotkeys list: {e}"),
+                )
+            })?;
+            // Wrap in an object so the IPC protocol's data field (which requires a JSON object)
+            // can carry the array without violating the wire format.
+            Ok(json!({ "bindings": bindings, "total": total }))
+        }
+    });
+}
+
+/// Create a new `IpcDispatcher` pre-configured with default timeout, baseline, system, audio, and input handlers.
 pub fn create_default_dispatcher() -> IpcDispatcher {
     let mut dispatcher = IpcDispatcher::new();
     register_baseline_handlers(&mut dispatcher);
+    let hotkeys = Arc::new(crate::input::HotkeyManager::new());
+    register_input_handlers(&mut dispatcher, hotkeys);
     dispatcher
 }
 
@@ -550,6 +611,8 @@ mod tests {
         assert_eq!(data["capture_sample_rate"], 16000);
         assert_eq!(data["capture_channels"], 1);
         assert_eq!(data["captured_samples"], 0);
+        assert_eq!(data["capture_overruns"], 0);
+        assert_eq!(data["playback_underruns"], 0);
     }
 
     #[tokio::test]
@@ -613,5 +676,48 @@ mod tests {
         let stop_req = IpcRequest::new("aud_stop_1", "audio.playback_stop", json!({}));
         let stop_resp = dispatcher.dispatch(stop_req).await;
         assert!(stop_resp.success);
+    }
+
+    #[tokio::test]
+    async fn test_input_handlers() {
+        let dispatcher = create_default_dispatcher();
+
+        // Register a test hotkey
+        let reg_req = IpcRequest::new(
+            "in_reg_1",
+            "input.register_hotkey",
+            json!({
+                "id": "ipc_hotkey_1",
+                "key": "KeyT",
+                "modifiers": { "ctrl": true, "alt": false, "shift": false, "win": false },
+                "action": "ToggleListening",
+                "enabled": true
+            }),
+        );
+        let reg_resp = dispatcher.dispatch(reg_req).await;
+        assert!(reg_resp.success);
+
+        // List hotkeys
+        let list_req = IpcRequest::new("in_list_1", "input.list_hotkeys", json!({}));
+        let list_resp = dispatcher.dispatch(list_req).await;
+        assert!(list_resp.success);
+        let data = list_resp.data.unwrap();
+        // list_hotkeys now returns { "bindings": [...], "total": n }
+        let list = data["bindings"].as_array().unwrap().clone();
+        assert_eq!(data["total"].as_u64().unwrap(), list.len() as u64);
+        assert!(list.iter().any(|h| h["id"] == "ipc_hotkey_1"));
+
+        // Unregister hotkey
+        let unreg_req = IpcRequest::new(
+            "in_unreg_1",
+            "input.unregister_hotkey",
+            json!({ "id": "ipc_hotkey_1" }),
+        );
+        let unreg_resp = dispatcher.dispatch(unreg_req.clone()).await;
+        assert!(unreg_resp.success);
+
+        // Unregister again -> not found
+        let unreg_fail = dispatcher.dispatch(unreg_req).await;
+        assert!(!unreg_fail.success);
     }
 }

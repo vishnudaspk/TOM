@@ -24,7 +24,7 @@ pub struct AudioCaptureConfig {
     pub sample_rate: u32,
     /// Output channels (must be 1 for voice pipeline).
     pub channels: u16,
-    /// Ignored — frames are always emitted at TARGET_FRAME_SAMPLES (20ms at 16kHz).
+    /// Frame size for mock capture only. Live capture always emits TARGET_FRAME_SAMPLES (320).
     pub chunk_size: usize,
 }
 
@@ -69,51 +69,68 @@ impl AudioCaptureController {
         let host = cpal::default_host();
 
         fn select_input_device(
-    host: &cpal::Host,
-    device_name: Option<&str>,
-) -> Result<cpal::Device, AudioError> {
-    let devices = host
-        .input_devices()
-        .map_err(|e| AudioError::HostError(e.to_string()))?;
+            host: &cpal::Host,
+            device_name: Option<&str>,
+        ) -> Result<cpal::Device, AudioError> {
+            let devices = host
+                .input_devices()
+                .map_err(|e| AudioError::HostError(e.to_string()))?;
 
-    // Collect all devices first to allow multiple passes
-    let devices: Vec<_> = devices.collect();
+            // Collect all devices first to allow multiple passes
+            let devices: Vec<_> = devices.collect();
 
-    // If a specific device name is configured, try to find it exactly
-    if let Some(name) = device_name {
-        if let Some(device) = devices.iter().find(|d| {
-            d.name().map(|n| n == name).unwrap_or(false)
-        }) {
-            info!("Selected configured input device: {}", device.name().unwrap_or_else(|_| "unknown".to_string()));
-            return Ok(device.clone());
+            // If a specific device name is configured, try to find it exactly
+            if let Some(name) = device_name {
+                if let Some(device) = devices
+                    .iter()
+                    .find(|d| d.name().map(|n| n == name).unwrap_or(false))
+                {
+                    info!(
+                        "Selected configured input device: {}",
+                        device.name().unwrap_or_else(|_| "unknown".to_string())
+                    );
+                    return Ok(device.clone());
+                }
+                // Configured device not found - return error instead of falling back
+                return Err(AudioError::NoDeviceFound(format!(
+                    "Input device '{}' not found",
+                    name
+                )));
+            }
+
+            // Auto-select: prefer non-loopback physical microphones
+            // First, try to find a non-loopback device (not "stereo mix", "loopback", etc.)
+            let loopback_keywords = ["stereo mix", "loopback", "what u hear", "wave out mix"];
+            let non_loopback = devices.iter().find(|d| {
+                d.name()
+                    .map(|n| {
+                        let lower = n.to_lowercase();
+                        !loopback_keywords.iter().any(|kw| lower.contains(kw))
+                    })
+                    .unwrap_or(false)
+            });
+
+            if let Some(device) = non_loopback {
+                info!(
+                    "Auto-selected input device: {}",
+                    device.name().unwrap_or_else(|_| "unknown".to_string())
+                );
+                return Ok(device.clone());
+            }
+
+            // Fallback: use the first available device
+            if let Some(device) = devices.first() {
+                warn!(
+                    "No non-loopback input device found; using first available: {}",
+                    device.name().unwrap_or_else(|_| "unknown".to_string())
+                );
+                return Ok(device.clone());
+            }
+
+            Err(AudioError::NoDeviceFound(
+                "No input audio device available".into(),
+            ))
         }
-        // Configured device not found - return error instead of falling back
-        return Err(AudioError::NoDeviceFound(format!("Input device '{}' not found", name)));
-    }
-
-    // Auto-select: prefer non-loopback physical microphones
-    // First, try to find a non-loopback device (not "stereo mix", "loopback", etc.)
-    let loopback_keywords = ["stereo mix", "loopback", "what u hear", "wave out mix"];
-    let non_loopback = devices.iter().find(|d| {
-        d.name().map(|n| {
-            let lower = n.to_lowercase();
-            !loopback_keywords.iter().any(|kw| lower.contains(kw))
-        }).unwrap_or(false)
-    });
-
-    if let Some(device) = non_loopback {
-        info!("Auto-selected input device: {}", device.name().unwrap_or_else(|_| "unknown".to_string()));
-        return Ok(device.clone());
-    }
-
-    // Fallback: use the first available device
-    if let Some(device) = devices.first() {
-        warn!("No non-loopback input device found; using first available: {}", device.name().unwrap_or_else(|_| "unknown".to_string()));
-        return Ok(device.clone());
-    }
-
-    Err(AudioError::NoDeviceFound("No input audio device available".into()))
-}
 
         let device = select_input_device(&host, config.device_name.as_deref())?;
 
@@ -189,8 +206,10 @@ impl AudioCaptureController {
                 move |data: &[u16], _: &cpal::InputCallbackInfo| {
                     if !data.is_empty() {
                         const U16_MID: f32 = 32768.0;
-                        let frames: Vec<f32> =
-                            data.iter().map(|&s| (s as f32 - U16_MID) / U16_MID).collect();
+                        let frames: Vec<f32> = data
+                            .iter()
+                            .map(|&s| (s as f32 - U16_MID) / U16_MID)
+                            .collect();
                         let _ = raw_tx.try_send(frames);
                     }
                 },

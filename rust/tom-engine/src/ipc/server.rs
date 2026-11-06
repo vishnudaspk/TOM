@@ -22,6 +22,10 @@ pub const PIPE_NAME: &str = r"\\.\pipe\tom-engine";
 /// Protects the engine from unbounded memory allocation.
 pub const MAX_FRAME_BYTES: usize = 4 * 1024 * 1024;
 
+/// Default timeout for writing an outbound framed response back to the client (2000 ms).
+/// Prevents stalled clients from blocking engine connection workers indefinitely.
+pub const DEFAULT_WRITE_TIMEOUT: Duration = Duration::from_millis(2000);
+
 /// Transport-level errors.
 #[derive(Debug, thiserror::Error)]
 pub enum IpcTransportError {
@@ -143,16 +147,12 @@ where
                 let mut out_bytes = serde_json::to_vec(&response)?;
                 out_bytes.push(b'\n');
 
-                tokio::select! {
-                    _ = cancel.cancelled() => {
-                        debug!("Cancelled while writing IPC response");
-                        return Ok(());
-                    }
-                    write_res = write_half.write_all(&out_bytes) => {
-                        write_res?;
-                        write_half.flush().await?;
-                    }
-                }
+                tokio::time::timeout(DEFAULT_WRITE_TIMEOUT, async {
+                    write_half.write_all(&out_bytes).await?;
+                    write_half.flush().await
+                })
+                .await
+                .map_err(|_| IpcTransportError::Timeout(DEFAULT_WRITE_TIMEOUT))??;
             }
             Err(IpcTransportError::FrameTooLarge { size, max }) => {
                 warn!(size, max, "Inbound frame exceeded maximum allowed size");

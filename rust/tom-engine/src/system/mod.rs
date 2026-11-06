@@ -122,15 +122,31 @@ impl SystemMonitor {
 
     /// Retrieve an aggregated snapshot of all system telemetry domains.
     ///
-    /// Always returns a complete snapshot even if optional hardware (GPU, battery)
-    /// reports unavailable.
+    /// Consolidates all sysinfo queries under a single mutex acquisition,
+    /// and queries peripheral telemetry (GPU, battery, disk) without holding locks.
     pub async fn get_all(&self) -> SystemSnapshot {
-        let cpu = self.get_cpu().await;
-        let memory = self.get_memory().await;
         let gpu = self.get_gpu();
         let battery = self.get_battery();
         let disk = self.get_disk();
-        let process_info = self.get_processes(processes::DEFAULT_PROCESS_LIMIT).await;
+
+        let mut sys = self.sys.lock().await;
+
+        let mut last_cpu = self.last_cpu_refresh.lock().await;
+        if last_cpu.elapsed() >= CPU_REFRESH_INTERVAL {
+            sys.refresh_cpu_usage();
+            *last_cpu = Instant::now();
+        }
+        let cpu = cpu::get_cpu_info(&sys);
+
+        sys.refresh_memory();
+        let memory = memory::get_memory_info(&sys);
+
+        let mut last_proc = self.last_process_refresh.lock().await;
+        if last_proc.elapsed() >= PROCESS_REFRESH_INTERVAL {
+            sys.refresh_processes(ProcessesToUpdate::All, true);
+            *last_proc = Instant::now();
+        }
+        let process_info = processes::get_process_info(&sys, processes::DEFAULT_PROCESS_LIMIT);
 
         SystemSnapshot {
             cpu,
@@ -146,18 +162,18 @@ impl SystemMonitor {
     pub async fn get_time(&self) -> TimeInfo {
         // Use system time directly - sysinfo doesn't provide time, so use std::time
         use std::time::{SystemTime, UNIX_EPOCH};
-        
+
         let now = SystemTime::now();
         let duration_since_epoch = now.duration_since(UNIX_EPOCH).unwrap_or_default();
         let timestamp_secs = duration_since_epoch.as_secs();
         let timestamp_nanos = duration_since_epoch.subsec_nanos();
-        
+
         // Get local timezone offset
         let now_dt = Local::now();
         let offset = now_dt.offset();
         let offset_seconds = offset.local_minus_utc();
         let timezone_name = offset.to_string();
-        
+
         TimeInfo {
             timestamp_secs,
             timestamp_nanos,

@@ -22,7 +22,7 @@ impl TimeInfo {
     /// Get the local time as a formatted string (e.g., "10:24 PM").
     pub fn local_time_str(&self) -> String {
         let dt = DateTime::from_timestamp(self.timestamp_secs as i64, self.timestamp_nanos)
-            .unwrap_or_else(|| Utc::now())
+            .unwrap_or_else(Utc::now)
             .with_timezone(&Local);
         dt.format("%I:%M %p").to_string()
     }
@@ -42,7 +42,7 @@ mod tests {
             timezone_name: "PST".to_string(),
             iso8601: "2024-01-01T00:00:00-08:00".to_string(),
         };
-        
+
         // The formatted string should contain the time
         let time_str = time_info.local_time_str();
         assert!(time_str.contains(":"));

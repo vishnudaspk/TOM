@@ -32,6 +32,41 @@ pub struct AudioStatus {
     pub capture_sample_rate: u32,
     pub capture_channels: u16,
     pub captured_samples: usize,
+    pub capture_overruns: usize,
+    pub playback_underruns: usize,
+}
+
+/// Consolidated playback state — single lock covers sender, cancel, controller, and config.
+#[derive(Default)]
+struct PlaybackState {
+    sender: Option<mpsc::Sender<Vec<f32>>>,
+    cancel: Option<CancellationToken>,
+    controller: Option<AudioPlaybackController>,
+    config: AudioPlaybackConfig,
+}
+
+impl PlaybackState {
+    fn is_active(&self) -> bool {
+        self.cancel
+            .as_ref()
+            .map(|c| !c.is_cancelled())
+            .unwrap_or(false)
+    }
+
+    fn underruns(&self) -> usize {
+        self.controller
+            .as_ref()
+            .map(|c| c.underrun_count.load(Ordering::Relaxed))
+            .unwrap_or(0)
+    }
+
+    fn stop(&mut self) {
+        if let Some(cancel) = self.cancel.take() {
+            cancel.cancel();
+        }
+        self.sender = None;
+        self.controller = None;
+    }
 }
 
 /// Orchestrates live/mock audio capture and playback for TOM Engine.
@@ -41,11 +76,9 @@ pub struct AudioManager {
     capture_buffer: Arc<Mutex<AudioBuffer>>,
     capture_config: Mutex<AudioCaptureConfig>,
     total_captured_samples: Arc<AtomicUsize>,
+    total_overrun_samples: Arc<AtomicUsize>,
 
-    playback_controller: Mutex<Option<AudioPlaybackController>>,
-    playback_sender: Mutex<Option<mpsc::Sender<Vec<f32>>>>,
-    playback_cancel: Mutex<Option<CancellationToken>>,
-    playback_config: Mutex<AudioPlaybackConfig>,
+    playback: Mutex<PlaybackState>,
 
     cached_devices: Mutex<Option<(std::time::Instant, AudioHostInfo)>>,
 }
@@ -67,11 +100,9 @@ impl AudioManager {
             ))),
             capture_config: Mutex::new(AudioCaptureConfig::default()),
             total_captured_samples: Arc::new(AtomicUsize::new(0)),
+            total_overrun_samples: Arc::new(AtomicUsize::new(0)),
 
-            playback_controller: Mutex::new(None),
-            playback_sender: Mutex::new(None),
-            playback_cancel: Mutex::new(None),
-            playback_config: Mutex::new(AudioPlaybackConfig::default()),
+            playback: Mutex::new(PlaybackState::default()),
 
             cached_devices: Mutex::new(None),
         }
@@ -104,16 +135,12 @@ impl AudioManager {
             .map(|c| !c.is_cancelled())
             .unwrap_or(false);
 
-        let is_playing = self
-            .playback_cancel
-            .lock()
-            .unwrap()
-            .as_ref()
-            .map(|c| !c.is_cancelled())
-            .unwrap_or(false);
-
         let cap_cfg = self.capture_config.lock().unwrap();
         let total_samples = self.total_captured_samples.load(Ordering::Relaxed);
+        let overrun_samples = self.total_overrun_samples.load(Ordering::Relaxed);
+        let pb = self.playback.lock().unwrap();
+        let is_playing = pb.is_active();
+        let underruns = pb.underruns();
 
         AudioStatus {
             capture_active: is_capturing,
@@ -121,6 +148,8 @@ impl AudioManager {
             capture_sample_rate: cap_cfg.sample_rate,
             capture_channels: cap_cfg.channels,
             captured_samples: total_samples,
+            capture_overruns: overrun_samples,
+            playback_underruns: underruns,
         }
     }
 
@@ -130,36 +159,50 @@ impl AudioManager {
     /// with a supported configuration, the error is returned to the caller.
     /// Mock capture is only used when explicitly requested via
     /// `AudioCaptureController::create_mock_capture()` (tests / CI).
-    pub fn start_capture(&self, config: AudioCaptureConfig) -> Result<(), AudioError> {
+    ///
+    /// CPAL stream initialization is blocking (WASAPI device negotiation); it is
+    /// offloaded to `spawn_blocking` so the Tokio runtime is not stalled.
+    pub async fn start_capture(&self, config: AudioCaptureConfig) -> Result<(), AudioError> {
         // Stop any currently running capture session first
         let _ = self.stop_capture();
 
         // Clear existing audio buffer and reset cumulative sample counter for fresh session
         self.capture_buffer.lock().unwrap().clear();
         self.total_captured_samples.store(0, Ordering::Relaxed);
+        self.total_overrun_samples.store(0, Ordering::Relaxed);
 
         let cancel = CancellationToken::new();
 
-        // Attempt live hardware capture. On failure, return the error — NO silent fallback.
-        let (controller, mut rx) =
-            AudioCaptureController::start_live(config.clone(), cancel.clone()).map_err(|e| {
-                error!(
-                    "Failed to start live audio capture: {e}. Device: {:?}, requested: {}Hz {}ch",
-                    config.device_name, config.sample_rate, config.channels
-                );
-                e
-            })?;
+        // Offload blocking CPAL/WASAPI device initialization to the blocking thread pool.
+        let config_clone = config.clone();
+        let cancel_clone = cancel.clone();
+        let (controller, mut rx) = tokio::task::spawn_blocking(move || {
+            AudioCaptureController::start_live(config_clone, cancel_clone)
+        })
+        .await
+        .map_err(|e| AudioError::StreamError(format!("spawn_blocking join error: {e}")))?
+        .map_err(|e| {
+            error!(
+                "Failed to start live audio capture: {e}. Device: {:?}, requested: {}Hz {}ch",
+                config.device_name, config.sample_rate, config.channels
+            );
+            e
+        })?;
 
         info!("Live hardware audio capture started successfully");
 
         // Spawn background worker to drain incoming PCM frames into the ring buffer
         let buf_clone = Arc::clone(&self.capture_buffer);
         let total_samples = Arc::clone(&self.total_captured_samples);
+        let overrun_samples = Arc::clone(&self.total_overrun_samples);
         tokio::spawn(async move {
             while let Some(chunk) = rx.recv().await {
                 total_samples.fetch_add(chunk.len(), Ordering::Relaxed);
                 let mut buf = buf_clone.lock().unwrap();
-                buf.push_samples(&chunk);
+                let (_written, dropped) = buf.push_samples_with_overrun(&chunk);
+                if dropped > 0 {
+                    overrun_samples.fetch_add(dropped, Ordering::Relaxed);
+                }
             }
             debug!("Audio capture worker loop terminated cleanly");
         });
@@ -212,6 +255,9 @@ impl AudioManager {
     /// Enqueues PCM samples for asynchronous audio playback.
     /// Spawns or reuses playback controller; returns error if physical device cannot be initialized.
     /// Mock playback is only available via explicit test paths.
+    ///
+    /// CPAL stream initialization is blocking (WASAPI device negotiation); it is
+    /// offloaded to `spawn_blocking` so the Tokio runtime is not stalled.
     pub async fn play_buffer(
         &self,
         samples: Vec<f32>,
@@ -222,37 +268,42 @@ impl AudioManager {
             return Ok(0);
         }
 
-        let sender = {
-            let mut sender_opt = self.playback_sender.lock().unwrap();
-            let mut needs_init = sender_opt.is_none();
+        // Check if playback is already active while holding the lock only briefly.
+        let already_active = self.playback.lock().unwrap().is_active();
 
-            if let Some(ref cancel) = *self.playback_cancel.lock().unwrap() {
-                if cancel.is_cancelled() {
-                    needs_init = true;
-                }
+        if !already_active {
+            // Offload blocking CPAL/WASAPI device initialization to the blocking thread pool.
+            let config_clone = config.clone();
+            let cancel = CancellationToken::new();
+            let cancel_clone = cancel.clone();
+            let (controller, tx) = tokio::task::spawn_blocking(move || {
+                AudioPlaybackController::start_live(config_clone, cancel_clone)
+            })
+            .await
+            .map_err(|e| AudioError::StreamError(format!("spawn_blocking join error: {e}")))?
+            .map_err(|e| {
+                error!(
+                    "Failed to start live audio playback: {e}. Device: {:?}, requested: {}Hz {}ch",
+                    config.device_name, config.sample_rate, config.channels
+                );
+                e
+            })?;
+
+            info!("Live hardware audio playback stream started");
+
+            let mut pb = self.playback.lock().unwrap();
+            // Double-check: another concurrent call may have started playback while we waited.
+            if !pb.is_active() {
+                pb.config = config;
+                pb.cancel = Some(cancel);
+                pb.controller = Some(controller);
+                pb.sender = Some(tx);
             }
+            // If already started by concurrent caller, the controller and cancel we built
+            // are dropped cleanly here — stream stops on drop.
+        }
 
-            if needs_init {
-                let cancel = CancellationToken::new();
-                let (controller, tx) = AudioPlaybackController::start_live(config.clone(), cancel.clone())
-                    .map_err(|e| {
-                        error!(
-                            "Failed to start live audio playback: {e}. Device: {:?}, requested: {}Hz {}ch",
-                            config.device_name, config.sample_rate, config.channels
-                        );
-                        e
-                    })?;
-
-                info!("Live hardware audio playback stream started");
-
-                *self.playback_config.lock().unwrap() = config;
-                *self.playback_cancel.lock().unwrap() = Some(cancel);
-                *self.playback_controller.lock().unwrap() = Some(controller);
-                *sender_opt = Some(tx);
-            }
-
-            sender_opt.clone()
-        };
+        let sender = self.playback.lock().unwrap().sender.clone();
 
         if let Some(tx) = sender {
             tx.send(samples).await.map_err(|e| {
@@ -267,11 +318,7 @@ impl AudioManager {
 
     /// Stops audio playback immediately and cancels the playback task (barge-in).
     pub fn stop_playback(&self) -> Result<(), AudioError> {
-        if let Some(cancel) = self.playback_cancel.lock().unwrap().take() {
-            cancel.cancel();
-        }
-        *self.playback_sender.lock().unwrap() = None;
-        *self.playback_controller.lock().unwrap() = None;
+        self.playback.lock().unwrap().stop();
         debug!("Audio playback stopped immediately (barge-in)");
         Ok(())
     }

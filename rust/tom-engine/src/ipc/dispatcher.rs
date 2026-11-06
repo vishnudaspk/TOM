@@ -77,76 +77,14 @@ impl IpcDispatcher {
     /// - Returns `error_code::TIMEOUT` if handler execution exceeds `self.timeout`.
     /// - Returns structured `IpcResponse` with payload or error.
     pub async fn dispatch(&self, request: IpcRequest) -> IpcResponse {
-        // Step 1: Protocol validation
-        if let Err(val_err) = request.validate() {
-            warn!(
-                id = %request.id,
-                code = %val_err.code,
-                "Request validation failed during dispatch"
-            );
-            return IpcResponse::error(request.id, val_err.code, val_err.message);
-        }
-
-        // Step 2: Method lookup
-        let handler = match self.handlers.get(&request.method) {
-            Some(h) => h,
-            None => {
-                debug!(
-                    id = %request.id,
-                    method = %request.method,
-                    "Requested method not found"
-                );
-                return IpcResponse::error(
-                    request.id,
-                    error_code::NOT_FOUND,
-                    format!("method '{}' not found", request.method),
-                );
-            }
-        };
-
-        // Step 3: Bounded execution under timeout
-        let fut = (handler)(request.params);
-        match tokio::time::timeout(self.timeout, fut).await {
-            Ok(handler_res) => match handler_res {
-                Ok(data) => {
-                    debug!(
-                        id = %request.id,
-                        method = %request.method,
-                        "Handler executed successfully"
-                    );
-                    IpcResponse::ok(request.id, data)
-                }
-                Err(ipc_err) => {
-                    warn!(
-                        id = %request.id,
-                        method = %request.method,
-                        code = %ipc_err.code,
-                        "Handler returned error"
-                    );
-                    IpcResponse::error(request.id, ipc_err.code, ipc_err.message)
-                }
-            },
-            Err(_) => {
-                warn!(
-                    id = %request.id,
-                    method = %request.method,
-                    timeout_ms = self.timeout.as_millis(),
-                    "Handler timed out"
-                );
-                IpcResponse::error(
-                    request.id,
-                    error_code::TIMEOUT,
-                    format!("handler timed out after {}ms", self.timeout.as_millis()),
-                )
-            }
-        }
+        self.dispatch_with_timeout(request, self.timeout).await
     }
 
-    /// Dispatch an `IpcRequest` with a custom timeout.
+    /// Dispatch an `IpcRequest` with a caller-specified timeout instead of the default.
     pub async fn dispatch_with_timeout(
         &self,
         request: IpcRequest,
-        timeout: std::time::Duration,
+        timeout: Duration,
     ) -> IpcResponse {
         // Step 1: Protocol validation
         if let Err(val_err) = request.validate() {
@@ -175,7 +113,7 @@ impl IpcDispatcher {
             }
         };
 
-        // Step 3: Bounded execution under custom timeout
+        // Step 3: Bounded execution under timeout
         let fut = (handler)(request.params);
         match tokio::time::timeout(timeout, fut).await {
             Ok(handler_res) => match handler_res {

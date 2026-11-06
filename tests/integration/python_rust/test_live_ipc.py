@@ -27,6 +27,7 @@ from tom.ipc.protocol import (
     StatusResponse,
     SystemSnapshot,
 )
+from tom.ipc.transport import NamedPipeTransport
 from tom.schemas.config import IpcConfig
 
 
@@ -244,8 +245,8 @@ def test_live_version_mismatch_returns_remote_error(live_engine: str) -> None:
     """Verify request with unsupported protocol version returns VERSION_MISMATCH."""
 
     async def _test() -> None:
-        client = NamedPipeIpcClient(config=IpcConfig(pipe_name=live_engine))
-        await client.connect()
+        transport = NamedPipeTransport(config=IpcConfig(pipe_name=live_engine))
+        await transport.connect()
         try:
             raw_req = {
                 "id": "test_mismatch_id",
@@ -256,14 +257,14 @@ def test_live_version_mismatch_returns_remote_error(live_engine: str) -> None:
             import json
 
             frame = json.dumps(raw_req).encode("utf-8")
-            await client.transport.write_frame(frame)
-            resp_bytes = await client.transport.read_frame()
+            await transport.write_frame(frame)
+            resp_bytes = await transport.read_frame()
             resp_data = json.loads(resp_bytes.decode("utf-8"))
 
             assert resp_data["success"] is False
             assert resp_data["error"]["code"] == "VERSION_MISMATCH"
         finally:
-            await client.close()
+            await transport.close()
 
     run_async(_test())
 

@@ -20,15 +20,18 @@ impl AudioBuffer {
     ///
     /// If the incoming samples exceed available capacity, the oldest samples
     /// are dropped to prevent unbounded memory growth (ring-buffer semantics).
-    /// Returns the number of samples successfully written.
-    pub fn push_samples(&mut self, samples: &[f32]) -> usize {
+    /// Returns the number of samples successfully written and number of samples dropped.
+    pub fn push_samples_with_overrun(&mut self, samples: &[f32]) -> (usize, usize) {
         let count = samples.len();
         if count == 0 {
-            return 0;
+            return (0, 0);
         }
+
+        let mut dropped = 0;
 
         // If incoming slice is larger than capacity, only keep the tail
         let slice_to_keep = if count > self.capacity {
+            dropped += count - self.capacity;
             &samples[count - self.capacity..]
         } else {
             samples
@@ -39,11 +42,19 @@ impl AudioBuffer {
         let available_space = self.capacity.saturating_sub(self.data.len());
         if needed_space > available_space {
             let to_evict = needed_space - available_space;
+            dropped += to_evict;
             self.data.drain(0..to_evict);
         }
 
         self.data.extend(slice_to_keep.iter().copied());
-        count
+        (count, dropped)
+    }
+
+    /// Pushes a slice of audio samples into the buffer.
+    ///
+    /// Returns the number of samples successfully written.
+    pub fn push_samples(&mut self, samples: &[f32]) -> usize {
+        self.push_samples_with_overrun(samples).0
     }
 
     /// Pops up to `max_samples` from the front of the buffer.
@@ -131,5 +142,19 @@ mod tests {
         buf.clear();
         assert_eq!(buf.len(), 0);
         assert!(buf.is_empty());
+    }
+
+    #[test]
+    fn test_push_samples_with_overrun_tracking() {
+        let mut buf = AudioBuffer::new(4);
+        let (written, dropped) = buf.push_samples_with_overrun(&[1.0, 2.0, 3.0]);
+        assert_eq!(written, 3);
+        assert_eq!(dropped, 0);
+
+        let (written, dropped) = buf.push_samples_with_overrun(&[4.0, 5.0, 6.0]);
+        assert_eq!(written, 3);
+        assert_eq!(dropped, 2);
+        assert_eq!(buf.len(), 4);
+        assert_eq!(buf.pop_samples(4), vec![3.0, 4.0, 5.0, 6.0]);
     }
 }

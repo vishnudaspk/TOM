@@ -40,6 +40,7 @@ pub struct AudioPlaybackController {
     output_sample_rate: u32,
     output_channels: u16,
     output_format: SampleFormat,
+    pub underrun_count: Arc<AtomicUsize>,
 }
 
 unsafe impl Send for AudioPlaybackController {}
@@ -64,7 +65,9 @@ impl AudioPlaybackController {
         // Query supported output configuration ranges
         let supported_config_ranges = device
             .supported_output_configs()
-            .map_err(|e| AudioError::StreamError(format!("Failed to query supported output configs: {e}")))?
+            .map_err(|e| {
+                AudioError::StreamError(format!("Failed to query supported output configs: {e}"))
+            })?
             .collect::<Vec<_>>();
 
         if supported_config_ranges.is_empty() {
@@ -97,10 +100,13 @@ impl AudioPlaybackController {
         let stream_config: StreamConfig = negotiated_config.into();
 
         // Create resampler if needed
-        let needs_resampling = config.sample_rate != output_sample_rate || config.channels != output_channels;
+        let needs_resampling =
+            config.sample_rate != output_sample_rate || config.channels != output_channels;
 
         let sample_queue: Arc<Mutex<VecDeque<f32>>> = Arc::new(Mutex::new(VecDeque::new()));
         let queue_clone = Arc::clone(&sample_queue);
+        let underrun_count = Arc::new(AtomicUsize::new(0));
+        let underrun_clone = Arc::clone(&underrun_count);
 
         let err_fn = move |err| {
             warn!("Audio playback stream error: {err}");
@@ -108,10 +114,18 @@ impl AudioPlaybackController {
 
         // Build the output stream based on the device's sample format
         let stream = match output_format {
-            SampleFormat::F32 => build_stream_f32(&device, &stream_config, queue_clone, err_fn)?,
-            SampleFormat::I16 => build_stream_i16(&device, &stream_config, queue_clone, err_fn)?,
-            SampleFormat::U16 => build_stream_u16(&device, &stream_config, queue_clone, err_fn)?,
-            SampleFormat::U8 => build_stream_u8(&device, &stream_config, queue_clone, err_fn)?,
+            SampleFormat::F32 => {
+                build_stream_f32(&device, &stream_config, queue_clone, underrun_clone, err_fn)?
+            }
+            SampleFormat::I16 => {
+                build_stream_i16(&device, &stream_config, queue_clone, underrun_clone, err_fn)?
+            }
+            SampleFormat::U16 => {
+                build_stream_u16(&device, &stream_config, queue_clone, underrun_clone, err_fn)?
+            }
+            SampleFormat::U8 => {
+                build_stream_u8(&device, &stream_config, queue_clone, underrun_clone, err_fn)?
+            }
             unsupported => {
                 return Err(AudioError::UnsupportedFormat(format!(
                     "Device sample format {:?} is not supported for playback",
@@ -130,9 +144,7 @@ impl AudioPlaybackController {
         let bridge_cancel = cancel.clone();
         let input_sample_rate = config.sample_rate;
         let input_channels = config.channels as usize;
-        let output_sample_rate = output_sample_rate;
         let output_channels = output_channels as usize;
-        let output_format = output_format;
 
         tokio::spawn(async move {
             let mut resampler: Option<Async<f32>> = None;
@@ -207,12 +219,7 @@ impl AudioPlaybackController {
                                         }
                                     }
                                     // Drain output buffer
-                                    if !output_buffer.is_empty() {
-                                        let to_send: Vec<f32> = output_buffer.drain(..).collect();
-                                        to_send
-                                    } else {
-                                        Vec::new()
-                                    }
+                                    std::mem::take(&mut output_buffer)
                                 } else {
                                     // No resampling needed, just channel conversion if needed
                                     if input_channels == output_channels {
@@ -244,6 +251,7 @@ impl AudioPlaybackController {
                 output_sample_rate,
                 output_channels: output_channels as u16,
                 output_format,
+                underrun_count,
             },
             sender,
         ))
@@ -278,12 +286,17 @@ impl AudioPlaybackController {
             }
         });
 
-        (Self {
-            _stream: None,
-            output_sample_rate: 0,
-            output_channels: 0,
-            output_format: SampleFormat::F32,
-        }, sender, sample_count)
+        (
+            Self {
+                _stream: None,
+                output_sample_rate: 0,
+                output_channels: 0,
+                output_format: SampleFormat::F32,
+                underrun_count: Arc::new(AtomicUsize::new(0)),
+            },
+            sender,
+            sample_count,
+        )
     }
 }
 
@@ -339,15 +352,12 @@ fn negotiate_output_config(
         }
     }
 
-    best_config
-        .zip(best_format)
-        .ok_or_else(|| AudioError::UnsupportedFormat("No suitable output configuration found".into()))
+    best_config.zip(best_format).ok_or_else(|| {
+        AudioError::UnsupportedFormat("No suitable output configuration found".into())
+    })
 }
 
-fn build_resampler(
-    input_rate: u32,
-    output_rate: u32,
-) -> Result<Async<f32>, AudioError> {
+fn build_resampler(input_rate: u32, output_rate: u32) -> Result<Async<f32>, AudioError> {
     // We always resample mono -> mono, then handle channel conversion separately
     let ratio = output_rate as f64 / input_rate as f64;
 
@@ -362,15 +372,9 @@ fn build_resampler(
     let chunk_size = (input_rate as f64 * 0.02).ceil() as usize; // ~20ms chunks
     let channels = 1; // Always mono for resampling
 
-    let resampler = Async::<f32>::new_sinc(
-        ratio,
-        2.0,
-        &params,
-        chunk_size,
-        channels,
-        FixedAsync::Input,
-    )
-    .map_err(|e| AudioError::StreamError(format!("Failed to create resampler: {e}")))?;
+    let resampler =
+        Async::<f32>::new_sinc(ratio, 2.0, &params, chunk_size, channels, FixedAsync::Input)
+            .map_err(|e| AudioError::StreamError(format!("Failed to create resampler: {e}")))?;
 
     Ok(resampler)
 }
@@ -425,6 +429,7 @@ fn build_stream_f32(
     device: &cpal::Device,
     config: &StreamConfig,
     queue: Arc<Mutex<VecDeque<f32>>>,
+    underrun_count: Arc<AtomicUsize>,
     err_fn: impl Fn(cpal::StreamError) + Send + 'static,
 ) -> Result<cpal::Stream, AudioError> {
     device
@@ -438,8 +443,17 @@ fn build_stream_f32(
                         return;
                     }
                 };
+                let mut had_samples = false;
                 for sample in data.iter_mut() {
-                    *sample = q.pop_front().unwrap_or(0.0);
+                    if let Some(s) = q.pop_front() {
+                        *sample = s;
+                        had_samples = true;
+                    } else {
+                        *sample = 0.0;
+                        if had_samples {
+                            underrun_count.fetch_add(1, Ordering::Relaxed);
+                        }
+                    }
                 }
             },
             err_fn,
@@ -452,6 +466,7 @@ fn build_stream_i16(
     device: &cpal::Device,
     config: &StreamConfig,
     queue: Arc<Mutex<VecDeque<f32>>>,
+    underrun_count: Arc<AtomicUsize>,
     err_fn: impl Fn(cpal::StreamError) + Send + 'static,
 ) -> Result<cpal::Stream, AudioError> {
     device
@@ -465,9 +480,17 @@ fn build_stream_i16(
                         return;
                     }
                 };
+                let mut had_samples = false;
                 for sample in data.iter_mut() {
-                    let f = q.pop_front().unwrap_or(0.0);
-                    *sample = (f.clamp(-1.0, 1.0) * 32767.0) as i16;
+                    if let Some(s) = q.pop_front() {
+                        *sample = (s.clamp(-1.0, 1.0) * 32767.0) as i16;
+                        had_samples = true;
+                    } else {
+                        *sample = 0;
+                        if had_samples {
+                            underrun_count.fetch_add(1, Ordering::Relaxed);
+                        }
+                    }
                 }
             },
             err_fn,
@@ -480,6 +503,7 @@ fn build_stream_u16(
     device: &cpal::Device,
     config: &StreamConfig,
     queue: Arc<Mutex<VecDeque<f32>>>,
+    underrun_count: Arc<AtomicUsize>,
     err_fn: impl Fn(cpal::StreamError) + Send + 'static,
 ) -> Result<cpal::Stream, AudioError> {
     device
@@ -493,9 +517,17 @@ fn build_stream_u16(
                         return;
                     }
                 };
+                let mut had_samples = false;
                 for sample in data.iter_mut() {
-                    let f = q.pop_front().unwrap_or(0.0);
-                    *sample = ((f.clamp(-1.0, 1.0) + 1.0) * 32767.5) as u16;
+                    if let Some(s) = q.pop_front() {
+                        *sample = ((s.clamp(-1.0, 1.0) + 1.0) * 32767.5) as u16;
+                        had_samples = true;
+                    } else {
+                        *sample = 32768;
+                        if had_samples {
+                            underrun_count.fetch_add(1, Ordering::Relaxed);
+                        }
+                    }
                 }
             },
             err_fn,
@@ -508,6 +540,7 @@ fn build_stream_u8(
     device: &cpal::Device,
     config: &StreamConfig,
     queue: Arc<Mutex<VecDeque<f32>>>,
+    underrun_count: Arc<AtomicUsize>,
     err_fn: impl Fn(cpal::StreamError) + Send + 'static,
 ) -> Result<cpal::Stream, AudioError> {
     device
@@ -521,9 +554,17 @@ fn build_stream_u8(
                         return;
                     }
                 };
+                let mut had_samples = false;
                 for sample in data.iter_mut() {
-                    let f = q.pop_front().unwrap_or(0.0);
-                    *sample = ((f.clamp(-1.0, 1.0) + 1.0) * 127.5) as u8;
+                    if let Some(s) = q.pop_front() {
+                        *sample = ((s.clamp(-1.0, 1.0) + 1.0) * 127.5) as u8;
+                        had_samples = true;
+                    } else {
+                        *sample = 128;
+                        if had_samples {
+                            underrun_count.fetch_add(1, Ordering::Relaxed);
+                        }
+                    }
                 }
             },
             err_fn,
@@ -543,24 +584,41 @@ fn select_output_device(
     let devices: Vec<_> = devices.collect();
 
     if let Some(name) = device_name {
-        if let Some(device) = devices.iter().find(|d| d.name().map(|n| n == name).unwrap_or(false)) {
-            info!("Selected configured output device: {}", device.name().unwrap_or_else(|_| "unknown".to_string()));
+        if let Some(device) = devices
+            .iter()
+            .find(|d| d.name().map(|n| n == name).unwrap_or(false))
+        {
+            info!(
+                "Selected configured output device: {}",
+                device.name().unwrap_or_else(|_| "unknown".to_string())
+            );
             return Ok(device.clone());
         }
-        return Err(AudioError::NoDeviceFound(format!("Output device '{}' not found", name)));
+        return Err(AudioError::NoDeviceFound(format!(
+            "Output device '{}' not found",
+            name
+        )));
     }
 
     if let Some(device) = host.default_output_device() {
-        info!("Auto-selected output device: {}", device.name().unwrap_or_else(|_| "unknown".to_string()));
+        info!(
+            "Auto-selected output device: {}",
+            device.name().unwrap_or_else(|_| "unknown".to_string())
+        );
         return Ok(device);
     }
 
     if let Some(device) = devices.first() {
-        warn!("No default output device; using first available: {}", device.name().unwrap_or_else(|_| "unknown".to_string()));
+        warn!(
+            "No default output device; using first available: {}",
+            device.name().unwrap_or_else(|_| "unknown".to_string())
+        );
         return Ok(device.clone());
     }
 
-    Err(AudioError::NoDeviceFound("No output audio device available".into()))
+    Err(AudioError::NoDeviceFound(
+        "No output audio device available".into(),
+    ))
 }
 
 #[cfg(test)]
