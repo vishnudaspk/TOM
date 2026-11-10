@@ -99,6 +99,10 @@ async fn main() -> anyhow::Result<()> {
         let mut dispatcher_inner =
             tom_engine::ipc::IpcDispatcher::with_timeout(std::time::Duration::from_secs(10));
         tom_engine::ipc::handlers::register_baseline_handlers(&mut dispatcher_inner);
+        tom_engine::ipc::handlers::register_shutdown_handler(
+            &mut dispatcher_inner,
+            lifecycle.root_token().clone(),
+        );
         tom_engine::ipc::handlers::register_input_handlers(
             &mut dispatcher_inner,
             hotkey_manager.clone(),

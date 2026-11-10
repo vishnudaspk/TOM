@@ -159,7 +159,14 @@ class SystemTelemetryProvider(ResourceTelemetryProvider):
                 "--query-gpu=memory.total,memory.used,memory.free",
                 "--format=csv,noheader,nounits",
             ]
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=2.0, check=True)
+            res = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=2.0,
+                check=True,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
             line = res.stdout.strip()
             parts = [float(p.strip()) for p in line.split(",")]
             if len(parts) == 3:

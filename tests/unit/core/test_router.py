@@ -80,6 +80,9 @@ class TestTier1DirectMatch:
             "think through this",
             "what is the meaning",
             "evaluate my options",
+            "what is today's date",
+            "what time is it",
+            "what year is this",
         ]
         for text in cases:
             domain, tool = _match_tier1(text)

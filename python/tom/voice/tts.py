@@ -225,6 +225,9 @@ class KokoroTTSProvider(TTSProvider):
         self._config = config or TTSConfig()
         self._model: Any = None  # Kokoro instance, typed as Any to avoid import
         self._serialization_lock = asyncio.Lock()
+        self._last_initialization_duration_ms: int | None = None
+        self._last_lifecycle_error: str | None = None
+        self._active_worker: asyncio.Task[Any] | None = None
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -238,6 +241,9 @@ class KokoroTTSProvider(TTSProvider):
         """
         if self._model is not None:
             return
+        import logging
+
+        logger = logging.getLogger(__name__)
         try:
             import kokoro_onnx  # noqa: PLC0415
         except ImportError as exc:
@@ -324,13 +330,22 @@ class KokoroTTSProvider(TTSProvider):
         # Serialize calls to prevent concurrent model access when timeouts
         # leave worker threads running (asyncio.wait_for() doesn't terminate them).
         async with self._serialization_lock:
+            if self._active_worker is not None and not self._active_worker.done():
+                raise TTSSynthesisError("A timed-out synthesis worker is still using the model")
             try:
                 # Add timeout to prevent indefinite blocking in thread pool (CPU inference)
                 # Typical synthesis is fast, but cap at 30s for safety
-                samples, sr, duration_s = await asyncio.wait_for(
-                    asyncio.to_thread(self._synthesize_sync, request),
-                    timeout=30.0,
-                )
+                worker = asyncio.create_task(asyncio.to_thread(self._synthesize_sync, request))
+                self._active_worker = worker
+                try:
+                    samples, sr, duration_s = await asyncio.wait_for(asyncio.shield(worker), timeout=30.0)
+                except BaseException:
+                    if not worker.done():
+                        worker.add_done_callback(lambda completed: self._clear_worker(completed))
+                    else:
+                        self._active_worker = None
+                    raise
+                self._active_worker = None
             except TTSError:
                 raise
             except asyncio.CancelledError:
@@ -358,12 +373,57 @@ class KokoroTTSProvider(TTSProvider):
 
     async def check_health(self) -> bool:
         try:
-            self._ensure_loaded()
+            await self.load_model()
             return True
         except TTSError:
             return False
         except Exception:
             return False
+
+    async def load_model(self) -> dict[str, Any]:
+        """Load Kokoro once, serialized with synthesis."""
+        async with self._serialization_lock:
+            if self._model is not None:
+                return self.get_model_info()
+            if self._active_worker is not None and not self._active_worker.done():
+                raise TTSUnavailableError("A prior model operation is still running")
+            started = time.monotonic()
+            self._last_lifecycle_error = None
+            try:
+                worker = asyncio.create_task(asyncio.to_thread(self._ensure_loaded))
+                self._active_worker = worker
+                try:
+                    await asyncio.shield(worker)
+                except BaseException:
+                    if not worker.done():
+                        worker.add_done_callback(self._clear_worker)
+                    else:
+                        self._active_worker = None
+                    raise
+                self._active_worker = None
+                self._last_initialization_duration_ms = int((time.monotonic() - started) * 1000)
+                return self.get_model_info()
+            except Exception as exc:
+                self._last_initialization_duration_ms = int((time.monotonic() - started) * 1000)
+                self._last_lifecycle_error = f"{type(exc).__name__}: {exc}"
+                raise
+
+    async def unload_model(self) -> dict[str, Any]:
+        """Drop Kokoro's model reference after any synthesis completes."""
+        import gc
+
+        async with self._serialization_lock:
+            if self._active_worker is not None and not self._active_worker.done():
+                raise TTSError("Cannot unload Kokoro while a synthesis worker is still active")
+            self._model = None
+            await asyncio.to_thread(gc.collect)
+            return {**self.get_model_info(), "physical_memory_release": "unconfirmed"}
+
+    def _clear_worker(self, completed: asyncio.Task[Any]) -> None:
+        if not completed.cancelled():
+            completed.exception()
+        if self._active_worker is completed:
+            self._active_worker = None
 
     def get_model_info(self) -> dict[str, Any]:
         return {
@@ -374,6 +434,8 @@ class KokoroTTSProvider(TTSProvider):
             "device": self._config.device,
             "sample_rate": self._config.sample_rate,
             "loaded": self._model is not None,
+            "initialization_duration_ms": self._last_initialization_duration_ms,
+            "last_lifecycle_error": self._last_lifecycle_error,
         }
 
 

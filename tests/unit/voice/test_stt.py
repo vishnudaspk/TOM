@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import sys
 from collections.abc import Coroutine
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -58,6 +59,46 @@ def _make_request(
         channels=1,
         language=language,
     )
+
+
+def test_stt_lifecycle_load_unload_and_active_worker_guard() -> None:
+    provider = FasterWhisperSTTProvider(config=STTConfig(model_name="offline-test-model"))
+    loads = 0
+
+    def fake_ensure_loaded() -> None:
+        nonlocal loads
+        loads += 1
+        provider._model = object()
+
+    provider._ensure_loaded = fake_ensure_loaded  # type: ignore[method-assign]
+
+    async def exercise() -> None:
+        loaded = await provider.load_model()
+        assert loaded["loaded"] is True
+        await provider.load_model()
+        assert loads == 1
+        unloaded = await provider.unload_model()
+        assert unloaded["loaded"] is False
+        assert unloaded["physical_memory_release"] == "unconfirmed"
+        pending = asyncio.get_running_loop().create_future()
+        provider._active_worker = pending  # type: ignore[assignment]
+        with pytest.raises(STTError, match="still active"):
+            await provider.unload_model()
+        pending.set_result(None)
+
+    run_async(exercise())
+
+
+def test_management_can_disable_automatic_cuda_to_cpu_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    factory = MagicMock()
+    monkeypatch.setitem(sys.modules, "faster_whisper", SimpleNamespace(WhisperModel=factory))
+    provider = FasterWhisperSTTProvider(config=STTConfig(device="cuda", allow_cpu_fallback=False))
+    provider._cuda_failed = True
+    provider._cuda_failure_reason = "fixture CUDA error"
+
+    with pytest.raises(STTUnavailableError, match="CPU fallback is disabled"):
+        provider._ensure_loaded()
+    factory.assert_not_called()
 
 
 # ===========================================================================

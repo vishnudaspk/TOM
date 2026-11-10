@@ -105,6 +105,10 @@ class Message(BaseModel):
 
     role: Role = Field(..., description="Role of the message author")
     content: str = Field(..., description="Text content of the message")
+    turn_id: str | None = Field(
+        default=None,
+        description="Correlation ID shared by messages originating from one user turn",
+    )
     timestamp: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
         description="Timezone-aware creation timestamp (UTC)",

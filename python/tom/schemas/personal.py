@@ -369,6 +369,8 @@ class PersonalReminderInput(BaseModel):
                 raise ValueError("action 'create' requires message")
             if self.fire_utc is None:
                 raise ValueError("action 'create' requires fire_utc")
+            if self.fire_utc <= datetime.now(UTC):
+                raise ValueError("fire_utc must be in the future")
             if (
                 self.recurrence == ReminderRecurrence.ONE_SHOT
                 and self.max_fires is not None
@@ -378,6 +380,8 @@ class PersonalReminderInput(BaseModel):
         elif self.action == "update":
             if not self.reminder_id:
                 raise ValueError("action 'update' requires reminder_id")
+            if self.fire_utc is not None and self.fire_utc <= datetime.now(UTC):
+                raise ValueError("fire_utc must be in the future")
             if (
                 self.message is None
                 and self.fire_utc is None

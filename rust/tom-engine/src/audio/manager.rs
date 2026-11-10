@@ -108,6 +108,30 @@ impl AudioManager {
         }
     }
 
+    /// Create a deterministic playback queue for handler unit tests. This does not
+    /// open a physical device or write to the user's speakers.
+    #[cfg(test)]
+    pub(crate) fn new_mock_playback() -> Self {
+        let manager = Self::new();
+        let (sender, mut receiver) = mpsc::channel::<Vec<f32>>(8);
+        let cancel = CancellationToken::new();
+        let worker_cancel = cancel.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    _ = worker_cancel.cancelled() => break,
+                    samples = receiver.recv() => if samples.is_none() { break; },
+                }
+            }
+        });
+        {
+            let mut playback = manager.playback.lock().unwrap();
+            playback.sender = Some(sender);
+            playback.cancel = Some(cancel);
+        }
+        manager
+    }
+
     /// Enumerates all system audio input and output devices with a 5-second TTL cache.
     pub async fn get_devices(&self) -> Result<AudioHostInfo, AudioError> {
         {

@@ -636,3 +636,58 @@ def test_engine_stop_cancels_poll_task():
         assert mock_engine.stop_audio_capture.called
 
     run_async(_test())
+
+
+def test_barge_in_detection_while_gated():
+    """Verify that high-energy speech while gated triggers barge-in and un-gates."""
+
+    async def _test():
+        config = MicrophoneConfig(
+            frame_duration_ms=20,
+            energy_threshold=0.01,
+            barge_in_min_rms_multiplier=2.0,
+            barge_in_min_duration_ms=60,  # 3 frames
+            sample_rate=16000,
+        )
+        loop = MicrophoneLoop(config=config)
+        # Mark calibrated with a known threshold
+        loop._noise_floor_calibrated = True
+        loop._barge_in_rms_threshold = 0.02
+
+        # Gate microphone (as during TTS playback)
+        loop.gate()
+        assert loop._gated is True
+
+        events_received: list[VoiceEvent] = []
+        sub = loop.subscribe()
+
+        async def collect():
+            async for ev in sub:
+                events_received.append(ev)
+
+        collector = asyncio.create_task(collect())
+
+        # 1. Push quiet / sub-threshold frame (amplitude 0.01 -> rms < 0.02)
+        await loop.push_samples(make_speech_samples(320, amplitude=0.005))
+        assert loop._gated is True
+        assert len(events_received) == 0
+
+        # 2. Push 3 loud frames (amplitude 0.2 -> rms >> 0.02)
+        await loop.push_samples(make_speech_samples(320 * 3, amplitude=0.2))
+
+        # Barge-in should have fired, un-gated, and entered speech
+        assert loop._gated is False
+        assert loop._in_speech is True
+
+        await loop.stop()
+        await collector
+
+        start_events = [e for e in events_received if isinstance(e, SpeechStartEvent)]
+        assert len(start_events) == 1
+        assert start_events[0].metadata.get("barge_in") is True
+
+        # Candidate audio frames should have been forwarded as well
+        audio_events = [e for e in events_received if isinstance(e, AudioFrameEvent)]
+        assert len(audio_events) >= 2
+
+    run_async(_test())

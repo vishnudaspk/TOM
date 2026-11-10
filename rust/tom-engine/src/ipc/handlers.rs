@@ -7,11 +7,26 @@
 
 use serde_json::json;
 use std::sync::Arc;
+use tokio_util::sync::CancellationToken;
 
 use super::dispatcher::IpcDispatcher;
 use super::protocol::{error_code, IpcError};
 use crate::system::SystemMonitor;
 use crate::{ENGINE_NAME, ENGINE_VERSION};
+
+/// Register the backwards-compatible NDJSON v1 graceful shutdown operation.
+pub fn register_shutdown_handler(dispatcher: &mut IpcDispatcher, shutdown: CancellationToken) {
+    dispatcher.register("engine.shutdown", move |_params| {
+        let shutdown = shutdown.clone();
+        async move {
+            tokio::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                shutdown.cancel();
+            });
+            Ok(json!({"accepted": true, "graceful": true}))
+        }
+    });
+}
 
 /// Register the foundational engine handlers, system telemetry handlers, and audio handlers.
 pub fn register_baseline_handlers(dispatcher: &mut IpcDispatcher) {
@@ -437,6 +452,25 @@ mod tests {
     use crate::ipc::protocol::IpcRequest;
 
     #[tokio::test]
+    async fn test_engine_shutdown_acknowledges_then_cancels() {
+        let token = CancellationToken::new();
+        let mut dispatcher = IpcDispatcher::new();
+        register_shutdown_handler(&mut dispatcher, token.clone());
+        let response = dispatcher
+            .dispatch(IpcRequest::new(
+                "shutdown_test",
+                "engine.shutdown",
+                json!({}),
+            ))
+            .await;
+        assert!(response.success);
+        assert_eq!(response.data.unwrap()["accepted"], true);
+        tokio::time::timeout(std::time::Duration::from_secs(1), token.cancelled())
+            .await
+            .expect("shutdown token should be cancelled");
+    }
+
+    #[tokio::test]
     async fn test_engine_ping_handler() {
         let dispatcher = create_default_dispatcher();
         let req = IpcRequest::new("ping_1", "engine.ping", json!({}));
@@ -656,7 +690,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_audio_play_and_stop_handler() {
-        let dispatcher = create_default_dispatcher();
+        let mut dispatcher = IpcDispatcher::new();
+        register_baseline_handlers_with_components(
+            &mut dispatcher,
+            Arc::new(SystemMonitor::new()),
+            Arc::new(crate::audio::AudioManager::new_mock_playback()),
+        );
 
         // Play synthetic sine wave samples at 48000 Hz (widely supported)
         let samples = vec![0.1f32, 0.2, 0.3, 0.2, 0.1, 0.0, -0.1, -0.2];

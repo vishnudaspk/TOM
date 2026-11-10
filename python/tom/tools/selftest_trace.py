@@ -11,10 +11,9 @@ Runs 3 utterances: one with a 1.5s internal pause.
 from __future__ import annotations
 
 import asyncio
-import os
+import subprocess
 import sys
 import tempfile
-import subprocess
 import wave
 from pathlib import Path
 
@@ -23,15 +22,15 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "python"))
 
 from tom.core.config import load_config
 from tom.voice.debug_trace import create_debug_trace_manager
-from tom.voice.microphone import MicrophoneLoop, MicrophoneConfig
+from tom.voice.microphone import MicrophoneConfig, MicrophoneLoop
 from tom.voice.vad import EnergyVADDetector
 
 
 def generate_speech_wav(text: str, output_path: Path, duration_s: float = 2.0) -> Path:
     """Generate a speech WAV using Kokoro TTS or synthetic fallback."""
     try:
-        from tom.voice.tts import KokoroTTSProvider, TTSConfig
         from tom.schemas.voice import SynthesisRequest
+        from tom.voice.tts import KokoroTTSProvider, TTSConfig
 
         async def _generate():
             provider = KokoroTTSProvider(TTSConfig())
@@ -76,10 +75,6 @@ def generate_speech_wav(text: str, output_path: Path, duration_s: float = 2.0) -
 
 async def run_selftest():
     """Run the full self-test: 3 utterances through pipeline with debug_trace."""
-    from tom.core.config import load_config
-    from tom.voice.debug_trace import create_debug_trace_manager
-    from tom.voice.microphone import MicrophoneLoop, MicrophoneConfig
-    from tom.voice.vad import EnergyVADDetector
 
     config = load_config()
     config.voice.debug_trace = True
@@ -131,7 +126,6 @@ async def run_selftest():
         # Load and push through mic loop
         import numpy as np
         with wave.open(str(wav_path), "rb") as wf:
-            rate = wf.getframerate()
             nframes = wf.getnframes()
             raw = wf.readframes(nframes)
         samples = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
@@ -152,11 +146,10 @@ async def run_selftest():
         return 1
 
     print("Running replay_endpointing...")
-    replay_script = Path(__file__).parent / "replay_endpointing.py"
     result = subprocess.run([
         sys.executable, "-m", "tom.tools.replay_endpointing",
         str(session.session_dir / "mic.wav")
-    ], capture_output=True, text=True)
+    ], capture_output=True, text=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     if result.returncode != 0:
         print("FAIL: replay_endpointing failed")
         print(result.stdout)

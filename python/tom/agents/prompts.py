@@ -6,6 +6,7 @@ Optimized for concise spoken responses with no markdown artifacts in voice mode.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 
 from tom.identity import ASSISTANT_NAME
@@ -109,18 +110,50 @@ RECOVERY_PHRASES: dict[str, dict[Literal["voice", "cli"], str]] = {
 }
 
 
-def build_system_prompt(mode: str = "voice") -> str:
+_TEMPORAL_HEADER = "CURRENT TEMPORAL CONTEXT:"
+
+
+def get_temporal_context(now: datetime | None = None) -> str:
+    """Return a structured temporal context block anchored to the current system time.
+
+    Provides exact day, date, year, and local time to anchor LLM responses
+    and prevent pre-training cutoff year fallbacks (e.g. 2023).
+    """
+    if now is None:
+        now = datetime.now().astimezone()
+    date_str = now.strftime("%A, %B %d, %Y")
+    time_str = now.strftime("%I:%M %p %Z").strip()
+    return (
+        f"{_TEMPORAL_HEADER}\n"
+        f"- Today's date: {date_str}\n"
+        f"- Current local time: {time_str}\n"
+        f"- Current year: {now.year}\n"
+        f"You are operating in the present year ({now.year}). You are NOT in 2023 or any past training cutoff year.\n"
+        f"Always use this date and year ({now.year}) for all temporal calculations, relative dates ('today', 'yesterday', 'tomorrow', 'this month'), scheduling, and current events."
+    )
+
+
+def refresh_prompt_temporal_context(prompt: str, now: datetime | None = None) -> str:
+    """Update or append the temporal context block within a system prompt string."""
+    temporal = get_temporal_context(now)
+    if _TEMPORAL_HEADER in prompt:
+        base = prompt.split(_TEMPORAL_HEADER)[0].rstrip()
+        return f"{base}\n\n{temporal}"
+    return f"{prompt.rstrip()}\n\n{temporal}"
+
+
+def build_system_prompt(mode: str = "voice", now: datetime | None = None) -> str:
     """Return the appropriate system prompt for the given mode.
 
     Args:
         mode: Either "voice" or "cli". Unknown modes fall back to voice prompt.
+        now: Optional datetime override for temporal anchoring.
 
     Returns:
-        The system prompt string for the specified mode.
+        The system prompt string for the specified mode with live temporal anchoring.
     """
-    if mode == "cli":
-        return CLI_SYSTEM_PROMPT
-    return VOICE_SYSTEM_PROMPT
+    base = CLI_SYSTEM_PROMPT if mode == "cli" else VOICE_SYSTEM_PROMPT
+    return refresh_prompt_temporal_context(base, now)
 
 
 def get_recovery_phrase(key: str, mode: str = "voice") -> str:

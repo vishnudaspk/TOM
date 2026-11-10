@@ -448,6 +448,51 @@ class TestGovernorCancellationAndCleanup:
         assert not resource_manager.is_heavy_inference_active
 
     @pytest.mark.anyio
+    async def test_provider_cleanup_failure_is_reported_and_releases_lease(
+        self, resource_manager: ResourceManager
+    ) -> None:
+        class FailingCleanupProvider(LLMProvider):
+            async def check_health(self) -> bool:
+                return True
+
+            async def generate(self, request: ModelRequest) -> ModelResponse:
+                return ModelResponse(content="Done", tool_calls=[])
+
+            async def stream(self, request: ModelRequest):
+                try:
+                    yield StreamChunk(content="partial")
+                finally:
+                    raise RuntimeError("provider cleanup failed")
+
+        provider = FailingCleanupProvider()
+        agent = Agent(config=AgentConfig(), dependencies=AgentDependencies(model_provider=provider))
+        router = MagicMock(spec=IntentRouter)
+        router.classify = AsyncMock(
+            return_value=RoutingDecision(
+                domain=IntentDomain.CHAT,
+                confidence=0.95,
+                target_tool=None,
+                route_tier=2,
+                latency_ms=1.0,
+            )
+        )
+        orchestrator = AgentOrchestrator(
+            agent=agent,
+            router=router,
+            resource_manager=resource_manager,
+        )
+
+        stream = orchestrator.stream("Close stream with a provider cleanup failure")
+        assert await stream.__anext__() == "partial"
+
+        with pytest.raises(RuntimeError, match="provider cleanup failed"):
+            await stream.aclose()
+
+        assert resource_manager.allocated_vram_mb == 0
+        assert not resource_manager.is_heavy_inference_active
+        assert resource_manager.active_leases_count == 0
+
+    @pytest.mark.anyio
     async def test_cancellation_during_lease_wait_releases_lock(
         self, resource_manager: ResourceManager
     ) -> None:

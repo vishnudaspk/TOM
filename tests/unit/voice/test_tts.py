@@ -40,6 +40,34 @@ def run_async(coro: Coroutine[Any, Any, Any]) -> Any:
     return asyncio.run(coro)
 
 
+def test_kokoro_lifecycle_load_unload_and_active_worker_guard() -> None:
+    provider = KokoroTTSProvider(config=TTSConfig(model_path="offline-test.onnx", voices_path="offline-voices.bin"))
+    loads = 0
+
+    def fake_ensure_loaded() -> None:
+        nonlocal loads
+        loads += 1
+        provider._model = object()
+
+    provider._ensure_loaded = fake_ensure_loaded  # type: ignore[method-assign]
+
+    async def exercise() -> None:
+        loaded = await provider.load_model()
+        assert loaded["loaded"] is True
+        await provider.load_model()
+        assert loads == 1
+        unloaded = await provider.unload_model()
+        assert unloaded["loaded"] is False
+        assert unloaded["physical_memory_release"] == "unconfirmed"
+        pending = asyncio.get_running_loop().create_future()
+        provider._active_worker = pending  # type: ignore[assignment]
+        with pytest.raises(TTSError, match="still active"):
+            await provider.unload_model()
+        pending.set_result(None)
+
+    run_async(exercise())
+
+
 # ===========================================================================
 # SynthesisRequest schema tests
 # ===========================================================================

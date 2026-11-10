@@ -181,8 +181,11 @@ class MicrophoneLoop:
         self._gated = False
 
         # Barge-in detection state
-        self._barge_in_rms_threshold: float | None = None
+        self._barge_in_rms_threshold: float = (
+            self._config.energy_threshold * self._config.barge_in_min_rms_multiplier
+        )
         self._barge_in_sustained_ms = 0
+        self._barge_in_quiet_frames = 0
         self._barge_in_candidate_frames: list[tuple[list[float], bytes]] = []
 
         # Noise floor calibration
@@ -384,7 +387,7 @@ class MicrophoneLoop:
 
     async def push_samples(self, samples: list[float] | bytes) -> None:
         """Ingest raw audio samples or PCM bytes into the processing loop."""
-        if self._stopped or self._muted or self._gated:
+        if self._stopped or self._muted or self._paused:
             return
 
         if isinstance(samples, bytes):
@@ -445,6 +448,7 @@ class MicrophoneLoop:
         if self._gated:
             # Barge-in detection: require RMS >= barge_in_threshold sustained for min_duration_ms
             if self._barge_in_rms_threshold is not None and rms >= self._barge_in_rms_threshold:
+                self._barge_in_quiet_frames = 0
                 self._barge_in_sustained_ms += self._config.frame_duration_ms
                 self._barge_in_candidate_frames.append((frame_samples, pcm_bytes))
                 if self._barge_in_sustained_ms >= self._config.barge_in_min_duration_ms:
@@ -455,18 +459,68 @@ class MicrophoneLoop:
                         threshold=round(self._barge_in_rms_threshold, 6),
                         sustained_ms=self._barge_in_sustained_ms,
                     )
-                    # The InteractionCore will handle the barge-in via SpeechStartEvent
+                    # Transition immediately out of gating and into active speech
                     self._gated = False
                     self._barge_in_sustained_ms = 0
-                    # Clear candidate frames and start fresh speech detection
+                    self._barge_in_quiet_frames = 0
+                    self._in_speech = True
+                    self._utterance_samples = []
+                    self._utterance_pcm_bytes = bytearray()
+                    self._utterance_frame_index = 0
+                    self._trailing_silence_ms = 0
+                    self._speech_onset_count = 0
+
+                    # 1. Emit SpeechStartEvent (triggers handle_barge_in in InteractionCore)
+                    self._dispatch_event(
+                        SpeechStartEvent(
+                            timestamp=now,
+                            metadata={"rms": rms, "barge_in": True},
+                        )
+                    )
+
+                    # 2. Drain pre-roll buffer in chronological order
+                    while self._pre_roll_buffer:
+                        p_samples, p_bytes = self._pre_roll_buffer.popleft()
+                        self._dispatch_event(
+                            AudioFrameEvent(
+                                samples=p_samples,
+                                pcm_bytes=p_bytes,
+                                timestamp=now,
+                                frame_index=self._utterance_frame_index,
+                                is_speech=False,
+                            )
+                        )
+                        self._utterance_samples.extend(p_samples)
+                        self._utterance_pcm_bytes.extend(p_bytes)
+                        self._utterance_frame_index += 1
+
+                    # 3. Drain onset / barge-in candidate speech frames
+                    for b_samples, b_bytes in self._barge_in_candidate_frames:
+                        self._dispatch_event(
+                            AudioFrameEvent(
+                                samples=b_samples,
+                                pcm_bytes=b_bytes,
+                                timestamp=now,
+                                frame_index=self._utterance_frame_index,
+                                is_speech=True,
+                            )
+                        )
+                        self._utterance_samples.extend(b_samples)
+                        self._utterance_pcm_bytes.extend(b_bytes)
+                        self._utterance_frame_index += 1
+
                     self._barge_in_candidate_frames.clear()
-                    # Re-process this frame as normal speech onset
-                    self._process_frame(frame_samples)
                     return
             else:
-                # Below threshold - reset barge-in state
-                self._barge_in_sustained_ms = 0
-                self._barge_in_candidate_frames.clear()
+                self._barge_in_quiet_frames += 1
+                if self._barge_in_quiet_frames >= 3:
+                    # Below threshold past grace window (60ms) - reset barge-in accumulation
+                    self._barge_in_sustained_ms = 0
+                    self._barge_in_candidate_frames.clear()
+                    self._barge_in_quiet_frames = 0
+                elif self._barge_in_candidate_frames:
+                    # Within grace window, keep candidate frame to avoid clipping audio
+                    self._barge_in_candidate_frames.append((frame_samples, pcm_bytes))
             return  # Ignore all other input while gated
 
         if not self._in_speech:
@@ -601,6 +655,7 @@ class MicrophoneLoop:
         self._onset_frames.clear()
         # Barge-in detection state
         self._barge_in_sustained_ms = 0
+        self._barge_in_quiet_frames = 0
         self._barge_in_candidate_frames.clear()
         if clear_ingest:
             self._sample_buffer.clear()

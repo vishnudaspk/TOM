@@ -475,6 +475,75 @@ async def test_speech_after_timeout_is_discarded_unless_wakeword() -> None:
 
 
 @pytest.mark.asyncio
+async def test_wakeword_timeout_during_async_turn_arbitration_rechecks_gate() -> None:
+    stt = MockScriptedSTT(["ordinary speech"])
+    clock = [100.0]
+    core = InteractionCore(
+        mic_loop=MagicMock(),
+        stt=stt,
+        tts=MagicMock(),
+        orchestrator=MagicMock(),
+        turn_manager=MagicMock(),
+        policy=MagicMock(),
+        engine=MagicMock(),
+        startup_greeting=False,
+        wakeword_enabled=True,
+        wakeword_phrase="hey tom",
+        wakeword_timeout_seconds=30.0,
+        clock=lambda: clock[0],
+    )
+    core._pipeline.transition_to(VoicePipelineState.LISTENING)
+    core._wakeword_active = True
+    core._wakeword_expires_at = 130.0
+
+    class ExpiresSessionDuringArbitration:
+        async def analyze(self, _audio: bytes):
+            clock[0] = 131.0
+            core._on_wakeword_timeout()
+            from tom.voice.smart_turn import TurnArbitrationDecision
+
+            return TurnArbitrationDecision.COMPLETE
+
+    core._turn_arbitrator = ExpiresSessionDuringArbitration()
+    core._begin_turn = AsyncMock()
+
+    await core._handle_speech_end(b"\x00\x00" * 1600)
+
+    assert core._wakeword_active is False
+    core._begin_turn.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_expired_wakeword_is_rejected_even_if_timer_callback_was_delayed() -> None:
+    stt = MockScriptedSTT(["ordinary speech"])
+    clock = [100.0]
+    core = InteractionCore(
+        mic_loop=MagicMock(),
+        stt=stt,
+        tts=MagicMock(),
+        orchestrator=MagicMock(),
+        turn_manager=MagicMock(),
+        policy=MagicMock(),
+        engine=MagicMock(),
+        startup_greeting=False,
+        wakeword_enabled=True,
+        wakeword_phrase="hey tom",
+        wakeword_timeout_seconds=30.0,
+        clock=lambda: clock[0],
+    )
+    core._pipeline.transition_to(VoicePipelineState.LISTENING)
+    core._wakeword_active = True
+    core._wakeword_expires_at = 100.0
+    clock[0] = 131.0
+    core._begin_turn = AsyncMock()
+
+    await core._handle_speech_end(b"\x00\x00" * 1600)
+
+    assert core._wakeword_active is False
+    core._begin_turn.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_startup_greeting_activates_session_followup_window() -> None:
     """Startup greeting proactively activates session; speech without wake phrase is accepted within window."""
     stt = MockScriptedSTT(
@@ -486,6 +555,7 @@ async def test_startup_greeting_activates_session_followup_window() -> None:
     synth_res = MagicMock(samples=[0.1], audio_data=b"\x00\x00", sample_rate=24000, channels=1)
     tts = MagicMock(synthesize=AsyncMock(return_value=synth_res))
     engine = MagicMock(play_audio_buffer=AsyncMock())
+    clock = [100.0]
 
     core = InteractionCore(
         mic_loop=MagicMock(),
@@ -498,7 +568,8 @@ async def test_startup_greeting_activates_session_followup_window() -> None:
         startup_greeting=True,
         wakeword_enabled=True,
         wakeword_phrase="hey tom",
-        wakeword_timeout_seconds=0.05,
+        wakeword_timeout_seconds=30.0,
+        clock=lambda: clock[0],
     )
 
     assert core._wakeword_active is False
@@ -517,8 +588,9 @@ async def test_startup_greeting_activates_session_followup_window() -> None:
     # Re-arm timeout (as would happen after turn completion)
     core._arm_wakeword_timeout()
 
-    # 3. Timeout expires
-    await asyncio.sleep(0.08)
+    # 3. Timeout expires (advance the monotonic test clock without sleeping)
+    clock[0] = 131.0
+    core._on_wakeword_timeout()
     assert core._wakeword_active is False
 
     # 4. User speaks after timeout without wake phrase (rejected)
@@ -546,6 +618,7 @@ async def test_wake_ack_greets_on_first_wake_and_after_timeout() -> None:
     synth_res = MagicMock(samples=[0.1], audio_data=b"\x00\x00", sample_rate=24000, channels=1)
     tts = MagicMock(synthesize=AsyncMock(return_value=synth_res))
     engine = MagicMock(play_audio_buffer=AsyncMock())
+    clock = [100.0]
 
     core = InteractionCore(
         mic_loop=MagicMock(),
@@ -560,6 +633,7 @@ async def test_wake_ack_greets_on_first_wake_and_after_timeout() -> None:
         wakeword_enabled=True,
         wakeword_phrase="hey tom",
         wakeword_timeout_seconds=30.0,
+        clock=lambda: clock[0],
     )
 
     # Starts dormant and silent without startup greeting
@@ -579,6 +653,7 @@ async def test_wake_ack_greets_on_first_wake_and_after_timeout() -> None:
     assert core._begin_turn.call_count == 1
 
     # 3. Simulate inactivity timeout firing
+    clock[0] = 131.0
     core._on_wakeword_timeout()
     assert core._wakeword_active is False
     assert core._woke_from_timeout is True

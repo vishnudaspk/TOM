@@ -173,6 +173,7 @@ class STTConfig:
         no_speech_prob_threshold: float = 0.6,
         avg_logprob_threshold: float = -1.0,
         compression_ratio_threshold: float = 2.4,
+        allow_cpu_fallback: bool = True,
     ) -> None:
         self.model_name = model_name
         self.device = device
@@ -185,6 +186,7 @@ class STTConfig:
         self.no_speech_prob_threshold = no_speech_prob_threshold
         self.avg_logprob_threshold = avg_logprob_threshold
         self.compression_ratio_threshold = compression_ratio_threshold
+        self.allow_cpu_fallback = allow_cpu_fallback
 
 
 # ---------------------------------------------------------------------------
@@ -217,6 +219,9 @@ class FasterWhisperSTTProvider(STTProvider):
         self._cuda_failure_reason: str | None = None
         self._serialization_lock = asyncio.Lock()
         self._dropped_utterance_count: int = 0  # Item 4: hallucination filter counter
+        self._last_initialization_duration_ms: int | None = None
+        self._last_lifecycle_error: str | None = None
+        self._active_worker: asyncio.Task[Any] | None = None
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -308,6 +313,10 @@ class FasterWhisperSTTProvider(STTProvider):
 
         # If CUDA was previously attempted and failed, skip CUDA and go straight to CPU
         if self._cuda_failed:
+            if not self._config.allow_cpu_fallback:
+                raise STTUnavailableError(
+                    f"CUDA initialization previously failed: {self._cuda_failure_reason}; CPU fallback is disabled"
+                )
             logger.info(
                 "Skipping CUDA initialization (previous failure: %s); using CPU",
                 self._cuda_failure_reason,
@@ -349,6 +358,10 @@ class FasterWhisperSTTProvider(STTProvider):
                 )
                 logger.error(err_msg)
                 print(err_msg, file=sys.stderr)
+                if not self._config.allow_cpu_fallback:
+                    raise STTUnavailableError(
+                        f"CUDA initialization failed and CPU fallback is disabled: {self._cuda_failure_reason}"
+                    ) from cuda_exc
                 # Fall through to CPU
 
         # CPU fallback (or primary if CUDA failed/was skipped)
@@ -401,9 +414,6 @@ class FasterWhisperSTTProvider(STTProvider):
         Uses segment-level stats first; falls back to blocklist only when the
         audio is short or the model is uncertain.
         """
-        import logging
-        logger = logging.getLogger(__name__)
-
         if not segments:
             return False, ""
 
@@ -453,6 +463,7 @@ class FasterWhisperSTTProvider(STTProvider):
         self._ensure_loaded()
 
         import logging
+
         import numpy as np  # noqa: PLC0415
 
         logger = logging.getLogger(__name__)
@@ -516,13 +527,22 @@ class FasterWhisperSTTProvider(STTProvider):
         # Serialize calls to prevent concurrent model access when timeouts
         # leave worker threads running (asyncio.wait_for() doesn't terminate them).
         async with self._serialization_lock:
+            if self._active_worker is not None and not self._active_worker.done():
+                raise STTTranscriptionError("A timed-out transcription worker is still using the model")
             try:
                 # Add timeout to prevent indefinite blocking in thread pool (CPU inference)
                 # 30s max utterance duration + 10s buffer = 40s timeout
-                text, lang, segments = await asyncio.wait_for(
-                    asyncio.to_thread(self._transcribe_sync, request),
-                    timeout=40.0,
-                )
+                worker = asyncio.create_task(asyncio.to_thread(self._transcribe_sync, request))
+                self._active_worker = worker
+                try:
+                    text, lang, segments = await asyncio.wait_for(asyncio.shield(worker), timeout=40.0)
+                except BaseException:
+                    if not worker.done():
+                        worker.add_done_callback(lambda completed: self._clear_worker(completed))
+                    else:
+                        self._active_worker = None
+                    raise
+                self._active_worker = None
             except STTError:
                 raise
             except TimeoutError as exc:
@@ -550,10 +570,55 @@ class FasterWhisperSTTProvider(STTProvider):
 
     async def check_health(self) -> bool:
         try:
-            self._ensure_loaded()
+            await self.load_model()
             return True
         except STTError:
             return False
+
+    async def load_model(self) -> dict[str, Any]:
+        """Load the configured model once, serialized with transcription."""
+        async with self._serialization_lock:
+            if self._model is not None:
+                return self.get_model_info()
+            if self._active_worker is not None and not self._active_worker.done():
+                raise STTUnavailableError("A prior model operation is still running")
+            started = time.monotonic()
+            self._last_lifecycle_error = None
+            try:
+                worker = asyncio.create_task(asyncio.to_thread(self._ensure_loaded))
+                self._active_worker = worker
+                try:
+                    await asyncio.shield(worker)
+                except BaseException:
+                    if not worker.done():
+                        worker.add_done_callback(self._clear_worker)
+                    else:
+                        self._active_worker = None
+                    raise
+                self._active_worker = None
+                self._last_initialization_duration_ms = int((time.monotonic() - started) * 1000)
+                return self.get_model_info()
+            except Exception as exc:
+                self._last_initialization_duration_ms = int((time.monotonic() - started) * 1000)
+                self._last_lifecycle_error = f"{type(exc).__name__}: {exc}"
+                raise
+
+    async def unload_model(self) -> dict[str, Any]:
+        """Drop the provider's model reference after any transcription completes."""
+        import gc
+
+        async with self._serialization_lock:
+            if self._active_worker is not None and not self._active_worker.done():
+                raise STTError("Cannot unload STT while a transcription worker is still active")
+            self._model = None
+            await asyncio.to_thread(gc.collect)
+            return {**self.get_model_info(), "physical_memory_release": "unconfirmed"}
+
+    def _clear_worker(self, completed: asyncio.Task[Any]) -> None:
+        if not completed.cancelled():
+            completed.exception()
+        if self._active_worker is completed:
+            self._active_worker = None
 
     def get_model_info(self) -> dict[str, Any]:
         info = {
@@ -561,8 +626,11 @@ class FasterWhisperSTTProvider(STTProvider):
             "model": self._config.model_name,
             "device": self._config.device,
             "compute_type": self._config.compute_type,
+            "allow_cpu_fallback": self._config.allow_cpu_fallback,
             "loaded": self._model is not None,
             "dropped_utterance_count": self._dropped_utterance_count,
+            "initialization_duration_ms": self._last_initialization_duration_ms,
+            "last_lifecycle_error": self._last_lifecycle_error,
         }
         if self._cuda_attempted:
             info["cuda_attempted"] = True

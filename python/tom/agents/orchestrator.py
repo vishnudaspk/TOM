@@ -12,11 +12,15 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
 from collections.abc import AsyncGenerator, AsyncIterator
+from typing import Any
+from uuid import uuid4
 
 from pydantic import BaseModel
 
 from tom.agents.base import Agent, AgentState
+from tom.agents.prompts import refresh_prompt_temporal_context
 from tom.core.context import CancellationToken
 from tom.core.router import IntentRouter
 from tom.models.base import LLMProvider
@@ -59,6 +63,7 @@ class AgentOrchestrator:
         self._resource_manager = resource_manager
         self._config = config
         self._max_response_tokens = max_response_tokens
+        self._turn_lock = agent._conversation_lock
 
     @property
     def agent(self) -> Agent:
@@ -70,6 +75,24 @@ class AgentOrchestrator:
         prompt: str,
         cancellation_token: CancellationToken | None = None,
         max_steps: int = _DEFAULT_MAX_STEPS,
+    ) -> str:
+        async with self._turn_lock:
+            original_history = self._agent.history
+            staged_history = original_history.model_copy(deep=True)
+            self._agent._history = staged_history
+            try:
+                result = await self._run_turn(prompt, cancellation_token, max_steps)
+            finally:
+                if self._agent.state == AgentState.IDLE:
+                    original_history.messages = staged_history.messages
+                self._agent._history = original_history
+            return result
+
+    async def _run_turn(
+        self,
+        prompt: str,
+        cancellation_token: CancellationToken | None,
+        max_steps: int,
     ) -> str:
         """Run the orchestration loop for a user prompt.
 
@@ -85,6 +108,12 @@ class AgentOrchestrator:
         if self._check_cancelled(cancellation_token):
             return "Task cancelled"
 
+        # Recover from previous turn error if needed
+        if self._agent.state == AgentState.ERROR:
+            self._agent.transition_to(AgentState.IDLE)
+
+        self._refresh_temporal_context()
+
         # Route the request
         route: RoutingDecision = await self._router.classify(prompt)
         logger.info(
@@ -93,19 +122,14 @@ class AgentOrchestrator:
             route_tier=route.route_tier,
             router_ms=round(route.latency_ms, 2),
         )
-        logger.info(
-            "orchestrator_routed",
-            domain=route.domain.value,
-            route_tier=route.route_tier,
-            router_ms=round(route.latency_ms, 2),
-        )
 
         # Add user message to history
-        self._agent.history.append(Message(role=Role.USER, content=prompt))
+        turn_id = uuid4().hex
+        self._agent.history.append(Message(role=Role.USER, content=prompt, turn_id=turn_id))
 
         # Tier 1: direct tool execution
         if route.target_tool is not None:
-            return await self._execute_direct_tool(route.target_tool)
+            return await self._execute_direct_tool(route.target_tool, turn_id)
 
         # No Tier 1 match: check if we have a provider for multi-step
         if self._agent.model_provider is None:
@@ -119,12 +143,34 @@ class AgentOrchestrator:
             prompt,
             cancellation_token,
             max_steps,
+            turn_id,
         )
 
     async def stream(
         self,
         prompt: str,
         token: CancellationToken | None = None,
+    ) -> AsyncGenerator[str, None]:
+        async with self._turn_lock:
+            original_history = self._agent.history
+            staged_history = original_history.model_copy(deep=True)
+            self._agent._history = staged_history
+            completed = False
+            stream_iter = self._stream_turn(prompt, token)
+            try:
+                async for delta in stream_iter:
+                    yield delta
+                completed = True
+            finally:
+                await self._close_stream(stream_iter)
+                if completed and self._agent.state == AgentState.IDLE:
+                    original_history.messages = staged_history.messages
+                self._agent._history = original_history
+
+    async def _stream_turn(
+        self,
+        prompt: str,
+        token: CancellationToken | None,
     ) -> AsyncGenerator[str, None]:
         """Yield incremental model text deltas for a user prompt.
 
@@ -135,6 +181,11 @@ class AgentOrchestrator:
         if self._check_cancelled(token):
             return
 
+        if self._agent.state == AgentState.ERROR:
+            self._agent.transition_to(AgentState.IDLE)
+
+        self._refresh_temporal_context()
+
         route: RoutingDecision = await self._router.classify(prompt)
         logger.info(
             "orchestrator_routed",
@@ -142,10 +193,11 @@ class AgentOrchestrator:
             route_tier=route.route_tier,
             router_ms=round(route.latency_ms, 2),
         )
-        self._agent.history.append(Message(role=Role.USER, content=prompt))
+        turn_id = uuid4().hex
+        self._agent.history.append(Message(role=Role.USER, content=prompt, turn_id=turn_id))
 
         if route.target_tool is not None:
-            text = await self._execute_direct_tool(route.target_tool)
+            text = await self._execute_direct_tool(route.target_tool, turn_id)
             if text:
                 yield text
             return
@@ -157,19 +209,71 @@ class AgentOrchestrator:
             yield "I'm not sure how to help with that"
             return
 
-        loop_gen = self._stream_agent_loop(prompt, token, _DEFAULT_MAX_STEPS)
+        loop_gen = self._stream_agent_loop(prompt, token, _DEFAULT_MAX_STEPS, turn_id)
         try:
             async for delta in loop_gen:
                 yield delta
         finally:
-            await loop_gen.aclose()
+            await self._close_stream(loop_gen)
 
-    async def _execute_direct_tool(self, tool_name: str) -> str:
+    async def _execute_tool_compat(
+        self,
+        *,
+        tool_name: str,
+        params: dict[str, Any] | BaseModel | None = None,
+        return_to_state: AgentState = AgentState.THINKING,
+        tool_call_id: str | None = None,
+        turn_id: str | None = None,
+    ) -> ToolResult:
+        """Execute a tool while tolerating older test doubles that omit ``turn_id``."""
+        call_kwargs: dict[str, Any] = {
+            "tool_name": tool_name,
+            "params": params,
+            "return_to_state": return_to_state,
+            "tool_call_id": tool_call_id,
+        }
+        if turn_id is not None:
+            call_kwargs["turn_id"] = turn_id
+        try:
+            return await self._agent.execute_tool(**call_kwargs)
+        except TypeError as exc:
+            if "turn_id" not in str(exc):
+                raise
+            call_kwargs.pop("turn_id", None)
+            return await self._agent.execute_tool(**call_kwargs)
+
+    async def _close_stream(self, stream_iter: Any | None) -> None:
+        """Close a provider stream without releasing a heavy lease early.
+
+        If the caller is being cancelled, wait for the provider's own cleanup to
+        complete before re-raising cancellation. This preserves the resource
+        governor invariant that a heavy lease stays active until the underlying
+        model stream has fully terminated.
+        """
+        if stream_iter is None or not hasattr(stream_iter, "aclose"):
+            return
+
+        close_task = asyncio.create_task(stream_iter.aclose())
+        try:
+            await asyncio.shield(close_task)
+        except asyncio.CancelledError:
+            await close_task
+            raise
+
+    async def _execute_direct_tool(self, tool_name: str, turn_id: str | None = None) -> str:
         """Execute a single tool and return its result text."""
+        if self._agent.state == AgentState.ERROR:
+            self._agent.transition_to(AgentState.IDLE)
         if self._agent.state == AgentState.IDLE:
             self._agent.transition_to(AgentState.THINKING)
 
-        result: ToolResult = await self._agent.execute_tool(tool_name=tool_name)
+        result: ToolResult = await self._execute_tool_compat(
+            tool_name=tool_name,
+            params=None,
+            return_to_state=AgentState.THINKING,
+            tool_call_id=None,
+            turn_id=turn_id,
+        )
 
         if self._agent.state == AgentState.THINKING:
             self._agent.transition_to(AgentState.IDLE)
@@ -191,6 +295,7 @@ class AgentOrchestrator:
         prompt: str,
         cancellation_token: CancellationToken | None,
         max_steps: int,
+        turn_id: str,
     ) -> str:
         """Run the bounded multi-step model → tool → observation loop."""
 
@@ -233,6 +338,7 @@ class AgentOrchestrator:
                 Message(
                     role=Role.ASSISTANT,
                     content=response.content,
+                    turn_id=turn_id,
                     tool_calls=response.tool_calls if response.has_tool_calls else None,
                 )
             )
@@ -249,11 +355,12 @@ class AgentOrchestrator:
                         return "Task cancelled"
 
                     try:
-                        await self._agent.execute_tool(
+                        await self._execute_tool_compat(
                             tool_name=tool_call.name,
                             params=tool_call.arguments,
                             return_to_state=AgentState.THINKING,
                             tool_call_id=tool_call.id,
+                            turn_id=turn_id,
                         )
                     except asyncio.CancelledError:
                         if self._agent.state != AgentState.TERMINATED:
@@ -298,15 +405,20 @@ class AgentOrchestrator:
 
         if self._resource_manager is not None:
             # Get VRAM requirement from loaded config (single source of truth)
-            # for BOTH resident registration and lease acquisition
+            # for BOTH resident registration and lease acquisition.
+            # Use an explicit lease lifecycle so the heavy lock stays held until
+            # the provider has fully finished any in-flight cleanup.
             reasoning_vram_mb = (
                 self._config.models.reasoning.vram_required_mb if self._config else 4531
             )
             await self._maybe_register_resident_model(ModelRole.REASONING, reasoning_vram_mb)
-            async with self._resource_manager.acquire(
+            lease = await self._resource_manager.acquire(
                 ModelRole.REASONING, required_vram_mb=reasoning_vram_mb
-            ):
+            )
+            try:
                 return await provider.generate(req)
+            finally:
+                await lease.release()
         return await provider.generate(req)
 
     async def _maybe_register_resident_model(self, role: ModelRole, required_vram_mb: int) -> None:
@@ -362,6 +474,7 @@ class AgentOrchestrator:
         prompt: str,
         token: CancellationToken | None,
         max_steps: int,
+        turn_id: str,
     ) -> AsyncGenerator[str, None]:
         """Stream tokens; pause for tools; resume generation."""
         for step in range(max_steps):
@@ -379,6 +492,7 @@ class AgentOrchestrator:
 
             collected: list[str] = []
             tool_calls: list[ToolCallRequest] = []
+            stream_closing = False
             try:
                 if self._resource_manager is not None:
                     reasoning_vram_mb = (
@@ -387,34 +501,17 @@ class AgentOrchestrator:
                     await self._maybe_register_resident_model(
                         ModelRole.REASONING, reasoning_vram_mb
                     )
-                    async with self._resource_manager.acquire(
+                    lease = await self._resource_manager.acquire(
                         ModelRole.REASONING, required_vram_mb=reasoning_vram_mb
-                    ):
-                        stream_iter = await self._think_stream()
-                        try:
-                            async for chunk in stream_iter:
-                                if self._check_cancelled(token):
-                                    if collected:
-                                        self._agent.history.append(
-                                            Message(role=Role.ASSISTANT, content="".join(collected))
-                                        )
-                                    return
-                                if chunk.content:
-                                    collected.append(chunk.content)
-                                    yield chunk.content
-                                if chunk.tool_call_delta is not None:
-                                    tool_calls.append(chunk.tool_call_delta)
-                        finally:
-                            if hasattr(stream_iter, "aclose"):
-                                await stream_iter.aclose()
-                else:
-                    stream_iter = await self._think_stream()
+                    )
+                    stream_iter = None
                     try:
+                        stream_iter = await self._think_stream()
                         async for chunk in stream_iter:
                             if self._check_cancelled(token):
                                 if collected:
                                     self._agent.history.append(
-                                        Message(role=Role.ASSISTANT, content="".join(collected))
+                                        Message(role=Role.ASSISTANT, content="".join(collected), turn_id=turn_id)
                                     )
                                 return
                             if chunk.content:
@@ -423,8 +520,29 @@ class AgentOrchestrator:
                             if chunk.tool_call_delta is not None:
                                 tool_calls.append(chunk.tool_call_delta)
                     finally:
-                        if hasattr(stream_iter, "aclose"):
-                            await stream_iter.aclose()
+                        stream_closing = sys.exc_info()[0] is GeneratorExit
+                        try:
+                            await self._close_stream(stream_iter)
+                        finally:
+                            await lease.release()
+                else:
+                    stream_iter = await self._think_stream()
+                    try:
+                        async for chunk in stream_iter:
+                            if self._check_cancelled(token):
+                                if collected:
+                                    self._agent.history.append(
+                                        Message(role=Role.ASSISTANT, content="".join(collected), turn_id=turn_id)
+                                    )
+                                return
+                            if chunk.content:
+                                collected.append(chunk.content)
+                                yield chunk.content
+                            if chunk.tool_call_delta is not None:
+                                tool_calls.append(chunk.tool_call_delta)
+                    finally:
+                        stream_closing = sys.exc_info()[0] is GeneratorExit
+                        await self._close_stream(stream_iter)
             except asyncio.CancelledError:
                 if self._agent.state != AgentState.TERMINATED:
                     self._agent.transition_to(
@@ -433,6 +551,8 @@ class AgentOrchestrator:
                     )
                 raise
             except Exception as exc:
+                if stream_closing:
+                    raise
                 logger.error(
                     "orchestrator_model_error",
                     step=step + 1,
@@ -447,6 +567,7 @@ class AgentOrchestrator:
                 Message(
                     role=Role.ASSISTANT,
                     content="".join(collected),
+                    turn_id=turn_id,
                     tool_calls=tool_calls if tool_calls else None,
                 )
             )
@@ -461,11 +582,12 @@ class AgentOrchestrator:
                             )
                         return
                     try:
-                        await self._agent.execute_tool(
+                        await self._execute_tool_compat(
                             tool_name=tool_call.name,
                             params=tool_call.arguments,
                             return_to_state=AgentState.THINKING,
                             tool_call_id=tool_call.id,
+                            turn_id=turn_id,
                         )
                     except asyncio.CancelledError:
                         if self._agent.state != AgentState.TERMINATED:
@@ -485,6 +607,18 @@ class AgentOrchestrator:
                 AgentState.ERROR,
                 metadata={"reason": "max_steps_exceeded"},
             )
+
+    def _refresh_temporal_context(self) -> None:
+        """Keep the leading system prompt anchored with current local time and date."""
+        messages = self._agent.history.messages
+        if messages and messages[0].role == Role.SYSTEM:
+            content = messages[0].content or ""
+            refreshed = refresh_prompt_temporal_context(content)
+            if refreshed != content:
+                messages[0] = Message(role=Role.SYSTEM, content=refreshed)
+        elif not messages and self._agent.config.system_prompt:
+            refreshed = refresh_prompt_temporal_context(self._agent.config.system_prompt)
+            self._agent.history.append(Message(role=Role.SYSTEM, content=refreshed))
 
     def _check_cancelled(
         self,

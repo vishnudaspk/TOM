@@ -732,6 +732,7 @@ class InteractionCore:
         wakeword_enabled: bool = False,
         wakeword_phrase: str = "hey tom",
         wakeword_timeout_seconds: float = 30.0,
+        clock: Callable[[], float] | None = None,
     ) -> None:
         self._mic = mic_loop
         self._engine = engine
@@ -784,13 +785,16 @@ class InteractionCore:
         self._wakeword_enabled = wakeword_enabled
         self._wakeword_phrase = wakeword_phrase
         self._wakeword_timeout_seconds = wakeword_timeout_seconds
+        self._wakeword_clock_injected = clock is not None
+        self._wakeword_clock = clock or time.monotonic
         self._wakeword_active = not wakeword_enabled  # True means "awake / active session"
         self._wakeword_timeout_handle: asyncio.TimerHandle | None = None
+        self._wakeword_expires_at: float | None = None
         self._last_greeting_text: str | None = None
         self._last_wake_ack: str | None = None
         self._first_activation: bool = True
         self._woke_from_timeout: bool = False
-        self._last_interaction_time: float = time.monotonic()
+        self._last_interaction_time: float = self._wakeword_clock()
 
         self._frames = bytearray()
         self._smart_turn_candidate: bytes | None = None
@@ -1447,7 +1451,7 @@ class InteractionCore:
         if isinstance(event, SpeechStartEvent):
             self._cancel_wakeword_timeout()
             self._cancel_smart_turn_timeout()
-            if self._active_turn is not None and not self._active_turn.done():
+            if (self._active_turn is not None and not self._active_turn.done()) or self._playback_active:
                 await self.handle_barge_in()
             self._frames.clear()
             # Turn start anchor for the 9.6 VAD endpointing metric.
@@ -1539,7 +1543,13 @@ class InteractionCore:
     def _arm_wakeword_timeout(self) -> None:
         """Arm the inactivity timeout countdown once TOM returns to LISTENING."""
         self._cancel_wakeword_timeout()
-        self._last_interaction_time = time.monotonic()
+        now = self._wakeword_clock()
+        self._last_interaction_time = now
+        self._wakeword_expires_at = (
+            now + self._wakeword_timeout_seconds
+            if self._wakeword_enabled and self._wakeword_active and self._wakeword_timeout_seconds > 0
+            else None
+        )
         if (
             self._wakeword_enabled
             and self._wakeword_active
@@ -1553,10 +1563,11 @@ class InteractionCore:
         ):
             try:
                 loop = asyncio.get_running_loop()
-                self._wakeword_timeout_handle = loop.call_later(
-                    self._wakeword_timeout_seconds,
-                    self._on_wakeword_timeout,
-                )
+                if self._wakeword_clock_injected:
+                    delay_s = max(0.0, self._wakeword_expires_at - self._wakeword_clock())
+                else:
+                    delay_s = max(0.0, self._wakeword_expires_at - loop.time())
+                self._wakeword_timeout_handle = loop.call_later(delay_s, self._on_wakeword_timeout)
             except RuntimeError:
                 pass
 
@@ -1564,6 +1575,14 @@ class InteractionCore:
         """Deactivate session after inactivity timeout in LISTENING state."""
         self._wakeword_timeout_handle = None
         if not (self._wakeword_enabled and self._wakeword_active):
+            return
+        if self._wakeword_expires_at is not None and self._wakeword_clock() < self._wakeword_expires_at:
+            try:
+                loop = asyncio.get_running_loop()
+                delay_s = max(0.0, self._wakeword_expires_at - self._wakeword_clock())
+                self._wakeword_timeout_handle = loop.call_later(delay_s, self._on_wakeword_timeout)
+            except RuntimeError:
+                pass
             return
         if (
             self._pipeline.state is VoicePipelineState.LISTENING
@@ -1575,12 +1594,29 @@ class InteractionCore:
                 timeout_s=self._wakeword_timeout_seconds,
             )
             self._wakeword_active = False
+            self._wakeword_expires_at = None
             self._woke_from_timeout = True
 
     async def _handle_speech_end(self, audio: bytes) -> None:
         """Arbitrate a VAD-delimited candidate before committing a turn."""
         if not audio:
             return
+
+        # Timer callbacks may be delayed while the event loop is busy. Enforce
+        # expiry at the input boundary so that delay cannot bypass the wake gate.
+        if (
+            self._wakeword_enabled
+            and self._wakeword_active
+            and self._wakeword_expires_at is not None
+            and self._wakeword_clock() >= self._wakeword_expires_at
+            and self._pipeline.state is VoicePipelineState.LISTENING
+            and self._active_turn is None
+            and not self._playback_active
+        ):
+            self._wakeword_active = False
+            self._wakeword_expires_at = None
+            self._cancel_wakeword_timeout()
+            self._woke_from_timeout = True
 
         self._cancel_smart_turn_timeout()
 
@@ -1598,7 +1634,7 @@ class InteractionCore:
                     transcript=transcript[:80] if transcript else "",
                 )
                 self._wakeword_active = True
-                self._last_interaction_time = time.monotonic()
+                self._last_interaction_time = self._wakeword_clock()
                 self._smart_turn_candidate = None
                 from tom.voice.wakeword import strip_wake_phrase
 
@@ -1642,6 +1678,13 @@ class InteractionCore:
             )
             self._smart_turn_candidate = None
             await self._begin_turn(candidate)
+            return
+
+        # Arbitration is asynchronous. The wake session can expire while it is
+        # running, so re-enter the gate before treating the candidate as speech.
+        if self._wakeword_enabled and not self._wakeword_active:
+            self._smart_turn_candidate = None
+            await self._handle_speech_end(candidate)
             return
 
         if decision is TurnArbitrationDecision.CONTINUING:

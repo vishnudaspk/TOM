@@ -12,7 +12,6 @@ When voice.debug_trace is enabled, this module provides:
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 import sys
 import time
@@ -150,43 +149,54 @@ class DebugTraceSession:
             "inspection_time_ns": time.monotonic_ns(),
         }
 
-        # 1. Input/Output device info via Windows API
+        # 1. Audio device enumeration through sounddevice (no shell/console helper).
         try:
-            import ctypes
-            from ctypes import wintypes
+            import sounddevice as sd
 
-            # Try to get default audio devices via PowerShell
-            ps_script = """
-            Add-Type -AssemblyName System.Speech
-            $recognizer = New-Object System.Speech.Recognition.SpeechRecognitionEngine
-            $audioDevices = $recognizer.GetAudioInputs()
-            foreach ($dev in $audioDevices) {
-                Write-Output "INPUT:`t$($dev.DeviceName)`t`t$($dev.Format.SampleRate)Hz`t`t$($dev.Format.Channels)ch"
-            }
-            $outputDevices = [System.Media.SoundPlayer]::new().GetType().Assembly.GetTypes() | Where-Object {$_.Name -like '*Audio*'}
-            """
-            result = subprocess.run(
-                ["powershell", "-NoProfile", "-Command", ps_script],
-                capture_output=True, text=True, timeout=10
+            devices = sd.query_devices()
+            default_input = sd.default.device[0]
+            default_output = sd.default.device[1]
+            info["default_input_device"] = (
+                devices[default_input]["name"] if default_input >= 0 else "unknown"
             )
-            if result.returncode == 0:
-                info["device_enumeration_ps"] = result.stdout.strip()
+            info["default_output_device"] = (
+                devices[default_output]["name"] if default_output >= 0 else "unknown"
+            )
+            info["host_apis"] = sorted({d["hostapi"] for d in devices})
+            info["device_enumeration"] = [
+                {
+                    "name": device["name"],
+                    "inputs": device["max_input_channels"],
+                    "outputs": device["max_output_channels"],
+                    "sample_rate": device["default_samplerate"],
+                    "host_api": device["hostapi"],
+                }
+                for device in devices
+            ]
         except Exception as e:
-            info["device_enumeration_error"] = str(e)
+            info["sounddevice_info"] = f"unavailable: {e}"
 
-        # 2. Check for Nahimic and audio effects processes
-        nahimic_processes = []
+        # 2. Check for Nahimic and audio effects processes via psutil.
         try:
-            for proc in ["Nahimic", "NahimicService", "SonicStudio", "RealtekAudioConsole"]:
-                result = subprocess.run(
-                    ["tasklist", "/FI", f"IMAGENAME eq {proc}*"],
-                    capture_output=True, text=True, timeout=5
-                )
-                if proc.lower() in result.stdout.lower():
-                    nahimic_processes.append(proc)
-        except Exception:
-            pass
-        info["nahimic_processes_found"] = nahimic_processes if nahimic_processes else "none_detected"
+            import psutil
+
+            wanted = {
+                "nahimic",
+                "nahimicservice",
+                "sonicstudio",
+                "realtekaudioconsole",
+            }
+            found = sorted(
+                {
+                    str(proc.info.get("name"))
+                    for proc in psutil.process_iter(["name"])
+                    if proc.info.get("name")
+                    and str(proc.info["name"]).lower() in wanted
+                }
+            )
+            info["nahimic_processes_found"] = found or "none_detected"
+        except Exception as e:
+            info["nahimic_processes_check_error"] = f"unavailable: {e}"
 
         # 3. Windows Audio Enhancements setting (via registry)
         try:
@@ -232,24 +242,15 @@ class DebugTraceSession:
                 # Test in a subprocess to avoid contaminating main env
                 result = subprocess.run(
                     [sys.executable, "-c", f"import {lib_name}; print('OK')"],
-                    capture_output=True, text=True, timeout=10
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
                 )
                 aec_libs[lib_name] = "available" if result.returncode == 0 else f"unavailable: {result.stderr.strip()}"
             except Exception as e:
                 aec_libs[lib_name] = f"test_failed: {e}"
         info["aec_libraries"] = aec_libs
-
-        # 6. Input/Output device names via Python sounddevice if available
-        try:
-            import sounddevice as sd
-            devices = sd.query_devices()
-            default_input = sd.default.device[0]
-            default_output = sd.default.device[1]
-            info["default_input_device"] = devices[default_input]["name"] if default_input >= 0 else "unknown"
-            info["default_output_device"] = devices[default_output]["name"] if default_output >= 0 else "unknown"
-            info["host_apis"] = list(set(d["hostapi"] for d in devices))
-        except Exception as e:
-            info["sounddevice_info"] = f"unavailable: {e}"
 
         return info
 

@@ -132,6 +132,8 @@ class Agent:
         self._state = AgentState.IDLE
         self._callbacks: list[Callable[..., Any]] = []
         self._dependencies = dependencies
+        # All orchestrators for this agent must serialize access to its turn state.
+        self._conversation_lock = asyncio.Lock()
 
         if history is not None:
             self._history = history
@@ -255,6 +257,7 @@ class Agent:
         timeout_seconds: float | None = None,
         return_to_state: AgentState = AgentState.THINKING,
         tool_call_id: str | None = None,
+        turn_id: str | None = None,
     ) -> ToolResult:
         """Execute a tool via the authoritative ToolExecutor pipeline with strict safety.
 
@@ -351,6 +354,7 @@ class Agent:
         obs_msg = Message(
             role=Role.TOOL_RESULT,
             content=content_str,
+            turn_id=turn_id,
             name=tool_name,
             tool_call_id=tool_call_id,
             tool_metadata=ToolCallMetadata(
